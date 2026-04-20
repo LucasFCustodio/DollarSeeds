@@ -1,8 +1,12 @@
 import { StyleSheet, View, Text } from 'react-native';
 import InputField from '../ui/InputField';
 import Button from '../ui/Button';
+import Dropdown from '../ui/Dropdown'
+import React, { useState } from 'react';
 
 export default function ExpenseContainer() {
+    const [category, setCategory] = useState(null);
+    const expenseCategories = ["Need", "Want", "Savings", "Debt"];
     return (
         <View style={styles.expenseContainer}>
             <InputField 
@@ -14,9 +18,11 @@ export default function ExpenseContainer() {
                 icon="$"
                 placeholder="9.50"
             />
-            <InputField 
+            <Dropdown 
                 label="Category"
-                placeholder="Wants"
+                options={expenseCategories}
+                selectedValue={category}
+                onSelect={(selectedItem) => setCategory(selectedItem)} 
             />
             <InputField 
                 label="Date"
