@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
 
 export default function Dropdown({ label, options, selectedValue, onSelect }) {
     // This state controls whether the list of options is visible or hidden
@@ -22,18 +22,21 @@ export default function Dropdown({ label, options, selectedValue, onSelect }) {
             {/* The conditional menu that maps through your array of options */}
             {isOpen && (
                 <View style={styles.dropdownMenu}>
-                    {options.map((option, index) => (
-                        <TouchableOpacity 
-                            key={index} 
-                            style={styles.menuItem}
-                            onPress={() => {
-                                onSelect(option);
-                                setIsOpen(false); // Close menu after selection
-                            }}
-                        >
-                            <Text style={styles.menuItemText}>{option}</Text>
-                        </TouchableOpacity>
-                    ))}
+                    {/* Added ScrollView here */}
+                    <ScrollView nestedScrollEnabled={true}>
+                        {options.map((option, index) => (
+                            <TouchableOpacity 
+                                key={index} 
+                                style={styles.menuItem}
+                                onPress={() => {
+                                    onSelect(option);
+                                    setIsOpen(false); // Close menu after selection
+                                }}
+                            >
+                                <Text style={styles.menuItemText}>{option}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
                 </View>
             )}
         </View>
@@ -68,6 +71,8 @@ const styles = StyleSheet.create({
         borderColor: '#ccc',
         borderRadius: 5,
         marginTop: 2,
+        // CRITICAL FIX: Forces the menu to stop growing and start scrolling
+        maxHeight: 150, 
     },
     menuItem: {
         padding: 12,
