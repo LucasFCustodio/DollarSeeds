@@ -3,15 +3,43 @@ import InputField from '../ui/InputField';
 import Button from '../ui/Button';
 import Dropdown from '../ui/Dropdown'
 import React, { useState } from 'react';
+import axios from "axios"
 
 export default function ExpenseContainer() {
     const [title, setTitle] = useState()
     const [amount, setAmount] = useState()
-    const [categoryType, setCategoryType] = useState("null")
+    const [category, setCategory] = useState(null);
     const [date, setDate] = useState()
 
-    const [category, setCategory] = useState(null);
     const expenseCategories = ["Need", "Want", "Savings", "Debt"];
+
+    const submitExpense = async () => {
+        if (!title || !amount || !category || !date) {
+            console.log("Please fill out all the fields")
+            return;
+        }
+        try {
+            const SERVER_URL="https://micropaleontological-complicitly-socorro.ngrok-free.dev/expense/"
+
+            const payload = {
+                title: title,
+                amount: amount,
+                category: category,
+                date: date
+            }
+
+            const response = await axios.post(SERVER_URL, payload);
+            console.log(`Sent with status code ${response.status}, and with response ${response.data}`)
+
+            setTitle("")
+            setAmount("")
+            setCategory("")
+            setDate("")
+        } catch (error) {
+            console.error("Error sending data:", error.message);
+        }
+    }
+
     return (
         <View style={styles.expenseContainer}>
             <InputField 
@@ -46,6 +74,7 @@ export default function ExpenseContainer() {
                 rgbaColor="rgba(28, 168, 235, 0.8)"
                 width="60%"
                 padding="15"
+                onPress={submitExpense}
             />
         </View>
     )

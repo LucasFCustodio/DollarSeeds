@@ -1,15 +1,16 @@
 import { StyleSheet, Pressable, Text } from 'react-native'
 
-export default function Button({ label, rgbaColor="", width, padding}) {
+export default function Button({ label, rgbaColor="", width, padding, onPress}) {
     const buttonBackground = {
         backgroundColor: rgbaColor,
         width: width,
         padding: padding,
         marginTop: 10,
-        borderRadius: 40
+        borderRadius: 40,
+        alignItems: 'center'
     }
     return(
-        <Pressable style={buttonBackground}>
+        <Pressable style={buttonBackground} onPress={onPress}>
             <Text style={styles.text}>{label}</Text>
         </Pressable>
     )
