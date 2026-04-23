@@ -5,6 +5,11 @@ import Dropdown from '../ui/Dropdown'
 import React, { useState } from 'react';
 
 export default function ExpenseContainer() {
+    const [title, setTitle] = useState()
+    const [amount, setAmount] = useState()
+    const [categoryType, setCategoryType] = useState("null")
+    const [date, setDate] = useState()
+
     const [category, setCategory] = useState(null);
     const expenseCategories = ["Need", "Want", "Savings", "Debt"];
     return (
@@ -12,22 +17,29 @@ export default function ExpenseContainer() {
             <InputField 
                 label="Expense Title"
                 placeholder="Dinner at Chipotle"
+                value={title}
+                onChangeText={setTitle}
             />
             <InputField 
                 label="Amount"
                 icon="$"
                 placeholder="9.50"
+                isNumeric={true}
+                value={amount}
+                onChangeText={setAmount}
             />
             <Dropdown 
                 label="Category"
                 options={expenseCategories}
                 selectedValue={category}
-                onSelect={(selectedItem) => setCategory(selectedItem)} 
+                onSelect={(selectedItem) => setCategory(selectedItem)}
             />
             <InputField 
                 label="Date"
                 icon="🗓️"
                 placeholder="10/02/2026"
+                value={date}
+                onChangeText={setDate}
             />
             <Button
                 label="Add Expense +"

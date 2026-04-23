@@ -1,0 +1,28 @@
+Python:
+TO ACTIVATE THE VIRTUAL ENVIRONMENT:
+venv\Scripts\activate
+
+TO TEST THE BACKEND FASTAPI SERVER
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+IMPORTS FOR THE FASTAPI SUPABASE CONNECTION:
+import os
+from fastapi import FastAPI
+from pydantic import BaseModel
+from dotenv import load_dotenv
+from supabase import create_client, Client
+
+TO CONVERT THE PYDANTIC DATA INTO SUPABASE FORMAT:
+response = supabase.table("expenses").insert(expense.model_dump()).execute()
+
+
+
+
+
+FOR REACT/JS
+IPv4 Address: 10.0.0.13
+
+FOR THE ERROR "warning: Bundler cache is empty, rebuilding (this may take a minute)
+CommandError: TypeError: Cannot read properties of undefined (reading 'body')":
+npx expo start -c
+
