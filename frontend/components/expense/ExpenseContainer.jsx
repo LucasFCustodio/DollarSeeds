@@ -19,16 +19,20 @@ export default function ExpenseContainer() {
             return;
         }
         try {
-            const SERVER_URL="https://micropaleontological-complicitly-socorro.ngrok-free.dev/expense/"
+            const SERVER_URL="http://127.0.0.1:8000/expenses/"
 
             const payload = {
                 title: title,
-                amount: amount,
+                amount: parseFloat(amount),
                 category: category,
                 date: date
             }
 
-            const response = await axios.post(SERVER_URL, payload);
+            const response = await axios.post(SERVER_URL, payload, {
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            });
             console.log(`Sent with status code ${response.status}, and with response ${response.data}`)
 
             setTitle("")
