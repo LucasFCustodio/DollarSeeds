@@ -29,6 +29,13 @@ class Expense(BaseModel):
     date: str
     category: str
 
+class Income(BaseModel):
+    jobTitle: str
+    amount: float
+    jobType: str
+    day: int
+    month: str
+
 @app.get("/")
 def read_root():
     return {"message": "DollarSeeds Backend is running!"}
@@ -38,6 +45,15 @@ def create_expense(expense: Expense):
     # Convert the Pydantic model to a dictionary and insert it into Supabase.
     response = supabase.table("expenses").insert(expense.model_dump()).execute()
     
+    return {
+        "message": "Expense successfully added to database!",
+        "data": response.data
+    }
+
+@app.post("/income/")
+def create_income(income: Income):
+    response = supabase.table("income").insert(income.model_dump()).execute()
+
     return {
         "message": "Expense successfully added to database!",
         "data": response.data
