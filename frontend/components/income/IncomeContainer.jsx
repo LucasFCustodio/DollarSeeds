@@ -3,6 +3,7 @@ import InputField from "../ui/InputField"
 import Dropdown from "../ui/Dropdown"
 import React, { useState } from "react"
 import Button from "../ui/Button"
+import axios from "axios"
 
 export default function IncomeContainer() {
     const [jobTitle, setJobTitle] = useState()
@@ -23,8 +24,30 @@ export default function IncomeContainer() {
 
         try {
             const SERVER_URL="http://127.0.0.1:8000/income/"
+
+            const payload = {
+                jobTitle: jobTitle,
+                amount: parseFloat(amount),
+                jobType: jobType,
+                day: parseInt(day),
+                month: month
+            }
+
+            const response = await axios.post(SERVER_URL, payload, {
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            });
+
+            console.log(`Sent with status code ${response.status}, and with response ${response.data}`)
+
+            setJobTitle("")
+            setAmount("")
+            setJobType(null)
+            setDay(null)
+            setMonth(null)
         } catch(error) {
-            return 0
+            console.error("Error sending data:", error.message);
         }
     }
 
@@ -34,11 +57,16 @@ export default function IncomeContainer() {
                 label="Job Title"
                 icon="🏢"
                 placeholder="Barbecue for James"
+                value={jobTitle}
+                onChangeText={setJobTitle}
             />
             <InputField 
                 label="Amount Received"
                 icon="💵"
                 placeholder="2000"
+                isNumeric={true}
+                value={amount}
+                onChangeText={setAmount}
             />
             <Dropdown 
                 label="Job Type"
