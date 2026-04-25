@@ -26,8 +26,9 @@ app.add_middleware(
 class Expense(BaseModel):
     title: str
     amount: float
-    date: str
     category: str
+    day: int
+    month: str
 
 class Income(BaseModel):
     jobTitle: str
@@ -42,6 +43,7 @@ def read_root():
 
 @app.get("/dashboard/{current_month}")
 def get_dashboard_data(current_month: str):
+    # Income dashboard information
     income_response = supabase.table("income").select("amount").eq("month", current_month).execute()
 
     total_income = sum(item["amount"] for item in income_response.data)
@@ -50,6 +52,15 @@ def get_dashboard_data(current_month: str):
     wants_budget = total_income * .30
     goals_budget = total_income * .20
 
+    # Expense dashboard information
+    expense_needs_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Need").execute()
+    expense_wants_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Want").execute()
+    expense_goals_response = supabase.table("expenses").select("amount").eq("month", current_month).in_("category", ["Savings", "Debt"]).execute()
+
+    total_needs = sum(item["amount"] for item in expense_needs_response.data)
+    total_wants = sum(item["amount"] for item in expense_wants_response.data)
+    total_goals = sum(item["amount"] for item in expense_goals_response.data)
+
     return {
         "month": current_month,
         "total_income": total_income,
@@ -57,6 +68,11 @@ def get_dashboard_data(current_month: str):
             "needs": needs_budget,
             "wants": wants_budget,
             "goals": goals_budget
+        },
+        "expenses": {
+            "needs": total_needs,
+            "wants": total_wants,
+            "goals": total_goals
         }
     }
 
