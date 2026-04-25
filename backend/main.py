@@ -40,6 +40,26 @@ class Income(BaseModel):
 def read_root():
     return {"message": "DollarSeeds Backend is running!"}
 
+@app.get("/dashboard/{current_month}")
+def get_dashboard_data(current_month: str):
+    income_response = supabase.table("income").select("amount").eq("month", current_month).execute()
+
+    total_income = sum(item["amount"] for item in income_response.data)
+
+    needs_budget = total_income * .50
+    wants_budget = total_income * .30
+    goals_budget = total_income * .20
+
+    return {
+        "month": current_month,
+        "total_income": total_income,
+        "budgets": {
+            "needs": needs_budget,
+            "wants": wants_budget,
+            "goals": goals_budget
+        }
+    }
+
 @app.post("/expenses/")
 def create_expense(expense: Expense):
     # Convert the Pydantic model to a dictionary and insert it into Supabase.
