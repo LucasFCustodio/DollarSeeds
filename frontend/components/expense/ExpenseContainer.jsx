@@ -9,12 +9,15 @@ export default function ExpenseContainer() {
     const [title, setTitle] = useState()
     const [amount, setAmount] = useState()
     const [category, setCategory] = useState(null);
-    const [date, setDate] = useState()
+    const [day, setDay] = useState(null)
+    const [month, setMonth] = useState(null)
 
     const expenseCategories = ["Need", "Want", "Savings", "Debt"];
+    const days = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
     const submitExpense = async () => {
-        if (!title || !amount || !category || !date) {
+        if (!title || !amount || !category || !day || !month) {
             console.log("Please fill out all the fields")
             return;
         }
@@ -25,7 +28,8 @@ export default function ExpenseContainer() {
                 title: title,
                 amount: parseFloat(amount),
                 category: category,
-                date: date
+                day: parseInt(day),
+                month: month
             }
 
             const response = await axios.post(SERVER_URL, payload, {
@@ -37,8 +41,9 @@ export default function ExpenseContainer() {
 
             setTitle("")
             setAmount("")
-            setCategory("")
-            setDate("")
+            setCategory(null)
+            setDay(null)
+            setMonth(null)
         } catch (error) {
             console.error("Error sending data:", error.message);
         }
@@ -66,12 +71,17 @@ export default function ExpenseContainer() {
                 selectedValue={category}
                 onSelect={(selectedItem) => setCategory(selectedItem)}
             />
-            <InputField 
-                label="Date"
-                icon="🗓️"
-                placeholder="10/02/2026"
-                value={date}
-                onChangeText={setDate}
+            <Dropdown 
+                label="Day of the Expense"
+                options={days}
+                selectedValue={day}
+                onSelect={setDay}
+            />
+            <Dropdown 
+                label="Month of the Expense"
+                options={months}
+                selectedValue={month}
+                onSelect={setMonth}
             />
             <Button
                 label="Add Expense +"
