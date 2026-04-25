@@ -30,6 +30,14 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="addIncome" // This perfectly matches your new filename
+        options={{
+            title: 'Add Income',
+            // You can swap "dollar" for any FontAwesome icon name you prefer
+            tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

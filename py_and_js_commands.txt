@@ -1,4 +1,7 @@
 Python:
+TO ENSURE THE DEVICE CAN RUN SCRIPTS:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
 TO ACTIVATE THE VIRTUAL ENVIRONMENT:
 venv\Scripts\activate
 
