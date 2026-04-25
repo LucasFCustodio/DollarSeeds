@@ -4,6 +4,7 @@ import axios from "axios"
 
 export default function DashboardScreen() {
     const [currentMonth, setCurrentMonth] = useState("April")
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
     const [dashboardData, setDashboardData] = useState({
       total_income: 0,
@@ -26,7 +27,8 @@ export default function DashboardScreen() {
     const fetchDashboardData = async () => {
       try {
         const SERVER_URL=`http://127.0.0.1:8000/dashboard/${currentMonth}`;
-        const response = await axios.get(SERVER_URL);
+        const SERVER_URL_PHONE=`http://10.0.0.237:8000/dashboard/${currentMonth}`
+        const response = await axios.get(SERVER_URL_PHONE);
 
         setDashboardData(response.data);
       } catch (error) {
@@ -42,7 +44,9 @@ export default function DashboardScreen() {
         <ScrollView style={styles.container}>
             {/* Top Header Section */}
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>{currentMonth} Overview</Text>
+                <View>
+                    <Text style={styles.headerTitle}>{currentMonth} Overview</Text>
+                </View>
                 {/* We will eventually fetch this number from the backend */}
                 <Text style={styles.totalAmount}>${dashboardData.total_income}</Text>
                 <Text style={styles.subText}>Total Income Available</Text>

@@ -23,6 +23,7 @@ export default function ExpenseContainer() {
         }
         try {
             const SERVER_URL="http://127.0.0.1:8000/expenses/"
+            const SERVER_URL_PHONE="http://10.0.0.237:8000/expenses/"
 
             const payload = {
                 title: title,
@@ -32,7 +33,7 @@ export default function ExpenseContainer() {
                 month: month
             }
 
-            const response = await axios.post(SERVER_URL, payload, {
+            const response = await axios.post(SERVER_URL_PHONE, payload, {
                 headers: {
                     'ngrok-skip-browser-warning': 'true'
                 }
