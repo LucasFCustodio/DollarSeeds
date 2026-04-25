@@ -10,6 +10,6 @@ import ExpenseContainer from '../../components/expense/ExpenseContainer';
 
 export default function HomeScreen() {
   return (
-      <ExpenseContainer />
+      0
     );
 }
