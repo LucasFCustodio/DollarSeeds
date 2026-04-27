@@ -60,6 +60,12 @@ export default function DashboardScreen() {
       }
     };
 
+    const calculateProgress = (spent: number, budget: number) => {
+        if (!budget || budget == 0) return "0%"
+        const percentage = (spent/budget) * 100
+        return `${Math.min(percentage, 100)}%`;
+    };
+
     return (
         <ScrollView style={styles.container}>
             {/* Top Header Section */}
@@ -95,7 +101,16 @@ export default function DashboardScreen() {
                 <View style={[styles.card, { borderTopColor: '#FF6B6B' }]}>
                     <Text style={styles.cardTitle}>50% Needs</Text>
                     <Text style={styles.cardAmount}>${dashboardData.expenses.needs} / ${dashboardData.budgets.needs}</Text>
-                    <Text style={styles.cardSubText}>Budgeted</Text>
+                    
+                    {/* NEW PROGRESS BAR */}
+                    <View style={styles.progressBarBackground}>
+                        <View style={[styles.progressBarFill, { 
+                            backgroundColor: '#FF6B6B', 
+                            width: calculateProgress(dashboardData.expenses.needs, dashboardData.budgets.needs) as any 
+                        }]} />
+                    </View>
+
+                    <Text style={styles.cardSubText}>Budgeted</Text>                    
                     <Button 
                         label="View Need Expenses"
                         rgbaColor="#FF6B6B"
@@ -113,6 +128,15 @@ export default function DashboardScreen() {
                 <View style={[styles.card, { borderTopColor: '#4ECDC4' }]}>
                     <Text style={styles.cardTitle}>30% Wants</Text>
                     <Text style={styles.cardAmount}>${dashboardData.expenses.wants} / ${dashboardData.budgets.wants}</Text>
+
+                    {/* NEW PROGRESS BAR */}
+                    <View style={styles.progressBarBackground}>
+                        <View style={[styles.progressBarFill, { 
+                            backgroundColor: '#4ECDC4', 
+                            width: calculateProgress(dashboardData.expenses.wants, dashboardData.budgets.wants) as any 
+                        }]} />
+                    </View>
+
                     <Text style={styles.cardSubText}>Budgeted</Text>
                     <Button 
                         label="View Want Expenses"
@@ -131,6 +155,15 @@ export default function DashboardScreen() {
                 <View style={[styles.card, { borderTopColor: '#FFE66D' }]}>
                     <Text style={styles.cardTitle}>20% Goals</Text>
                     <Text style={styles.cardAmount}>${dashboardData.expenses.goals} / ${dashboardData.budgets.goals}</Text>
+
+                    {/* NEW PROGRESS BAR */}
+                    <View style={styles.progressBarBackground}>
+                        <View style={[styles.progressBarFill, { 
+                            backgroundColor: '#FFE66D', 
+                            width: calculateProgress(dashboardData.expenses.goals, dashboardData.budgets.goals) as any 
+                        }]} />
+                    </View>
+
                     <Text style={styles.cardSubText}>Budgeted</Text>
                     <Button 
                         label="View Goal Expenses"
@@ -217,5 +250,17 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#adb5bd',
         marginTop: 4,
-    }
+    },
+    progressBarBackground: {
+        height: 10,
+        backgroundColor: '#e9ecef', // Light gray track
+        borderRadius: 5,
+        marginVertical: 12,
+        width: '100%',
+        overflow: 'hidden', // Keeps the inner fill bar from poking out the corners
+    },
+    progressBarFill: {
+        height: '100%',
+        borderRadius: 5,
+    },
 });

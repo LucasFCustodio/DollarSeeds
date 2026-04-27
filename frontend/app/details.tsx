@@ -19,6 +19,10 @@ export default function DetailsScreen() {
     // This hook grabs the parameters we injected into the URL
     const { category, month } = useLocalSearchParams(); 
     
+    // The expenses variable is the array of all expense items for the specific month and category
+    // The expense items all have an id, title, amount, day, category, and month, retrieved from supabase
+    // The interface for Expense is needed so tsx knows the specific properties of the expenses coming from supabase
+    // It acts as a developer blueprint. It tells my code editor exactly what shape the Supabase data should be in, ensuring I don't reference properties that don't exist while I am writing the UI
     const [expenses, setExpenses] = useState<Expense[]>([]);
 
     useEffect(() => {
