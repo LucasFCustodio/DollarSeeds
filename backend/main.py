@@ -110,3 +110,9 @@ def get_expense_details(month: str, category: str):
         return {"data": []} # Fallback just in case
 
     return {"data": response.data}
+
+@app.delete("/expenses/delete/{id}")
+def delete_expense(id: int):
+    response = supabase.table("expenses").delete().eq("id", id).execute()
+
+    return response.data

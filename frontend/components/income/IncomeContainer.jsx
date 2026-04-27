@@ -24,7 +24,7 @@ export default function IncomeContainer() {
 
         try {
             const SERVER_URL="http://127.0.0.1:8000/income/"
-            const SERVER_URL_PHONE="http://10.0.0.237:8000/income/"
+            const SERVER_URL_PHONE="http://10.0.0.13:8000/income/"
 
             const payload = {
                 jobTitle: jobTitle,

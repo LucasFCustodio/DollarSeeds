@@ -6,6 +6,7 @@ import Button from '../components/ui/Button';
 
 // The interface connects to the expenses variable
 interface Expense {
+    id: number
     title: string;
     amount: number;
     day: number;
@@ -28,14 +29,25 @@ export default function DetailsScreen() {
         try {
             // Point this to your PC's IP address!
             //The month and category are being grabbed from the params that come with the routing
-            const SERVER_URL = `http://10.0.0.237:8000/expenses/details/?month=${month}&category=${category}`;
-            const response = await axios.get(SERVER_URL);
+            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/details/?month=${month}&category=${category}`;
+            const response = await axios.get(SERVER_URL_PHONE);
             
             setExpenses(response.data.data);
         } catch (error) {
             console.error("Error fetching detailed expenses:", error);
         }
     };
+
+    const deleteExpense = async (id: number) => {
+        try {
+            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/delete/${id}`
+            const response = await axios.delete(SERVER_URL_PHONE);
+
+            setExpenses(currentExpenses => currentExpenses.filter(expense => expense.id !== id));
+        } catch (error) {
+            console.error("Error fetching detailed expenses:", error);
+        }
+    }
 
     return (
         <ScrollView style={styles.container}>
@@ -62,6 +74,14 @@ export default function DetailsScreen() {
                                 <Text style={styles.expenseDate}>Day {item.day}</Text>
                             </View>
                             <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
+                            <Button 
+                                label="🗑️"
+                                rgbaColor="rgba(241, 21, 21, 0.7)"
+                                width="15%"
+                                padding="10"
+                                font="20"
+                                onPress={() => deleteExpense(item.id)}
+                            />
                         </View>
                     ))
                 )}
