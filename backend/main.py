@@ -94,3 +94,19 @@ def create_income(income: Income):
         "message": "Expense successfully added to database!",
         "data": response.data
     }
+
+
+# GET request for an viewing expense cards
+@app.get("/expenses/details/")
+def get_expense_details(month: str, category: str):
+    # Check what the frontend is asking for and query Supabase accordingly
+    if category == "Needs":
+        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Need").execute()
+    elif category == "Wants":
+        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Want").execute()
+    elif category == "Goals":
+        response = supabase.table("expenses").select("*").eq("month", month).in_("category", ["Savings", "Debt"]).execute()
+    else:
+        return {"data": []} # Fallback just in case
+
+    return {"data": response.data}

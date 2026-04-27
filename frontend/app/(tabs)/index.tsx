@@ -2,8 +2,10 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import axios from "axios"
 import Button from "../../components/ui/Button"
+import { useRouter } from 'expo-router';
 
 export default function DashboardScreen() {
+    const router = useRouter();
     const [currentMonth, setCurrentMonth] = useState("April")
     const [monthIndex, setMonthIndex] = useState(3)
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -100,7 +102,10 @@ export default function DashboardScreen() {
                         width="90%"
                         padding="10"
                         font="15"
-                        onPress={0}
+                        onPress={() => router.push({
+                            pathname: "/details",
+                            params: { category: "Needs", month: currentMonth }
+                        })}
                     />
                 </View>
 
@@ -115,7 +120,10 @@ export default function DashboardScreen() {
                         width="90%"
                         padding="10"
                         font="15"
-                        onPress={0}
+                        onPress={() => router.push({
+                            pathname: "/details",
+                            params: { category: "Wants", month: currentMonth }
+                        })}
                     />
                 </View>
 
@@ -130,7 +138,10 @@ export default function DashboardScreen() {
                         width="90%"
                         padding="10"
                         font="15"
-                        onPress={0}
+                        onPress={() => router.push({
+                            pathname: "/details",
+                            params: { category: "Goals", month: currentMonth }
+                        })}
                     />
                 </View>
 
