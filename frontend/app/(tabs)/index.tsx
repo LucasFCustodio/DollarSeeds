@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import axios from "axios"
 import Button from "../../components/ui/Button"
 import { useRouter } from 'expo-router';
@@ -24,9 +25,11 @@ export default function DashboardScreen() {
       }
     })
 
-    useEffect(() => {
-      fetchDashboardData();
-    }, [currentMonth]);
+    useFocusEffect(
+        useCallback(() => {
+            fetchDashboardData();
+        }, [currentMonth])
+    );
 
     const decreaseMonth = () => {
         // If we are on January (0), loop back to December (11). Otherwise, subtract 1.
@@ -66,6 +69,15 @@ export default function DashboardScreen() {
         return `${Math.min(percentage, 100)}%`;
     };
 
+    const checkOverspend = (spent: number, budget: number) => {
+        if (!budget || budget == 0) return false
+        const percentage = (spent/budget) * 100
+        if (percentage > 100) {
+            return true
+        }
+        else return false
+    }
+
     return (
         <ScrollView style={styles.container}>
             {/* Top Header Section */}
@@ -98,14 +110,14 @@ export default function DashboardScreen() {
             <View style={styles.cardsContainer}>
                 
                 {/* 50% Needs */}
-                <View style={[styles.card, { borderTopColor: '#FF6B6B' }]}>
+                <View style={[styles.card, { borderTopColor: '#ff9d5c' }]}>
                     <Text style={styles.cardTitle}>50% Needs</Text>
                     <Text style={styles.cardAmount}>${dashboardData.expenses.needs} / ${dashboardData.budgets.needs}</Text>
                     
                     {/* NEW PROGRESS BAR */}
                     <View style={styles.progressBarBackground}>
                         <View style={[styles.progressBarFill, { 
-                            backgroundColor: '#FF6B6B', 
+                            backgroundColor: checkOverspend(dashboardData.expenses.needs, dashboardData.budgets.needs) ? '#FF0000' : "#ff9d5c",
                             width: calculateProgress(dashboardData.expenses.needs, dashboardData.budgets.needs) as any 
                         }]} />
                     </View>
@@ -113,7 +125,7 @@ export default function DashboardScreen() {
                     <Text style={styles.cardSubText}>Budgeted</Text>                    
                     <Button 
                         label="View Need Expenses"
-                        rgbaColor="#FF6B6B"
+                        rgbaColor="#ff9d5c"
                         width="90%"
                         padding="10"
                         font="15"
@@ -132,7 +144,7 @@ export default function DashboardScreen() {
                     {/* NEW PROGRESS BAR */}
                     <View style={styles.progressBarBackground}>
                         <View style={[styles.progressBarFill, { 
-                            backgroundColor: '#4ECDC4', 
+                            backgroundColor: checkOverspend(dashboardData.expenses.wants, dashboardData.budgets.wants) ? '#FF0000' : "#4ECDC4", 
                             width: calculateProgress(dashboardData.expenses.wants, dashboardData.budgets.wants) as any 
                         }]} />
                     </View>
@@ -159,7 +171,7 @@ export default function DashboardScreen() {
                     {/* NEW PROGRESS BAR */}
                     <View style={styles.progressBarBackground}>
                         <View style={[styles.progressBarFill, { 
-                            backgroundColor: '#FFE66D', 
+                            backgroundColor: checkOverspend(dashboardData.expenses.goals, dashboardData.budgets.goals) ? '#FF0000' : "#FFE66D", 
                             width: calculateProgress(dashboardData.expenses.goals, dashboardData.budgets.goals) as any 
                         }]} />
                     </View>

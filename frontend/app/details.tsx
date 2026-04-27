@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import React, { useState, useEffect } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import axios from 'axios';
 import Button from '../components/ui/Button';
 
@@ -55,6 +55,9 @@ export default function DetailsScreen() {
 
     return (
         <ScrollView style={styles.container}>
+
+            <Stack.Screen options={{ headerShown: false }} />
+
             <View style={styles.header}>
                 <Button 
                     label="Back to Dashboard"
