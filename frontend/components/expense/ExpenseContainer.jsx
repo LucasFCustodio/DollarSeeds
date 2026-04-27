@@ -57,6 +57,7 @@ export default function ExpenseContainer() {
                 placeholder="Dinner at Chipotle"
                 value={title}
                 onChangeText={setTitle}
+                maxLength={20}
             />
             <InputField 
                 label="Amount"
@@ -65,6 +66,7 @@ export default function ExpenseContainer() {
                 isNumeric={true}
                 value={amount}
                 onChangeText={setAmount}
+                maxLength={9}
             />
             <Dropdown 
                 label="Category"

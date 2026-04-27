@@ -4,7 +4,7 @@ import { StyleSheet, View, Text, TextInput } from 'react-native';
 //1 Label to describe the type of input
 //1 optional icon to visually describe to input
 //A transparent placeholder to show an example iof what the user can input
-export default function InputField({ label, icon, placeholder, isNumeric, value, onChangeText }) {
+export default function InputField({ label, icon, placeholder, isNumeric, value, onChangeText, maxLength }) {
     return (
         <View style={styles.container}>
             <Text style={styles.label}>{label}</Text>
@@ -17,6 +17,7 @@ export default function InputField({ label, icon, placeholder, isNumeric, value,
                 keyboardType={isNumeric ? "numeric" : "default"}
                 value={value}
                 onChangeText={onChangeText}
+                maxLength={maxLength}
             />
         </View>
     )

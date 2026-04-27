@@ -60,6 +60,7 @@ export default function IncomeContainer() {
                 placeholder="Barbecue for James"
                 value={jobTitle}
                 onChangeText={setJobTitle}
+                maxLength={20}
             />
             <InputField 
                 label="Amount Received"
@@ -68,6 +69,7 @@ export default function IncomeContainer() {
                 isNumeric={true}
                 value={amount}
                 onChangeText={setAmount}
+                maxLength={9}
             />
             <Dropdown 
                 label="Job Type"
