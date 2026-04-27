@@ -1,9 +1,11 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import axios from "axios"
+import Button from "../../components/ui/Button"
 
 export default function DashboardScreen() {
     const [currentMonth, setCurrentMonth] = useState("April")
+    const [monthIndex, setMonthIndex] = useState(3)
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
     const [dashboardData, setDashboardData] = useState({
@@ -23,6 +25,22 @@ export default function DashboardScreen() {
     useEffect(() => {
       fetchDashboardData();
     }, [currentMonth]);
+
+    const decreaseMonth = () => {
+        // If we are on January (0), loop back to December (11). Otherwise, subtract 1.
+        const newIndex = monthIndex === 0 ? 11 : monthIndex - 1;
+        
+        setMonthIndex(newIndex);
+        setCurrentMonth(months[newIndex]);
+    }
+
+    const increaseMonth = () => {
+        // If we are on December (11), loop back to January (0). Otherwise, add 1.
+        const newIndex = monthIndex === 11 ? 0 : monthIndex + 1;
+        
+        setMonthIndex(newIndex);
+        setCurrentMonth(months[newIndex]);
+    }
 
     const fetchDashboardData = async () => {
       try {
@@ -44,8 +62,24 @@ export default function DashboardScreen() {
         <ScrollView style={styles.container}>
             {/* Top Header Section */}
             <View style={styles.header}>
-                <View>
+                <View style={styles.monthContainer}>
+                    <Button 
+                        label="<"
+                        rgbaColor="rgba(28, 168, 235, 0.8)"
+                        width={45}
+                        padding="10"
+                        font="20"
+                        onPress={decreaseMonth}
+                    />
                     <Text style={styles.headerTitle}>{currentMonth} Overview</Text>
+                    <Button 
+                        label=">"
+                        rgbaColor="rgba(28, 168, 235, 0.8)"
+                        width={45}
+                        padding="10"
+                        font="20"
+                        onPress={increaseMonth}
+                    />
                 </View>
                 {/* We will eventually fetch this number from the backend */}
                 <Text style={styles.totalAmount}>${dashboardData.total_income}</Text>
@@ -60,6 +94,14 @@ export default function DashboardScreen() {
                     <Text style={styles.cardTitle}>50% Needs</Text>
                     <Text style={styles.cardAmount}>${dashboardData.expenses.needs} / ${dashboardData.budgets.needs}</Text>
                     <Text style={styles.cardSubText}>Budgeted</Text>
+                    <Button 
+                        label="View Need Expenses"
+                        rgbaColor="#FF6B6B"
+                        width="90%"
+                        padding="10"
+                        font="15"
+                        onPress={0}
+                    />
                 </View>
 
                 {/* 30% Wants */}
@@ -67,6 +109,14 @@ export default function DashboardScreen() {
                     <Text style={styles.cardTitle}>30% Wants</Text>
                     <Text style={styles.cardAmount}>${dashboardData.expenses.wants} / ${dashboardData.budgets.wants}</Text>
                     <Text style={styles.cardSubText}>Budgeted</Text>
+                    <Button 
+                        label="View Want Expenses"
+                        rgbaColor="#4ECDC4"
+                        width="90%"
+                        padding="10"
+                        font="15"
+                        onPress={0}
+                    />
                 </View>
 
                 {/* 20% Goals (Savings & Debt) */}
@@ -74,6 +124,14 @@ export default function DashboardScreen() {
                     <Text style={styles.cardTitle}>20% Goals</Text>
                     <Text style={styles.cardAmount}>${dashboardData.expenses.goals} / ${dashboardData.budgets.goals}</Text>
                     <Text style={styles.cardSubText}>Budgeted</Text>
+                    <Button 
+                        label="View Goal Expenses"
+                        rgbaColor="#FFE66D"
+                        width="90%"
+                        padding="10"
+                        font="15"
+                        onPress={0}
+                    />
                 </View>
 
             </View>
@@ -92,7 +150,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderBottomWidth: 1,
         borderBottomColor: '#eee',
+        marginTop: 20,
         marginBottom: 20,
+    },
+    monthContainer: {
+        flexDirection: 'row',
+        justifyContent: "space-around",
+        alignItems: 'center',
+        width: "100%"
     },
     headerTitle: {
         fontSize: 16,

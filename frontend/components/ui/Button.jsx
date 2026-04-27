@@ -1,6 +1,6 @@
 import { StyleSheet, Pressable, Text } from 'react-native'
 
-export default function Button({ label, rgbaColor="", width, padding, onPress}) {
+export default function Button({ label, rgbaColor="", width, padding, font, onPress}) {
     const buttonBackground = {
         backgroundColor: rgbaColor,
         width: width,
@@ -9,16 +9,14 @@ export default function Button({ label, rgbaColor="", width, padding, onPress}) 
         borderRadius: 40,
         alignItems: 'center'
     }
+
+    const text = {
+        fontSize: font,
+        color: "black"
+    }
     return(
         <Pressable style={buttonBackground} onPress={onPress}>
-            <Text style={styles.text}>{label}</Text>
+            <Text style={text}>{label}</Text>
         </Pressable>
     )
 }
-
-const styles = StyleSheet.create({
-    text: {
-        fontSize: 18,
-        color: "black"
-    }
-})
