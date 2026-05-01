@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 
 // The interface connects to the expenses variable
 interface Expense {
-    id: number
+    id: number;
     title: string;
     amount: number;
     day: number;
@@ -14,20 +14,36 @@ interface Expense {
     month: string;
 }
 
+interface Income {
+    id: number;
+    jobTitle: string;
+    amount: number;
+    jobType: string;
+    day: number;
+    month: string;
+}
+
 export default function DetailsScreen() {
     const router = useRouter();
     // This hook grabs the parameters we injected into the URL
-    const { category, month } = useLocalSearchParams(); 
+    const { category, month, type } = useLocalSearchParams(); 
     
     // The expenses variable is the array of all expense items for the specific month and category
     // The expense items all have an id, title, amount, day, category, and month, retrieved from supabase
     // The interface for Expense is needed so tsx knows the specific properties of the expenses coming from supabase
     // It acts as a developer blueprint. It tells my code editor exactly what shape the Supabase data should be in, ensuring I don't reference properties that don't exist while I am writing the UI
     const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [income, setIncome] = useState<Income[]>([]);
 
     useEffect(() => {
-        fetchDetailedExpenses();
+        if(type == "expense") {
+            fetchDetailedExpenses();
+        }
+        else {
+            fetchDetailedIncome();
+        }
     }, []);
+
 
     const fetchDetailedExpenses = async () => {
         try {
@@ -53,6 +69,71 @@ export default function DetailsScreen() {
         }
     }
 
+    function renderExpense() {
+        return (
+            expenses.length === 0 ? (
+            <Text style={styles.emptyText}>No expenses logged yet.</Text>
+        ) : (
+            expenses.map((item, index) => (
+                <View key={index} style={styles.expenseItem}>
+                    <View>
+                        <Text style={styles.expenseTitle}>{item.title}</Text>
+                        <Text style={styles.expenseDate}>Day {item.day}</Text>
+                    </View>
+                    <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
+                    <Button 
+                        label="🗑️"
+                        rgbaColor="rgba(241, 21, 21, 0.7)"
+                        width="15%"
+                        padding="10"
+                        font="20"
+                        onPress={() => deleteExpense(item.id)}
+                    />
+                </View>
+            ))
+        )
+        )
+    }
+
+    const fetchDetailedIncome = async () => {
+        try {
+            //Make the axios call to the backend
+            //Month is being grabbed from the local search parameters that are sent when routing
+            const SERVER_URL_PHONE=`http://10.0.0.13:8000/income/details/?month=${month}`;
+            const response = await axios.get(SERVER_URL_PHONE);
+
+            setIncome(response.data.data)
+        } catch (error) {
+            console.error("Error fetching detailed expense:", error);
+        }
+    }
+
+    function renderIncome() {
+        return (
+            income.length === 0 ? (
+            <Text style={styles.emptyText}>No income logged yet.</Text>
+        ) : (
+            income.map((item, index) => (
+                <View key={index} style={styles.expenseItem}>
+                    <View>
+                        <Text style={styles.expenseTitle}>{item.jobTitle}</Text>
+                        <Text style={styles.expenseDate}>Day {item.day}</Text>
+                    </View>
+                    <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
+                    <Button 
+                        label="🗑️"
+                        rgbaColor="rgba(241, 21, 21, 0.7)"
+                        width="15%"
+                        padding="10"
+                        font="20"
+                        onPress={0}
+                    />
+                </View>
+            ))
+        )
+        )
+    }
+
     return (
         <ScrollView style={styles.container}>
 
@@ -69,29 +150,8 @@ export default function DetailsScreen() {
                 />
                 <Text style={styles.title}>{month} {category} Breakdown</Text>
             </View>
-
             <View style={styles.listContainer}>
-                {expenses.length === 0 ? (
-                    <Text style={styles.emptyText}>No expenses logged yet.</Text>
-                ) : (
-                    expenses.map((item, index) => (
-                        <View key={index} style={styles.expenseItem}>
-                            <View>
-                                <Text style={styles.expenseTitle}>{item.title}</Text>
-                                <Text style={styles.expenseDate}>Day {item.day}</Text>
-                            </View>
-                            <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
-                            <Button 
-                                label="🗑️"
-                                rgbaColor="rgba(241, 21, 21, 0.7)"
-                                width="15%"
-                                padding="10"
-                                font="20"
-                                onPress={() => deleteExpense(item.id)}
-                            />
-                        </View>
-                    ))
-                )}
+                {type === "expense" ? renderExpense() : renderIncome()}
             </View>
         </ScrollView>
     );

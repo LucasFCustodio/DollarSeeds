@@ -116,3 +116,10 @@ def delete_expense(id: int):
     response = supabase.table("expenses").delete().eq("id", id).execute()
 
     return response.data
+
+# GET request for viewing income cards
+@app.get("/income/details/")
+def get_income_details(month: str):
+    response = supabase.table("income").select("*").eq("month", month).execute()
+
+    return {"data": response.data}

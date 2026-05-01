@@ -104,6 +104,17 @@ export default function DashboardScreen() {
                 {/* We will eventually fetch this number from the backend */}
                 <Text style={styles.totalAmount}>${dashboardData.total_income}</Text>
                 <Text style={styles.subText}>Total Income Available</Text>
+                <Button 
+                    label="View Logged Income"
+                    rgbaColor="rgba(28, 168, 235, 0.8)"
+                    width="80%"
+                    padding="13"
+                    font="17"
+                    onPress={() => router.push({
+                        pathname: "/details",
+                        params: { category: "none", month: currentMonth, type: "income"}
+                    })}
+                />
             </View>
 
             {/* 50/30/20 Breakdown Cards */}
@@ -131,7 +142,7 @@ export default function DashboardScreen() {
                         font="15"
                         onPress={() => router.push({
                             pathname: "/details",
-                            params: { category: "Needs", month: currentMonth }
+                            params: { category: "Needs", month: currentMonth, type: "expense" }
                         })}
                     />
                 </View>
@@ -158,7 +169,7 @@ export default function DashboardScreen() {
                         font="15"
                         onPress={() => router.push({
                             pathname: "/details",
-                            params: { category: "Wants", month: currentMonth }
+                            params: { category: "Wants", month: currentMonth, type: "expense" }
                         })}
                     />
                 </View>
@@ -185,7 +196,7 @@ export default function DashboardScreen() {
                         font="15"
                         onPress={() => router.push({
                             pathname: "/details",
-                            params: { category: "Goals", month: currentMonth }
+                            params: { category: "Goals", month: currentMonth, type: "expense" }
                         })}
                     />
                 </View>
