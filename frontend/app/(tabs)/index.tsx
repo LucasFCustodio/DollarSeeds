@@ -4,9 +4,11 @@ import { useFocusEffect } from 'expo-router';
 import axios from "axios"
 import Button from "../../components/ui/Button"
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../context/AuthContext';
 
 export default function DashboardScreen() {
     const router = useRouter();
+    const { user } = useAuth();
     const [currentMonth, setCurrentMonth] = useState("April")
     const [monthIndex, setMonthIndex] = useState(3)
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -50,7 +52,7 @@ export default function DashboardScreen() {
     const fetchDashboardData = async () => {
       try {
         const SERVER_URL=`http://127.0.0.1:8000/dashboard/${currentMonth}`;
-        const SERVER_URL_PHONE=`http://10.0.0.13:8000/dashboard/${currentMonth}`
+        const SERVER_URL_PHONE=`http://10.0.0.13:8000/dashboard/${currentMonth}?user_id=${user?.id}`
         const response = await axios.get(SERVER_URL_PHONE);
 
         setDashboardData(response.data);
@@ -112,7 +114,7 @@ export default function DashboardScreen() {
                     font="17"
                     onPress={() => router.push({
                         pathname: "/details",
-                        params: { category: "none", month: currentMonth, type: "income"}
+                        params: { category: null, month: currentMonth, type: "income"}
                     })}
                 />
             </View>

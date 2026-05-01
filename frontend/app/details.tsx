@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import axios from 'axios';
 import Button from '../components/ui/Button';
+import { useAuth } from '../context/AuthContext';
 
 // The interface connects to the expenses variable
 interface Expense {
@@ -25,6 +26,7 @@ interface Income {
 
 export default function DetailsScreen() {
     const router = useRouter();
+    const { user } = useAuth();
     // This hook grabs the parameters we injected into the URL
     const { category, month, type } = useLocalSearchParams(); 
     
@@ -49,7 +51,7 @@ export default function DetailsScreen() {
         try {
             // Point this to your PC's IP address!
             //The month and category are being grabbed from the params that come with the routing
-            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/details/?month=${month}&category=${category}`;
+            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/details/?month=${month}&category=${category}&user_id=${user?.id}`;
             const response = await axios.get(SERVER_URL_PHONE);
             
             setExpenses(response.data.data);
@@ -60,12 +62,12 @@ export default function DetailsScreen() {
 
     const deleteExpense = async (id: number) => {
         try {
-            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/delete/${id}`
+            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/delete/${id}&user_id=${user?.id}`
             const response = await axios.delete(SERVER_URL_PHONE);
 
             setExpenses(currentExpenses => currentExpenses.filter(expense => expense.id !== id));
         } catch (error) {
-            console.error("Error fetching detailed expenses:", error);
+            console.error("Error deleting expenses:", error);
         }
     }
 
@@ -99,12 +101,12 @@ export default function DetailsScreen() {
         try {
             //Make the axios call to the backend
             //Month is being grabbed from the local search parameters that are sent when routing
-            const SERVER_URL_PHONE=`http://10.0.0.13:8000/income/details/?month=${month}`;
+            const SERVER_URL_PHONE=`http://10.0.0.13:8000/income/details/?month=${month}&user_id=${user?.id}`;
             const response = await axios.get(SERVER_URL_PHONE);
 
             setIncome(response.data.data)
         } catch (error) {
-            console.error("Error fetching detailed expense:", error);
+            console.error("Error fetching detailed income:", error);
         }
     }
 
@@ -148,7 +150,7 @@ export default function DetailsScreen() {
                     font="15"
                     onPress={() => router.back()}
                 />
-                <Text style={styles.title}>{month} {category} Breakdown</Text>
+                <Text style={styles.title}>{month} {category ? category : "Income"} Breakdown</Text>
             </View>
             <View style={styles.listContainer}>
                 {type === "expense" ? renderExpense() : renderIncome()}

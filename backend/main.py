@@ -29,6 +29,7 @@ class Expense(BaseModel):
     category: str
     day: int
     month: str
+    user_id: str
 
 class Income(BaseModel):
     jobTitle: str
@@ -36,15 +37,16 @@ class Income(BaseModel):
     jobType: str
     day: int
     month: str
+    user_id: str
 
 @app.get("/")
 def read_root():
     return {"message": "DollarSeeds Backend is running!"}
 
 @app.get("/dashboard/{current_month}")
-def get_dashboard_data(current_month: str):
+def get_dashboard_data(current_month: str, user_id: str):
     # Income dashboard information
-    income_response = supabase.table("income").select("amount").eq("month", current_month).execute()
+    income_response = supabase.table("income").select("amount").eq("month", current_month).eq("user_id", user_id).execute()
 
     total_income = sum(item["amount"] for item in income_response.data)
 
@@ -53,9 +55,9 @@ def get_dashboard_data(current_month: str):
     goals_budget = total_income * .20
 
     # Expense dashboard information
-    expense_needs_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Need").execute()
-    expense_wants_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Want").execute()
-    expense_goals_response = supabase.table("expenses").select("amount").eq("month", current_month).in_("category", ["Savings", "Debt"]).execute()
+    expense_needs_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Need").eq("user_id", user_id).execute()
+    expense_wants_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Want").eq("user_id", user_id).execute()
+    expense_goals_response = supabase.table("expenses").select("amount").eq("month", current_month).in_("category", ["Savings", "Debt"]).eq("user_id", user_id).execute()
 
     total_needs = sum(item["amount"] for item in expense_needs_response.data)
     total_wants = sum(item["amount"] for item in expense_wants_response.data)
@@ -98,28 +100,28 @@ def create_income(income: Income):
 
 # GET request for an viewing expense cards
 @app.get("/expenses/details/")
-def get_expense_details(month: str, category: str):
+def get_expense_details(month: str, category: str, user_id: str):
     # Check what the frontend is asking for and query Supabase accordingly
     if category == "Needs":
-        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Need").execute()
+        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Need").eq("user_id", user_id).execute()
     elif category == "Wants":
-        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Want").execute()
+        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Want").eq("user_id", user_id).execute()
     elif category == "Goals":
-        response = supabase.table("expenses").select("*").eq("month", month).in_("category", ["Savings", "Debt"]).execute()
+        response = supabase.table("expenses").select("*").eq("month", month).in_("category", ["Savings", "Debt"]).eq("user_id", user_id).execute()
     else:
         return {"data": []} # Fallback just in case
 
     return {"data": response.data}
 
 @app.delete("/expenses/delete/{id}")
-def delete_expense(id: int):
-    response = supabase.table("expenses").delete().eq("id", id).execute()
+def delete_expense(id: int, user_id: str):
+    response = supabase.table("expenses").delete().eq("id", id).eq("user_id", user_id).execute()
 
     return response.data
 
 # GET request for viewing income cards
 @app.get("/income/details/")
-def get_income_details(month: str):
-    response = supabase.table("income").select("*").eq("month", month).execute()
+def get_income_details(month: str, user_id: str):
+    response = supabase.table("income").select("*").eq("month", month).eq("user_id", user_id).execute()
 
     return {"data": response.data}

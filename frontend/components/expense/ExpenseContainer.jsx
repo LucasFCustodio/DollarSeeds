@@ -4,6 +4,7 @@ import Button from '../ui/Button';
 import Dropdown from '../ui/Dropdown'
 import React, { useState } from 'react';
 import axios from "axios"
+import { useAuth } from '../../context/AuthContext';
 
 export default function ExpenseContainer() {
     const [title, setTitle] = useState()
@@ -11,6 +12,8 @@ export default function ExpenseContainer() {
     const [category, setCategory] = useState(null);
     const [day, setDay] = useState(null)
     const [month, setMonth] = useState(null)
+
+    const { user } = useAuth();
 
     const expenseCategories = ["Need", "Want", "Savings", "Debt"];
     const days = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
@@ -30,7 +33,8 @@ export default function ExpenseContainer() {
                 amount: parseFloat(amount),
                 category: category,
                 day: parseInt(day),
-                month: month
+                month: month,
+                user_id: user?.id
             }
 
             const response = await axios.post(SERVER_URL_PHONE, payload, {
