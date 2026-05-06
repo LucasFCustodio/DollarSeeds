@@ -5,6 +5,7 @@ import axios from "axios"
 import Button from "../../components/ui/Button"
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function DashboardScreen() {
     const router = useRouter();
@@ -49,6 +50,13 @@ export default function DashboardScreen() {
         setCurrentMonth(months[newIndex]);
     }
 
+    const handleLogout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error("Error logging out:", error.message);
+        }
+    };
+
     const fetchDashboardData = async () => {
       try {
         const SERVER_URL=`http://127.0.0.1:8000/dashboard/${currentMonth}`;
@@ -84,6 +92,18 @@ export default function DashboardScreen() {
         <ScrollView style={styles.container}>
             {/* Top Header Section */}
             <View style={styles.header}>
+
+                <View style={{ width: '100%', alignItems: 'flex-end', marginBottom: 10 }}>
+                    <Button 
+                        label="Logout"
+                        rgbaColor="#f51127c0" 
+                        width="30%"
+                        padding="8"
+                        font="14"
+                        onPress={handleLogout}
+                    />
+                </View>
+
                 <View style={styles.monthContainer}>
                     <Button 
                         label="<"
