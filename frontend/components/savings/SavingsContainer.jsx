@@ -1,16 +1,18 @@
 import { StyleSheet, View, Text, Alert } from 'react-native';
-import InputField from '../ui/InputField';
 import Button from '../ui/Button';
 import Dropdown from '../ui/Dropdown';
+import InputField from '../ui/InputField';
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 
-export default function SavingsContainer({ transactionType, currentBalance, onSuccess }) {
-    const [title, setTitle] = useState('');
+const BASE = 'http://10.0.0.13:8000';
+
+export default function SavingsContainer({ transactionType, currentBalance, onSuccess, goals = [] }) {
     const [amount, setAmount] = useState('');
     const [day, setDay] = useState(null);
     const [month, setMonth] = useState(null);
+    const [selectedGoalTitle, setSelectedGoalTitle] = useState(null);
 
     const { user } = useAuth();
 
@@ -18,26 +20,34 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
     const isDeposit = transactionType === 'deposit';
-    const labelText = isDeposit ? 'What are you saving for?' : 'What did you buy?';
-    const placeholder = isDeposit ? 'Emergency fund' : 'New laptop';
+    const goalTitles = goals.map(g => g.title);
+    const selectedGoal = goals.find(g => g.title === selectedGoalTitle);
+
+    const reset = () => {
+        setAmount('');
+        setDay(null);
+        setMonth(null);
+        setSelectedGoalTitle(null);
+    };
 
     const doSubmit = async () => {
         try {
-            const payload = {
+            await axios.post(`${BASE}/savings/transaction/`, {
                 user_id: user?.id,
-                title,
+                title: selectedGoal?.title ?? (isDeposit ? 'Deposit' : 'Withdrawal'),
                 amount: parseFloat(amount),
                 type: transactionType,
                 day: parseInt(day),
                 month,
-            };
-            await axios.post('http://10.0.0.13:8000/savings/transaction/', payload, {
-                headers: { 'ngrok-skip-browser-warning': 'true' },
-            });
-            setTitle('');
-            setAmount('');
-            setDay(null);
-            setMonth(null);
+                goal_id: selectedGoal?.id ?? null,
+            }, { headers: { 'ngrok-skip-browser-warning': 'true' } });
+
+            // Completing a goal is triggered by any withdrawal with a goal selected
+            if (!isDeposit && selectedGoal) {
+                await axios.patch(`${BASE}/savings/goal/${selectedGoal.id}/complete?user_id=${user?.id}`);
+            }
+
+            reset();
             onSuccess?.();
         } catch (error) {
             console.error('Error saving transaction:', error.message);
@@ -45,15 +55,24 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
     };
 
     const submit = () => {
-        if (!title || !amount || !day || !month) {
+        if (!amount || !day || !month) {
             console.log('Please fill out all fields');
+            return;
+        }
+        if (goals.length > 0 && !selectedGoalTitle) {
+            Alert.alert(
+                'Select a goal',
+                isDeposit
+                    ? 'Please choose which savings goal this money is going towards.'
+                    : 'Please choose which goal you completed.'
+            );
             return;
         }
         const parsed = parseFloat(amount);
         if (!isDeposit && parsed > currentBalance) {
             Alert.alert(
                 'Heads up!',
-                `You only have $${currentBalance.toFixed(2)} saved, but you're about to withdraw $${parsed.toFixed(2)}. Spending more than you've saved goes against the budgeting ideal — your balance will go negative.\n\nAre you sure you want to continue?`,
+                `You only have $${currentBalance.toFixed(2)} saved, but you're about to withdraw $${parsed.toFixed(2)}. Your balance will go negative.\n\nAre you sure you want to continue?`,
                 [
                     { text: 'Cancel', style: 'cancel' },
                     { text: 'Go On', style: 'destructive', onPress: doSubmit },
@@ -69,13 +88,14 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
             <Text style={styles.heading}>
                 {isDeposit ? '🐷 Set Money Aside' : '🛍️ I Bought It'}
             </Text>
-            <InputField
-                label={labelText}
-                placeholder={placeholder}
-                value={title}
-                onChangeText={setTitle}
-                maxLength={30}
-            />
+            {goals.length > 0 && (
+                <Dropdown
+                    label={isDeposit ? 'Which goal is this for?' : 'Which goal did you complete?'}
+                    options={goalTitles}
+                    selectedValue={selectedGoalTitle}
+                    onSelect={setSelectedGoalTitle}
+                />
+            )}
             <InputField
                 label="Amount"
                 icon="$"
@@ -85,18 +105,8 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
                 onChangeText={setAmount}
                 maxLength={9}
             />
-            <Dropdown
-                label="Day"
-                options={days}
-                selectedValue={day}
-                onSelect={setDay}
-            />
-            <Dropdown
-                label="Month"
-                options={months}
-                selectedValue={month}
-                onSelect={setMonth}
-            />
+            <Dropdown label="Day" options={days} selectedValue={day} onSelect={setDay} />
+            <Dropdown label="Month" options={months} selectedValue={month} onSelect={setMonth} />
             <Button
                 label={isDeposit ? 'Add to Piggy Bank' : 'Withdraw from Piggy Bank'}
                 rgbaColor={isDeposit ? 'rgba(80, 200, 120, 0.85)' : 'rgba(255, 100, 100, 0.85)'}

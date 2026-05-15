@@ -62,12 +62,23 @@ export default function DetailsScreen() {
 
     const deleteExpense = async (id: number) => {
         try {
-            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/delete/${id}&user_id=${user?.id}`
-            const response = await axios.delete(SERVER_URL_PHONE);
+            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/delete/${id}?user_id=${user?.id}`
+            await axios.delete(SERVER_URL_PHONE);
 
             setExpenses(currentExpenses => currentExpenses.filter(expense => expense.id !== id));
         } catch (error) {
             console.error("Error deleting expenses:", error);
+        }
+    }
+
+    const deleteIncome = async (id: number) => {
+        try {
+            const SERVER_URL_PHONE = `http://10.0.0.13:8000/income/delete/${id}?user_id=${user?.id}`
+            await axios.delete(SERVER_URL_PHONE);
+
+            setIncome(currentIncome => currentIncome.filter(item => item.id !== id));
+        } catch (error) {
+            console.error("Error deleting income:", error);
         }
     }
 
@@ -122,13 +133,13 @@ export default function DetailsScreen() {
                         <Text style={styles.expenseDate}>Day {item.day}</Text>
                     </View>
                     <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
-                    <Button 
+                    <Button
                         label="🗑️"
                         rgbaColor="rgba(241, 21, 21, 0.7)"
                         width="15%"
                         padding="10"
                         font="20"
-                        onPress={0}
+                        onPress={() => deleteIncome(item.id)}
                     />
                 </View>
             ))
