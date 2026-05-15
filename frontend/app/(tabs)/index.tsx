@@ -27,6 +27,7 @@ export default function DashboardScreen() {
         goals: 0
       }
     })
+    const [piggyBankBalance, setPiggyBankBalance] = useState(0)
 
     useFocusEffect(
         useCallback(() => {
@@ -59,11 +60,13 @@ export default function DashboardScreen() {
 
     const fetchDashboardData = async () => {
       try {
-        const SERVER_URL=`http://127.0.0.1:8000/dashboard/${currentMonth}`;
-        const SERVER_URL_PHONE=`http://10.0.0.13:8000/dashboard/${currentMonth}?user_id=${user?.id}`
-        const response = await axios.get(SERVER_URL_PHONE);
-
-        setDashboardData(response.data);
+        const BASE = `http://10.0.0.13:8000`;
+        const [dashRes, piggyRes] = await Promise.all([
+          axios.get(`${BASE}/dashboard/${currentMonth}?user_id=${user?.id}`),
+          axios.get(`${BASE}/savings/balance/?user_id=${user?.id}`),
+        ]);
+        setDashboardData(dashRes.data);
+        setPiggyBankBalance(piggyRes.data.balance);
       } catch (error) {
         if (error instanceof Error) {
             console.error("Error fetching dashboard data:", error.message);
@@ -196,22 +199,22 @@ export default function DashboardScreen() {
                     />
                 </View>
 
-                {/* 20% Goals (Savings & Debt) */}
+                {/* 20% Goals (Debt + Piggy Bank) */}
                 <View style={[styles.card, { borderTopColor: '#FFE66D' }]}>
                     <Text style={styles.cardTitle}>20% Goals</Text>
                     <Text style={styles.cardAmount}>${dashboardData.expenses.goals} / ${dashboardData.budgets.goals}</Text>
 
-                    {/* NEW PROGRESS BAR */}
                     <View style={styles.progressBarBackground}>
-                        <View style={[styles.progressBarFill, { 
-                            backgroundColor: checkOverspend(dashboardData.expenses.goals, dashboardData.budgets.goals) ? '#FF0000' : "#FFE66D", 
-                            width: calculateProgress(dashboardData.expenses.goals, dashboardData.budgets.goals) as any 
+                        <View style={[styles.progressBarFill, {
+                            backgroundColor: checkOverspend(dashboardData.expenses.goals, dashboardData.budgets.goals) ? '#FF0000' : "#FFE66D",
+                            width: calculateProgress(dashboardData.expenses.goals, dashboardData.budgets.goals) as any
                         }]} />
                     </View>
 
-                    <Text style={styles.cardSubText}>Budgeted</Text>
-                    <Button 
-                        label="View Goal Expenses"
+                    <Text style={styles.cardSubText}>Debt Spending</Text>
+                    <Text style={styles.piggyBankLine}>🐷 Piggy Bank: ${piggyBankBalance.toFixed(2)}</Text>
+                    <Button
+                        label="View Debt Expenses"
                         rgbaColor="#FFE66D"
                         width="90%"
                         padding="10"
@@ -220,6 +223,14 @@ export default function DashboardScreen() {
                             pathname: "/details",
                             params: { category: "Goals", month: currentMonth, type: "expense" }
                         })}
+                    />
+                    <Button
+                        label="Open Piggy Bank 🐷"
+                        rgbaColor="rgba(255, 200, 80, 0.85)"
+                        width="90%"
+                        padding="10"
+                        font="15"
+                        onPress={() => router.push("/(tabs)/piggyBank" as any)}
                     />
                 </View>
 
@@ -307,5 +318,11 @@ const styles = StyleSheet.create({
     progressBarFill: {
         height: '100%',
         borderRadius: 5,
+    },
+    piggyBankLine: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#a07800',
+        marginBottom: 10,
     },
 });

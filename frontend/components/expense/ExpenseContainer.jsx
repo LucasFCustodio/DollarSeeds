@@ -15,7 +15,7 @@ export default function ExpenseContainer() {
 
     const { user } = useAuth();
 
-    const expenseCategories = ["Need", "Want", "Savings", "Debt"];
+    const expenseCategories = ["Need", "Want", "Debt"];
     const days = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
@@ -72,12 +72,15 @@ export default function ExpenseContainer() {
                 onChangeText={setAmount}
                 maxLength={9}
             />
-            <Dropdown 
+            <Dropdown
                 label="Category"
                 options={expenseCategories}
                 selectedValue={category}
                 onSelect={(selectedItem) => setCategory(selectedItem)}
             />
+            {category === "Want" && (
+                <Text style={styles.nudgeText}>Is this a want or a need? Take a moment before logging.</Text>
+            )}
             <Dropdown 
                 label="Day of the Expense"
                 options={days}
@@ -102,6 +105,13 @@ export default function ExpenseContainer() {
 }
 
 const styles = StyleSheet.create({
+    nudgeText: {
+        fontSize: 12,
+        color: '#e07b00',
+        marginTop: -8,
+        marginBottom: 8,
+        fontStyle: 'italic',
+    },
     expenseContainer: {
         display: 'flex',
         flexDirection: 'column',

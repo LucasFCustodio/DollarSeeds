@@ -31,11 +31,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="addIncome" // This perfectly matches your new filename
+        name="addIncome"
         options={{
             title: 'Add Income',
-            // You can swap "dollar" for any FontAwesome icon name you prefer
             tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="piggyBank"
+        options={{
+            title: 'Piggy Bank',
+            tabBarIcon: ({ color }) => <IconSymbol size={28} name="banknote.fill" color={color} />,
         }}
       />
     </Tabs>

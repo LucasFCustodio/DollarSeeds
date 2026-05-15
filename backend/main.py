@@ -39,6 +39,14 @@ class Income(BaseModel):
     month: str
     user_id: str
 
+class SavingsEntry(BaseModel):
+    user_id: str
+    title: str
+    amount: float
+    type: str  # "deposit" or "withdrawal"
+    day: int
+    month: str
+
 @app.get("/")
 def read_root():
     return {"message": "DollarSeeds Backend is running!"}
@@ -57,11 +65,12 @@ def get_dashboard_data(current_month: str, user_id: str):
     # Expense dashboard information
     expense_needs_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Need").eq("user_id", user_id).execute()
     expense_wants_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Want").eq("user_id", user_id).execute()
-    expense_goals_response = supabase.table("expenses").select("amount").eq("month", current_month).in_("category", ["Savings", "Debt"]).eq("user_id", user_id).execute()
+    expense_goals_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Debt").eq("user_id", user_id).execute()
+    savings_deposits_response = supabase.table("savings_transactions").select("amount").eq("month", current_month).eq("type", "deposit").eq("user_id", user_id).execute()
 
     total_needs = sum(item["amount"] for item in expense_needs_response.data)
     total_wants = sum(item["amount"] for item in expense_wants_response.data)
-    total_goals = sum(item["amount"] for item in expense_goals_response.data)
+    total_goals = sum(item["amount"] for item in expense_goals_response.data) + sum(item["amount"] for item in savings_deposits_response.data)
 
     return {
         "month": current_month,
@@ -107,7 +116,7 @@ def get_expense_details(month: str, category: str, user_id: str):
     elif category == "Wants":
         response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Want").eq("user_id", user_id).execute()
     elif category == "Goals":
-        response = supabase.table("expenses").select("*").eq("month", month).in_("category", ["Savings", "Debt"]).eq("user_id", user_id).execute()
+        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Debt").eq("user_id", user_id).execute()
     else:
         return {"data": []} # Fallback just in case
 
@@ -125,3 +134,30 @@ def get_income_details(month: str, user_id: str):
     response = supabase.table("income").select("*").eq("month", month).eq("user_id", user_id).execute()
 
     return {"data": response.data}
+
+@app.get("/savings/balance/")
+def get_savings_balance(user_id: str):
+    response = supabase.table("savings_transactions").select("amount, type").eq("user_id", user_id).execute()
+    balance = sum(
+        r["amount"] if r["type"] == "deposit" else -r["amount"]
+        for r in response.data
+    )
+    return {"balance": balance}
+
+@app.post("/savings/transaction/")
+def create_savings_transaction(entry: SavingsEntry):
+    response = supabase.table("savings_transactions").insert(entry.model_dump()).execute()
+    return {"message": "Savings transaction recorded.", "data": response.data}
+
+@app.get("/savings/history/")
+def get_savings_history(user_id: str, month: str = None):
+    query = supabase.table("savings_transactions").select("*").eq("user_id", user_id)
+    if month:
+        query = query.eq("month", month)
+    response = query.order("created_at", desc=True).execute()
+    return {"data": response.data}
+
+@app.delete("/savings/transaction/{id}")
+def delete_savings_transaction(id: int, user_id: str):
+    response = supabase.table("savings_transactions").delete().eq("id", id).eq("user_id", user_id).execute()
+    return response.data

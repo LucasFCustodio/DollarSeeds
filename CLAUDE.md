@@ -1,6 +1,6 @@
 # DollarSeeds
 
-Personal finance tracker based on the **50/30/20 budgeting rule** (50% Needs, 30% Wants, 20% Goals). Users log monthly income and expenses; the app tracks spending against budget targets.
+Personal finance tracker based on the **50/30/20 budgeting rule** (50% Needs, 30% Wants, 20% Goals) that is integrated with the Christian Faith. Users log monthly income and expenses; the app tracks spending against budget targets.
 
 ## Tech Stack
 
@@ -22,6 +22,8 @@ Personal finance tracker based on the **50/30/20 budgeting rule** (50% Needs, 30
 | [frontend/context/](frontend/context/) | React Context providers (`AuthContext.tsx`) |
 | [frontend/lib/](frontend/lib/) | Supabase client init (`supabase.ts`) |
 | [frontend/constants/](frontend/constants/) | App-wide constants (`theme.ts` for colors/fonts) |
+| [frontend/app/(tabs)/piggyBank.tsx](frontend/app/(tabs)/piggyBank.tsx) | Piggy bank screen — savings deposit/withdrawal UI and transaction history |
+| [frontend/components/savings/](frontend/components/savings/) | `SavingsContainer.jsx` — form component for savings deposits and withdrawals |
 | [backend/main.py](backend/main.py) | All FastAPI routes and Supabase query logic |
 
 ## Commands

@@ -24,6 +24,21 @@
 | `day` | integer | |
 | `month` | text | Month name |
 
+### `savings_transactions`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | bigint (identity PK) | |
+| `user_id` | uuid | |
+| `title` | text | e.g. "Emergency fund", "Bought the MacBook!" |
+| `amount` | numeric | Always positive |
+| `type` | text | `"deposit"` or `"withdrawal"` |
+| `day` | integer | |
+| `month` | text | Month name |
+| `created_at` | timestamptz | Default NOW() |
+
+Balance = `SUM(amount WHERE type='deposit') - SUM(amount WHERE type='withdrawal')`, computed in `GET /savings/balance/`. Persists across months (not reset monthly).
+
 ## Budget Calculation
 
 Computed server-side in [backend/main.py](../../backend/main.py) lines ~53–55 from the month's total income:

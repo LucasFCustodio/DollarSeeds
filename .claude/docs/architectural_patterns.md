@@ -48,6 +48,10 @@ Both expense and income forms follow the same structure.
 
 ---
 
+## Savings / Piggy Bank
+
+`SavingsContainer.jsx` follows the same pattern as `ExpenseContainer.jsx` — accepts a `transactionType` prop (`"deposit"` | `"withdrawal"`), manages form state locally, and POSTs to `/savings/transaction/`. The piggy bank balance is a cross-month aggregate (`GET /savings/balance/`) fetched separately from the monthly dashboard endpoint; the dashboard calls both in parallel via `Promise.all`.
+
 ## Dashboard Data Refresh
 
 [frontend/app/(tabs)/index.tsx](../../frontend/app/(tabs)/index.tsx) uses `useFocusEffect` (not `useEffect`) so data refreshes every time the tab is opened.
