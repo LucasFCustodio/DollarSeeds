@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "budget-optimizer": {
+      "source": "onewave-ai/claude-skills",
+      "sourceType": "github",
+      "skillPath": "budget-optimizer/SKILL.md",
+      "computedHash": "f6efa0fc4f70975619d48b40c63b734b0cf91adba1716641289cfd1688aba7df"
+    }
+  }
+}

@@ -1,0 +1,3 @@
+USE THESE COMMANDS IF GIT PUSH IS NOT WORKING
+git config --global --unset http.proxy
+git config --global --unset https.proxy
