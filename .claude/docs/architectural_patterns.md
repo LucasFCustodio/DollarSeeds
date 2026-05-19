@@ -37,12 +37,25 @@ All Supabase queries are in [backend/main.py](../../backend/main.py) using the P
 
 ---
 
+## Theming
+
+All screens and components consume design tokens via `useTheme()` — never hardcode colors.
+
+- Hook: `const { theme, isDark, toggleTheme } = useTheme()` from [frontend/context/ThemeContext.tsx](../../frontend/context/ThemeContext.tsx)
+- `AppThemeProvider` wraps the app in [frontend/app/_layout.tsx](../../frontend/app/_layout.tsx)
+- Apply tokens inline: `style={{ backgroundColor: theme.surface, color: theme.text }}`
+- Full token list and Button API: [design_system.md](./design_system.md)
+
+---
+
 ## Form Pattern
 
 Both expense and income forms follow the same structure.
 
 - Container component manages all form state and submission: [frontend/components/expense/ExpenseContainer.jsx](../../frontend/components/expense/ExpenseContainer.jsx), [frontend/components/income/IncomeContainer.jsx](../../frontend/components/income/IncomeContainer.jsx)
-- Shared primitives: [frontend/components/ui/InputField.jsx](../../frontend/components/ui/InputField.jsx) (label + text input), [frontend/components/ui/Dropdown.jsx](../../frontend/components/ui/Dropdown.jsx)
+- Shared primitives: [frontend/components/ui/InputField.jsx](../../frontend/components/ui/InputField.jsx), [frontend/components/ui/Dropdown.jsx](../../frontend/components/ui/Dropdown.jsx)
+- Both primitives are theme-aware — no style props needed from callers
+- Submit button uses `variant="primary" size="lg" fullWidth` — see [design_system.md#button-component](./design_system.md#button-component)
 - On successful POST, all state fields are manually reset to `""` / `null`
 - Validation: check all fields are non-empty before calling the API
 
