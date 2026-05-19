@@ -3,47 +3,54 @@ import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTheme } from '@/context/ThemeContext';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+    const { theme } = useTheme();
 
-  return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="add"
-        options={{
-          title: 'Add Expense',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="addIncome"
-        options={{
-            title: 'Add Income',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="piggyBank"
-        options={{
-            title: 'Piggy Bank',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="banknote.fill" color={color} />,
-        }}
-      />
-    </Tabs>
-  );
+    return (
+        <Tabs
+            screenOptions={{
+                tabBarActiveTintColor: theme.tabActive,
+                tabBarInactiveTintColor: theme.tabInactive,
+                tabBarStyle: {
+                    backgroundColor: theme.tabBar,
+                    borderTopColor: theme.tabBarBorder,
+                    borderTopWidth: 1,
+                },
+                tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+                headerShown: false,
+                tabBarButton: HapticTab,
+            }}
+        >
+            <Tabs.Screen
+                name="index"
+                options={{
+                    title: 'Home',
+                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="house.fill" color={color} />,
+                }}
+            />
+            <Tabs.Screen
+                name="add"
+                options={{
+                    title: 'Expense',
+                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="minus.circle.fill" color={color} />,
+                }}
+            />
+            <Tabs.Screen
+                name="addIncome"
+                options={{
+                    title: 'Income',
+                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="plus.circle.fill" color={color} />,
+                }}
+            />
+            <Tabs.Screen
+                name="piggyBank"
+                options={{
+                    title: 'Savings',
+                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="banknote.fill" color={color} />,
+                }}
+            />
+        </Tabs>
+    );
 }

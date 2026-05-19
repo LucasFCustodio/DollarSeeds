@@ -5,64 +5,57 @@ import 'react-native-reanimated';
 import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 
-import { useColorScheme } from '@/hooks/use-color-scheme'; // Your existing theme hook
-import { AuthProvider, useAuth } from '../context/AuthContext'; // Make sure this path matches your folder structure!
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AuthProvider, useAuth } from '../context/AuthContext';
+import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+    anchor: '(tabs)',
 };
 
-// 1. We moved your existing layout code into this inner component so it can access the AuthContext
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-  const { user, initialized } = useAuth();
-  const router = useRouter();
-  const segments = useSegments();
+    const colorScheme = useColorScheme();
+    const { user, initialized } = useAuth();
+    const { theme } = useTheme();
+    const router = useRouter();
+    const segments = useSegments();
 
-  // THE BOUNCER LOGIC
-  useEffect(() => {
-    if (!initialized) return; // Wait until Supabase checks local storage
+    useEffect(() => {
+        if (!initialized) return;
+        const inAuthGroup = segments[0] === 'auth';
+        if (!user && !inAuthGroup) {
+            router.replace('/auth');
+        } else if (user && inAuthGroup) {
+            router.replace('/(tabs)');
+        }
+    }, [user, initialized, segments]);
 
-    const inAuthGroup = segments[0] === 'auth';
-
-    if (!user && !inAuthGroup) {
-      // No ID -> Send to Login
-      router.replace('/auth');
-    } else if (user && inAuthGroup) {
-      // Has ID -> Send to Dashboard
-      router.replace('/(tabs)');
+    if (!initialized) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
+                <ActivityIndicator size="large" color={theme.action} />
+            </View>
+        );
     }
-  }, [user, initialized, segments]);
 
-  // Show a loading spinner while Supabase checks the storage
-  if (!initialized) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#1ca8eb" />
-      </View>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+                <Stack.Screen name="auth" options={{ headerShown: false }} />
+            </Stack>
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        </ThemeProvider>
     );
-  }
-
-  // If the bouncer approves, render your original template code!
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        
-        {/* ADDED THE NEW AUTH SCREEN TO THE STACK */}
-        <Stack.Screen name="auth" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
 }
 
-// 2. Wrap the whole app in the AuthProvider so the bouncer has access to the database
 export default function RootLayout() {
-  return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
-  );
+    return (
+        <AuthProvider>
+            <AppThemeProvider>
+                <RootLayoutNav />
+            </AppThemeProvider>
+        </AuthProvider>
+    );
 }

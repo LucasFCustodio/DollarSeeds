@@ -5,6 +5,7 @@ import InputField from '../ui/InputField';
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const BASE = 'http://10.0.0.13:8000';
 
@@ -15,20 +16,16 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
     const [selectedGoalTitle, setSelectedGoalTitle] = useState(null);
 
     const { user } = useAuth();
+    const { theme } = useTheme();
 
-    const days = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31];
-    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const days = Array.from({ length: 31 }, (_, i) => i + 1);
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
     const isDeposit = transactionType === 'deposit';
     const goalTitles = goals.map(g => g.title);
     const selectedGoal = goals.find(g => g.title === selectedGoalTitle);
 
-    const reset = () => {
-        setAmount('');
-        setDay(null);
-        setMonth(null);
-        setSelectedGoalTitle(null);
-    };
+    const reset = () => { setAmount(''); setDay(null); setMonth(null); setSelectedGoalTitle(null); };
 
     const doSubmit = async () => {
         try {
@@ -42,11 +39,9 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
                 goal_id: selectedGoal?.id ?? null,
             }, { headers: { 'ngrok-skip-browser-warning': 'true' } });
 
-            // Completing a goal is triggered by any withdrawal with a goal selected
             if (!isDeposit && selectedGoal) {
                 await axios.patch(`${BASE}/savings/goal/${selectedGoal.id}/complete?user_id=${user?.id}`);
             }
-
             reset();
             onSuccess?.();
         } catch (error) {
@@ -55,10 +50,7 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
     };
 
     const submit = () => {
-        if (!amount || !day || !month) {
-            console.log('Please fill out all fields');
-            return;
-        }
+        if (!amount || !day || !month) return;
         if (goals.length > 0 && !selectedGoalTitle) {
             Alert.alert(
                 'Select a goal',
@@ -72,7 +64,7 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
         if (!isDeposit && parsed > currentBalance) {
             Alert.alert(
                 'Heads up!',
-                `You only have $${currentBalance.toFixed(2)} saved, but you're about to withdraw $${parsed.toFixed(2)}. Your balance will go negative.\n\nAre you sure you want to continue?`,
+                `You only have $${currentBalance.toFixed(2)} saved, but you're about to withdraw $${parsed.toFixed(2)}. Your balance will go negative.\n\nAre you sure?`,
                 [
                     { text: 'Cancel', style: 'cancel' },
                     { text: 'Go On', style: 'destructive', onPress: doSubmit },
@@ -83,11 +75,14 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
         }
     };
 
+    const accentColor = isDeposit ? theme.goals : theme.danger;
+
     return (
-        <View style={styles.container}>
-            <Text style={styles.heading}>
+        <View style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border, borderLeftColor: accentColor }]}>
+            <Text style={[styles.heading, { color: theme.text }]}>
                 {isDeposit ? '🐷 Set Money Aside' : '🛍️ I Bought It'}
             </Text>
+
             {goals.length > 0 && (
                 <Dropdown
                     label={isDeposit ? 'Which goal is this for?' : 'Which goal did you complete?'}
@@ -96,40 +91,40 @@ export default function SavingsContainer({ transactionType, currentBalance, onSu
                     onSelect={setSelectedGoalTitle}
                 />
             )}
-            <InputField
-                label="Amount"
-                icon="$"
-                placeholder="50.00"
-                isNumeric={true}
-                value={amount}
-                onChangeText={setAmount}
-                maxLength={9}
-            />
+
+            <InputField label="Amount" icon="$" placeholder="50.00" isNumeric value={amount} onChangeText={setAmount} maxLength={9} />
             <Dropdown label="Day" options={days} selectedValue={day} onSelect={setDay} />
             <Dropdown label="Month" options={months} selectedValue={month} onSelect={setMonth} />
-            <Button
-                label={isDeposit ? 'Add to Piggy Bank' : 'Withdraw from Piggy Bank'}
-                rgbaColor={isDeposit ? 'rgba(80, 200, 120, 0.85)' : 'rgba(255, 100, 100, 0.85)'}
-                width="80%"
-                padding="13"
-                onPress={submit}
-            />
+
+            <View style={styles.btnRow}>
+                <Button
+                    label={isDeposit ? 'Add to Piggy Bank' : 'Withdraw from Piggy Bank'}
+                    variant={isDeposit ? 'success' : 'danger'}
+                    size="lg"
+                    fullWidth
+                    onPress={submit}
+                />
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
-        paddingHorizontal: 24,
-        paddingVertical: 16,
-        backgroundColor: '#fff',
+        marginHorizontal: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderLeftWidth: 4,
         borderRadius: 12,
+        padding: 18,
         gap: 4,
     },
     heading: {
-        fontSize: 17,
-        fontWeight: '600',
-        color: '#343a40',
+        fontSize: 16,
+        fontWeight: '700',
         marginBottom: 8,
+    },
+    btnRow: {
+        marginTop: 8,
     },
 });

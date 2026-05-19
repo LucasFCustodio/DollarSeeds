@@ -1,225 +1,183 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import axios from 'axios';
-import Button from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
-// The interface connects to the expenses variable
 interface Expense {
-    id: number;
-    title: string;
-    amount: number;
-    day: number;
-    category: string;
-    month: string;
+    id: number; title: string; amount: number; day: number; category: string; month: string;
+}
+interface Income {
+    id: number; jobTitle: string; amount: number; jobType: string; day: number; month: string;
 }
 
-interface Income {
-    id: number;
-    jobTitle: string;
-    amount: number;
-    jobType: string;
-    day: number;
-    month: string;
-}
+const CATEGORY_COLOR: Record<string, string | undefined> = {
+    Needs: undefined, // resolved at render time from theme
+    Wants: undefined,
+    Goals: undefined,
+};
 
 export default function DetailsScreen() {
     const router = useRouter();
     const { user } = useAuth();
-    // This hook grabs the parameters we injected into the URL
-    const { category, month, type } = useLocalSearchParams(); 
-    
-    // The expenses variable is the array of all expense items for the specific month and category
-    // The expense items all have an id, title, amount, day, category, and month, retrieved from supabase
-    // The interface for Expense is needed so tsx knows the specific properties of the expenses coming from supabase
-    // It acts as a developer blueprint. It tells my code editor exactly what shape the Supabase data should be in, ensuring I don't reference properties that don't exist while I am writing the UI
+    const { theme } = useTheme();
+    const { category, month, type } = useLocalSearchParams();
+
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [income, setIncome] = useState<Income[]>([]);
 
     useEffect(() => {
-        if(type == "expense") {
-            fetchDetailedExpenses();
-        }
-        else {
-            fetchDetailedIncome();
-        }
+        if (type === 'expense') fetchDetailedExpenses();
+        else fetchDetailedIncome();
     }, []);
 
+    const getCategoryColor = () => {
+        if (category === 'Needs') return theme.needs;
+        if (category === 'Wants') return theme.wants;
+        if (category === 'Goals') return theme.goals;
+        return theme.action;
+    };
 
     const fetchDetailedExpenses = async () => {
         try {
-            // Point this to your PC's IP address!
-            //The month and category are being grabbed from the params that come with the routing
-            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/details/?month=${month}&category=${category}&user_id=${user?.id}`;
-            const response = await axios.get(SERVER_URL_PHONE);
-            
-            setExpenses(response.data.data);
-        } catch (error) {
-            console.error("Error fetching detailed expenses:", error);
-        }
+            const res = await axios.get(
+                `http://10.0.0.13:8000/expenses/details/?month=${month}&category=${category}&user_id=${user?.id}`
+            );
+            setExpenses(res.data.data);
+        } catch (e) { console.error('Error fetching detailed expenses:', e); }
     };
 
     const deleteExpense = async (id: number) => {
         try {
-            const SERVER_URL_PHONE = `http://10.0.0.13:8000/expenses/delete/${id}?user_id=${user?.id}`
-            await axios.delete(SERVER_URL_PHONE);
-
-            setExpenses(currentExpenses => currentExpenses.filter(expense => expense.id !== id));
-        } catch (error) {
-            console.error("Error deleting expenses:", error);
-        }
-    }
-
-    const deleteIncome = async (id: number) => {
-        try {
-            const SERVER_URL_PHONE = `http://10.0.0.13:8000/income/delete/${id}?user_id=${user?.id}`
-            await axios.delete(SERVER_URL_PHONE);
-
-            setIncome(currentIncome => currentIncome.filter(item => item.id !== id));
-        } catch (error) {
-            console.error("Error deleting income:", error);
-        }
-    }
-
-    function renderExpense() {
-        return (
-            expenses.length === 0 ? (
-            <Text style={styles.emptyText}>No expenses logged yet.</Text>
-        ) : (
-            expenses.map((item, index) => (
-                <View key={index} style={styles.expenseItem}>
-                    <View>
-                        <Text style={styles.expenseTitle}>{item.title}</Text>
-                        <Text style={styles.expenseDate}>Day {item.day}</Text>
-                    </View>
-                    <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
-                    <Button 
-                        label="🗑️"
-                        rgbaColor="rgba(241, 21, 21, 0.7)"
-                        width="15%"
-                        padding="10"
-                        font="20"
-                        onPress={() => deleteExpense(item.id)}
-                    />
-                </View>
-            ))
-        )
-        )
-    }
+            await axios.delete(`http://10.0.0.13:8000/expenses/delete/${id}?user_id=${user?.id}`);
+            setExpenses(prev => prev.filter(e => e.id !== id));
+        } catch (e) { console.error('Error deleting expense:', e); }
+    };
 
     const fetchDetailedIncome = async () => {
         try {
-            //Make the axios call to the backend
-            //Month is being grabbed from the local search parameters that are sent when routing
-            const SERVER_URL_PHONE=`http://10.0.0.13:8000/income/details/?month=${month}&user_id=${user?.id}`;
-            const response = await axios.get(SERVER_URL_PHONE);
+            const res = await axios.get(
+                `http://10.0.0.13:8000/income/details/?month=${month}&user_id=${user?.id}`
+            );
+            setIncome(res.data.data);
+        } catch (e) { console.error('Error fetching detailed income:', e); }
+    };
 
-            setIncome(response.data.data)
-        } catch (error) {
-            console.error("Error fetching detailed income:", error);
-        }
-    }
+    const deleteIncome = async (id: number) => {
+        try {
+            await axios.delete(`http://10.0.0.13:8000/income/delete/${id}?user_id=${user?.id}`);
+            setIncome(prev => prev.filter(i => i.id !== id));
+        } catch (e) { console.error('Error deleting income:', e); }
+    };
 
-    function renderIncome() {
-        return (
-            income.length === 0 ? (
-            <Text style={styles.emptyText}>No income logged yet.</Text>
-        ) : (
-            income.map((item, index) => (
-                <View key={index} style={styles.expenseItem}>
-                    <View>
-                        <Text style={styles.expenseTitle}>{item.jobTitle}</Text>
-                        <Text style={styles.expenseDate}>Day {item.day}</Text>
-                    </View>
-                    <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
-                    <Button
-                        label="🗑️"
-                        rgbaColor="rgba(241, 21, 21, 0.7)"
-                        width="15%"
-                        padding="10"
-                        font="20"
-                        onPress={() => deleteIncome(item.id)}
-                    />
-                </View>
-            ))
-        )
-        )
-    }
+    const accentColor = getCategoryColor();
+    const items = type === 'expense' ? expenses : income;
+    const isEmpty = items.length === 0;
 
     return (
-        <ScrollView style={styles.container}>
-
+        <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
             <Stack.Screen options={{ headerShown: false }} />
 
-            <View style={styles.header}>
-                <Button 
-                    label="Back to Dashboard"
-                    rgbaColor="#6c757d"
-                    width="100%"
-                    padding="10"
-                    font="15"
+            <View style={[styles.header, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+                <Pressable
                     onPress={() => router.back()}
-                />
-                <Text style={styles.title}>{month} {category ? category : "Income"} Breakdown</Text>
+                    style={[styles.backBtn, { backgroundColor: theme.inputBg }]}
+                >
+                    <Text style={[styles.backBtnText, { color: theme.textSecondary }]}>← Back</Text>
+                </Pressable>
+
+                <View style={[styles.titleAccent, { backgroundColor: accentColor }]} />
+                <Text style={[styles.title, { color: theme.text }]}>
+                    {month} {category ? String(category) : 'Income'} Breakdown
+                </Text>
             </View>
+
             <View style={styles.listContainer}>
-                {type === "expense" ? renderExpense() : renderIncome()}
+                {isEmpty ? (
+                    <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+                        {type === 'expense' ? 'No expenses logged yet.' : 'No income logged yet.'}
+                    </Text>
+                ) : type === 'expense' ? (
+                    expenses.map((item, index) => (
+                        <View key={index} style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                            <View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
+                            <View style={styles.rowInfo}>
+                                <Text style={[styles.rowTitle, { color: theme.text }]}>{item.title}</Text>
+                                <Text style={[styles.rowDate, { color: theme.textMuted }]}>Day {item.day}</Text>
+                            </View>
+                            <Text style={[styles.rowAmount, { color: theme.text }]}>${item.amount.toFixed(2)}</Text>
+                            <Pressable
+                                onPress={() => deleteExpense(item.id)}
+                                style={[styles.deleteBtn, { backgroundColor: theme.dangerSoft }]}
+                                hitSlop={8}
+                            >
+                                <Text style={[styles.deleteBtnText, { color: theme.danger }]}>✕</Text>
+                            </Pressable>
+                        </View>
+                    ))
+                ) : (
+                    income.map((item, index) => (
+                        <View key={index} style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                            <View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
+                            <View style={styles.rowInfo}>
+                                <Text style={[styles.rowTitle, { color: theme.text }]}>{item.jobTitle}</Text>
+                                <Text style={[styles.rowDate, { color: theme.textMuted }]}>Day {item.day}</Text>
+                            </View>
+                            <Text style={[styles.rowAmount, { color: theme.text }]}>${item.amount.toFixed(2)}</Text>
+                            <Pressable
+                                onPress={() => deleteIncome(item.id)}
+                                style={[styles.deleteBtn, { backgroundColor: theme.dangerSoft }]}
+                                hitSlop={8}
+                            >
+                                <Text style={[styles.deleteBtnText, { color: theme.danger }]}>✕</Text>
+                            </Pressable>
+                        </View>
+                    ))
+                )}
             </View>
         </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f8f9fa',
-    },
+    container: { flex: 1 },
     header: {
         padding: 20,
-        backgroundColor: '#ffffff',
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        paddingTop: 60, // Gives space for the phone's top notch
+        paddingTop: 60,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        marginBottom: 16,
     },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginTop: 15,
-        color: '#212529',
+    backBtn: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+        marginBottom: 16,
     },
-    listContainer: {
-        padding: 20,
-    },
-    expenseItem: {
+    backBtnText: { fontSize: 14, fontWeight: '600' },
+    titleAccent: { width: 40, height: 4, borderRadius: 2, marginBottom: 10 },
+    title: { fontSize: 24, fontWeight: '800' },
+    listContainer: { paddingHorizontal: 16, paddingBottom: 32 },
+    emptyText: { textAlign: 'center', marginTop: 40, fontSize: 14 },
+    row: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#ffffff',
-        padding: 15,
-        borderRadius: 8,
-        marginBottom: 10,
         borderWidth: 1,
-        borderColor: '#eee',
+        borderRadius: 12,
+        marginBottom: 10,
+        overflow: 'hidden',
     },
-    expenseTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#343a40',
+    rowAccent: { width: 4, alignSelf: 'stretch' },
+    rowInfo: { flex: 1, paddingVertical: 14, paddingHorizontal: 14 },
+    rowTitle: { fontSize: 15, fontWeight: '600' },
+    rowDate: { fontSize: 12, marginTop: 2 },
+    rowAmount: { fontSize: 16, fontWeight: '700', paddingHorizontal: 10 },
+    deleteBtn: {
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+        alignSelf: 'stretch',
+        justifyContent: 'center',
     },
-    expenseDate: {
-        fontSize: 12,
-        color: '#adb5bd',
-        marginTop: 4,
-    },
-    expenseAmount: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#212529',
-    },
-    emptyText: {
-        textAlign: 'center',
-        color: '#adb5bd',
-        marginTop: 20,
-    }
+    deleteBtnText: { fontSize: 14, fontWeight: '700' },
 });

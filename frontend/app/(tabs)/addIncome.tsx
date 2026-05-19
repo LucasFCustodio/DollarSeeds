@@ -1,18 +1,16 @@
 import { View, StyleSheet } from 'react-native';
-import IncomeContainer from '../../components/income/IncomeContainer'; 
+import IncomeContainer from '../../components/income/IncomeContainer';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function AddIncomeScreen() {
+    const { theme } = useTheme();
     return (
-        <View style={styles.container}>
-            {/* The route simply renders your income container */}
-            <IncomeContainer /> 
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <IncomeContainer />
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-    }
+    container: { flex: 1 },
 });

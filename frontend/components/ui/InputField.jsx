@@ -1,48 +1,51 @@
 import { StyleSheet, View, Text, TextInput } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
-//For each input there is:
-//1 Label to describe the type of input
-//1 optional icon to visually describe to input
-//A transparent placeholder to show an example iof what the user can input
 export default function InputField({ label, icon, placeholder, isNumeric, value, onChangeText, maxLength }) {
+    const { theme } = useTheme();
+
     return (
         <View style={styles.container}>
-            <Text style={styles.label}>{label}</Text>
-            {icon && (
-                <Text style={styles.icon}>{icon}</Text>
-            )}
-            <TextInput 
-                placeholder={placeholder}
-                style={styles.input}
-                keyboardType={isNumeric ? "numeric" : "default"}
-                value={value}
-                onChangeText={onChangeText}
-                maxLength={maxLength}
-            />
+            <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text>
+            <View style={[styles.inputRow, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder }]}>
+                {icon && <Text style={styles.icon}>{icon}</Text>}
+                <TextInput
+                    placeholder={placeholder}
+                    placeholderTextColor={theme.inputPlaceholder}
+                    style={[styles.input, { color: theme.inputText }]}
+                    keyboardType={isNumeric ? 'numeric' : 'default'}
+                    value={value}
+                    onChangeText={onChangeText}
+                    maxLength={maxLength}
+                />
+            </View>
         </View>
-    )
+    );
 }
 
 const styles = StyleSheet.create({
+    container: { marginVertical: 8 },
     label: {
-        fontSize: 26,
-        color: 'black',
-        paddingLeft: 8,
-        marginBottom: 5
+        fontSize: 13,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 6,
+    },
+    inputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+        gap: 8,
     },
     icon: {
-        fontSize: 20,
-        fontStyle: 'bold',
-        paddingLeft: 8
+        fontSize: 16,
     },
     input: {
-        fontSize: 20,
-        color: 'gray',
-        backgroundColor: 'rgba(233, 248, 255, 0.5)',
-        padding: 8,
-        borderRadius: 10
+        flex: 1,
+        fontSize: 16,
     },
-    container: {
-        marginVertical: 10
-    }
-})
+});
