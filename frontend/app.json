@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSUserNotificationsUsageDescription": "DollarSeeds sends daily reminders to help you log income and spending."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -39,7 +42,15 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2563EB",
+          "sounds": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

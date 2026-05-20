@@ -51,6 +51,13 @@ export default function TabLayout() {
                     tabBarIcon: ({ color }) => <IconSymbol size={26} name="banknote.fill" color={color} />,
                 }}
             />
+            <Tabs.Screen
+                name="lessons"
+                options={{
+                    title: 'Lessons',
+                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="book.fill" color={color} />,
+                }}
+            />
         </Tabs>
     );
 }

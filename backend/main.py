@@ -299,3 +299,14 @@ def get_spending_trends(user_id: str):
         })
 
     return {"data": results}
+
+
+class LessonRating(BaseModel):
+    user_id: str
+    lesson_id: int
+    rating: int  # 1–5
+
+@app.post("/lesson-ratings/")
+def create_lesson_rating(entry: LessonRating):
+    response = supabase.table("lesson_ratings").insert(entry.model_dump()).execute()
+    return {"message": "Rating recorded.", "data": response.data}

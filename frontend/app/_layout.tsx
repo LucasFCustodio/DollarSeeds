@@ -8,6 +8,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
+import { useNotifications } from '../hooks/useNotifications';
 
 export const unstable_settings = {
     anchor: '(tabs)',
@@ -19,6 +20,8 @@ function RootLayoutNav() {
     const { theme } = useTheme();
     const router = useRouter();
     const segments = useSegments();
+
+    useNotifications(initialized && !!user);
 
     useEffect(() => {
         if (!initialized) return;
