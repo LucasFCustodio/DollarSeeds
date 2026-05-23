@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
-import { useState } from "react"
 
 // ─────────────────────────────────────────────
 // CUSTOMIZE YOUR REMINDERS HERE
@@ -29,12 +28,6 @@ const REMINDERS = [
         minute: 0,
     }
 ];
-
-function getRandomInt(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min) + min);
-}
-
-const [reminder, setReminder] = useState(REMINDERS[1])
 
 // ─────────────────────────────────────────────
 
@@ -66,10 +59,9 @@ async function requestPermission(): Promise<boolean> {
 }
 
 async function scheduleDailyReminders() {
-    // Cancel any previously scheduled reminders first
     await Notifications.cancelAllScheduledNotificationsAsync();
 
-    setReminder(REMINDERS[getRandomInt(0, 2)])
+    const reminder = REMINDERS[Math.floor(Math.random() * REMINDERS.length)];
 
     await Notifications.scheduleNotificationAsync({
         content: {

@@ -65,6 +65,7 @@ export default function DashboardScreen() {
     };
 
     const fetchDashboardData = async () => {
+        if (!user?.id) return;
         try {
             const BASE = 'http://10.0.0.13:8000';
             const [dashRes, piggyRes] = await Promise.all([

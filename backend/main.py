@@ -71,6 +71,85 @@ def calculate_category_score(spent: float, budget: float) -> float:
 def read_root():
     return {"message": "DollarSeeds Backend is running!"}
 
+@app.get("/dashboard/trends/")
+def get_spending_trends(user_id: str):
+    all_months = ["January", "February", "March", "April", "May", "June", "July",
+                  "August", "September", "October", "November", "December"]
+
+    # Fetch all data in 5 queries instead of per-month queries
+    all_income = supabase.table("income").select("amount, month").eq("user_id", user_id).execute()
+    all_needs = supabase.table("expenses").select("amount, day, month").eq("category", "Need").eq("user_id", user_id).execute()
+    all_wants = supabase.table("expenses").select("amount, day, month").eq("category", "Want").eq("user_id", user_id).execute()
+    all_goals_exp = supabase.table("expenses").select("amount, day, month").eq("category", "Debt").eq("user_id", user_id).execute()
+    all_savings = supabase.table("savings_transactions").select("amount, day, month").eq("type", "deposit").eq("user_id", user_id).execute()
+
+    def group_by_month(items):
+        grouped = {}
+        for item in items:
+            m = item["month"]
+            if m not in grouped:
+                grouped[m] = []
+            grouped[m].append(item)
+        return grouped
+
+    income_by_month = group_by_month(all_income.data)
+    needs_by_month = group_by_month(all_needs.data)
+    wants_by_month = group_by_month(all_wants.data)
+    goals_by_month = group_by_month(all_goals_exp.data)
+    savings_by_month = group_by_month(all_savings.data)
+
+    def spending_quartiles(expenses):
+        if not expenses:
+            return {"q25": None, "q50": None, "q75": None, "q100": None}
+        total = sum(e["amount"] for e in expenses)
+        if total == 0:
+            return {"q25": None, "q50": None, "q75": None, "q100": None}
+        sorted_exp = sorted(expenses, key=lambda x: x["day"])
+        cumulative = 0
+        quartiles = {}
+        thresholds = [(0.25, "q25"), (0.50, "q50"), (0.75, "q75"), (1.0, "q100")]
+        t_idx = 0
+        for item in sorted_exp:
+            cumulative += item["amount"]
+            while t_idx < len(thresholds) and cumulative / total >= thresholds[t_idx][0]:
+                quartiles[thresholds[t_idx][1]] = item["day"]
+                t_idx += 1
+            if t_idx == len(thresholds):
+                break
+        for _, key in thresholds[t_idx:]:
+            quartiles[key] = None
+        return quartiles
+
+    results = []
+    for month in all_months:
+        total_income = sum(i["amount"] for i in income_by_month.get(month, []))
+        total_needs = sum(i["amount"] for i in needs_by_month.get(month, []))
+        total_wants = sum(i["amount"] for i in wants_by_month.get(month, []))
+        total_goals = (
+            sum(i["amount"] for i in goals_by_month.get(month, [])) +
+            sum(i["amount"] for i in savings_by_month.get(month, []))
+        )
+
+        if total_income == 0 and total_needs == 0 and total_wants == 0 and total_goals == 0:
+            continue
+
+        results.append({
+            "month": month,
+            "total_income": total_income,
+            "needs": total_needs,
+            "wants": total_wants,
+            "goals": total_goals,
+            "budgets": {
+                "needs": total_income * 0.5,
+                "wants": total_income * 0.3,
+                "goals": total_income * 0.2
+            },
+            "wants_quartiles": spending_quartiles(wants_by_month.get(month, []))
+        })
+
+    return {"data": results}
+
+
 @app.get("/dashboard/{current_month}")
 def get_dashboard_data(current_month: str, user_id: str):
     income_response = supabase.table("income").select("amount").eq("month", current_month).eq("user_id", user_id).execute()
@@ -221,85 +300,6 @@ def create_savings_goal(goal: SavingsGoal):
 def delete_savings_goal(id: int, user_id: str):
     response = supabase.table("savings_goals").delete().eq("id", id).eq("user_id", user_id).execute()
     return response.data
-
-@app.get("/dashboard/trends/")
-def get_spending_trends(user_id: str):
-    all_months = ["January", "February", "March", "April", "May", "June", "July",
-                  "August", "September", "October", "November", "December"]
-
-    # Fetch all data in 5 queries instead of per-month queries
-    all_income = supabase.table("income").select("amount, month").eq("user_id", user_id).execute()
-    all_needs = supabase.table("expenses").select("amount, day, month").eq("category", "Need").eq("user_id", user_id).execute()
-    all_wants = supabase.table("expenses").select("amount, day, month").eq("category", "Want").eq("user_id", user_id).execute()
-    all_goals_exp = supabase.table("expenses").select("amount, day, month").eq("category", "Debt").eq("user_id", user_id).execute()
-    all_savings = supabase.table("savings_transactions").select("amount, day, month").eq("type", "deposit").eq("user_id", user_id).execute()
-
-    def group_by_month(items):
-        grouped = {}
-        for item in items:
-            m = item["month"]
-            if m not in grouped:
-                grouped[m] = []
-            grouped[m].append(item)
-        return grouped
-
-    income_by_month = group_by_month(all_income.data)
-    needs_by_month = group_by_month(all_needs.data)
-    wants_by_month = group_by_month(all_wants.data)
-    goals_by_month = group_by_month(all_goals_exp.data)
-    savings_by_month = group_by_month(all_savings.data)
-
-    def spending_quartiles(expenses):
-        if not expenses:
-            return {"q25": None, "q50": None, "q75": None, "q100": None}
-        total = sum(e["amount"] for e in expenses)
-        if total == 0:
-            return {"q25": None, "q50": None, "q75": None, "q100": None}
-        sorted_exp = sorted(expenses, key=lambda x: x["day"])
-        cumulative = 0
-        quartiles = {}
-        thresholds = [(0.25, "q25"), (0.50, "q50"), (0.75, "q75"), (1.0, "q100")]
-        t_idx = 0
-        for item in sorted_exp:
-            cumulative += item["amount"]
-            while t_idx < len(thresholds) and cumulative / total >= thresholds[t_idx][0]:
-                quartiles[thresholds[t_idx][1]] = item["day"]
-                t_idx += 1
-            if t_idx == len(thresholds):
-                break
-        for _, key in thresholds[t_idx:]:
-            quartiles[key] = None
-        return quartiles
-
-    results = []
-    for month in all_months:
-        total_income = sum(i["amount"] for i in income_by_month.get(month, []))
-        total_needs = sum(i["amount"] for i in needs_by_month.get(month, []))
-        total_wants = sum(i["amount"] for i in wants_by_month.get(month, []))
-        total_goals = (
-            sum(i["amount"] for i in goals_by_month.get(month, [])) +
-            sum(i["amount"] for i in savings_by_month.get(month, []))
-        )
-
-        if total_income == 0 and total_needs == 0 and total_wants == 0 and total_goals == 0:
-            continue
-
-        results.append({
-            "month": month,
-            "total_income": total_income,
-            "needs": total_needs,
-            "wants": total_wants,
-            "goals": total_goals,
-            "budgets": {
-                "needs": total_income * 0.5,
-                "wants": total_income * 0.3,
-                "goals": total_income * 0.2
-            },
-            "wants_quartiles": spending_quartiles(wants_by_month.get(month, []))
-        })
-
-    return {"data": results}
-
 
 class LessonRating(BaseModel):
     user_id: str
