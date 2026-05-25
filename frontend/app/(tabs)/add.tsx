@@ -5,7 +5,7 @@ import { useTheme } from '../../context/ThemeContext';
 export default function AddExpenseScreen() {
     const { theme } = useTheme();
     return (
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.container, { backgroundColor: theme.bg }]}>
             <ExpenseContainer />
         </View>
     );

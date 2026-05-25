@@ -1,55 +1,99 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert } from 'react-native';
+/**
+ * PiggyBankScreen — visual revamp (DollarSeeds design system)
+ *
+ * Behaviour preserved:
+ * ✅ Fetch balance, history, active goals, completed goals on focus
+ * ✅ POST deposit / withdrawal to /savings/transaction/
+ * ✅ PATCH goal to completed on withdrawal with a linked goal
+ * ✅ POST new goal to /savings/goal/
+ * ✅ DELETE transaction + DELETE goal
+ * ✅ Negative-balance alert on withdrawal
+ * ✅ Active / Completed tabs
+ */
 import React, { useState, useCallback } from 'react';
+import {
+    View, Text, ScrollView, Pressable,
+    TextInput, StyleSheet, Alert,
+} from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import axios from 'axios';
+
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import SavingsContainer from '../../components/savings/SavingsContainer';
+import { useTheme, shadow } from '../../context/ThemeContext';
+import HeroBg from '../../components/ui/HeroBg';
+import AnimatedAmount from '../../components/ui/AnimatedAmount';
+import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
+import Card from '../../components/ui/Card';
+import {
+    SavingsJar, IconPlus, IconArrow, IconTarget,
+    IconTrash, IconCheck,
+} from '../../components/icons';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const BASE = 'http://10.0.0.13:8000';
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTHS = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December',
+];
+const MONTH_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-type SavingsTransaction = {
+// ─── Types ────────────────────────────────────────────────────────────────────
+type Transaction = {
     id: number; title: string; amount: number;
     type: 'deposit' | 'withdrawal'; day: number; month: string;
 };
-
-type SavingsGoal = {
+type Goal = {
     id: number; title: string; target_amount: number;
     target_month: string; target_year: number;
     allocated_amount: number; created_at: string;
 };
 
-const getDeadline = (m: string, y: number) =>
-    new Date(y, MONTHS.indexOf(m) + 1, 0);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const getDeadline = (m: string, y: number) => new Date(y, MONTHS.indexOf(m) + 1, 0);
 
-const getDaysRemaining = (m: string, y: number) =>
-    Math.max(0, Math.ceil((getDeadline(m, y).getTime() - Date.now()) / 86400000));
+const getMonthsLeft = (m: string, y: number) =>
+    Math.max(0, Math.ceil((getDeadline(m, y).getTime() - Date.now()) / (30 * 86_400_000)));
 
-const getFixedRate = (target: number, createdAt: string, m: string, y: number) => {
+const getWeeklyRate = (target: number, allocated: number, m: string, y: number, createdAt: string) => {
+    const remaining = Math.max(0, target - allocated);
     const totalDays = Math.max(1, Math.ceil(
-        (getDeadline(m, y).getTime() - new Date(createdAt).getTime()) / 86400000
+        (getDeadline(m, y).getTime() - new Date(createdAt).getTime()) / 86_400_000
     ));
-    return { perWeek: (target / totalDays) * 7, perMonth: (target / totalDays) * 30 };
+    return (remaining / totalDays) * 7;
 };
 
+const fmtAmt = (n: number) =>
+    n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function PiggyBankScreen() {
     const { user } = useAuth();
     const { theme } = useTheme();
+    const today = new Date();
 
-    const [balance, setBalance] = useState(0);
-    const [history, setHistory] = useState<SavingsTransaction[]>([]);
-    const [activeForm, setActiveForm] = useState<'deposit' | 'withdrawal' | null>(null);
-    const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
-    const [goals, setGoals] = useState<SavingsGoal[]>([]);
-    const [completedGoals, setCompletedGoals] = useState<SavingsGoal[]>([]);
+    // ── Remote data ───────────────────────────────────────────────────────────
+    const [balance, setBalance]               = useState(0);
+    const [history, setHistory]               = useState<Transaction[]>([]);
+    const [goals, setGoals]                   = useState<Goal[]>([]);
+    const [completedGoals, setCompletedGoals] = useState<Goal[]>([]);
+
+    // ── UI state ──────────────────────────────────────────────────────────────
+    const [activeTab,    setActiveTab]    = useState<'active' | 'completed'>('active');
+    const [activeForm,   setActiveForm]   = useState<'deposit' | 'withdrawal' | null>(null);
     const [showGoalForm, setShowGoalForm] = useState(false);
-    const [goalTitle, setGoalTitle] = useState('');
-    const [goalAmount, setGoalAmount] = useState('');
-    const [goalMonth, setGoalMonth] = useState(MONTHS[11]);
-    const [goalYear, setGoalYear] = useState(2026);
-    const [goalError, setGoalError] = useState('');
 
+    // Transaction form
+    const [txAmount, setTxAmount] = useState('');
+    const [txGoalId, setTxGoalId] = useState<number | null>(null);
+
+    // Goal creation form
+    const [goalTitle,  setGoalTitle]  = useState('');
+    const [goalAmount, setGoalAmount] = useState('');
+    const [goalMonth,  setGoalMonth]  = useState(MONTHS[today.getMonth()]);
+    const [goalYear,   setGoalYear]   = useState(today.getFullYear());
+    const [goalError,  setGoalError]  = useState('');
+
+    // ── Fetch ─────────────────────────────────────────────────────────────────
     const fetchData = async () => {
         try {
             const [balRes, histRes, goalRes, completedRes] = await Promise.all([
@@ -62,21 +106,60 @@ export default function PiggyBankScreen() {
             setHistory(histRes.data.data);
             setGoals(goalRes.data.data);
             setCompletedGoals(completedRes.data.data);
-        } catch (e) { console.error('Error fetching savings data:', e); }
+        } catch (e) { console.error('Savings fetch error:', e); }
     };
 
     useFocusEffect(useCallback(() => { fetchData(); }, []));
 
-    const deleteTransaction = async (id: number) => {
-        try {
-            await axios.delete(`${BASE}/savings/transaction/${id}?user_id=${user?.id}`);
-            setHistory(prev => prev.filter(t => t.id !== id));
-            const balRes = await axios.get(`${BASE}/savings/balance/?user_id=${user?.id}`);
-            setBalance(balRes.data.balance);
-        } catch (e) { console.error('Error deleting transaction:', e); }
+    // ── Handlers ──────────────────────────────────────────────────────────────
+    const toggleForm = (type: 'deposit' | 'withdrawal') => {
+        if (activeForm === type) {
+            setActiveForm(null); setTxAmount(''); setTxGoalId(null);
+        } else {
+            setActiveForm(type); setTxAmount(''); setTxGoalId(null);
+        }
     };
 
-    const handleFormSuccess = () => { setActiveForm(null); fetchData(); };
+    const doSubmitTransaction = async () => {
+        const parsed = parseFloat(txAmount);
+        if (!txAmount || isNaN(parsed) || parsed <= 0) return;
+
+        const selectedGoal = goals.find(g => g.id === txGoalId) ?? null;
+
+        try {
+            await axios.post(`${BASE}/savings/transaction/`, {
+                user_id: user?.id,
+                title: selectedGoal?.title ?? (activeForm === 'deposit' ? 'Deposit' : 'Withdrawal'),
+                amount: parsed,
+                type: activeForm,
+                day: today.getDate(),
+                month: MONTHS[today.getMonth()],
+                goal_id: txGoalId ?? null,
+            });
+            if (activeForm === 'withdrawal' && selectedGoal) {
+                await axios.patch(`${BASE}/savings/goal/${selectedGoal.id}/complete?user_id=${user?.id}`);
+            }
+            setTxAmount(''); setTxGoalId(null); setActiveForm(null);
+            fetchData();
+        } catch (err) { console.error('Transaction error:', err); }
+    };
+
+    const submitTransaction = () => {
+        const parsed = parseFloat(txAmount);
+        if (!txAmount || isNaN(parsed) || parsed <= 0) return;
+        if (activeForm === 'withdrawal' && parsed > balance) {
+            Alert.alert(
+                'Heads up!',
+                `You only have $${balance.toFixed(2)} saved. Your balance will go negative.\n\nAre you sure?`,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Continue', style: 'destructive', onPress: doSubmitTransaction },
+                ],
+            );
+        } else {
+            doSubmitTransaction();
+        }
+    };
 
     const submitGoal = async () => {
         const amount = parseFloat(goalAmount);
@@ -93,340 +176,795 @@ export default function PiggyBankScreen() {
             setShowGoalForm(false); setGoalTitle(''); setGoalAmount('');
             fetchData();
         } catch (error: any) {
-            if (error?.response?.status === 400) {
-                setGoalError('A goal with this name already exists.');
-            } else { console.error('Error creating goal:', error); }
+            if (error?.response?.status === 400) setGoalError('A goal with this name already exists.');
+            else console.error('Goal create error:', error);
         }
+    };
+
+    const deleteTransaction = async (id: number) => {
+        try {
+            await axios.delete(`${BASE}/savings/transaction/${id}?user_id=${user?.id}`);
+            setHistory(prev => prev.filter(t => t.id !== id));
+            const balRes = await axios.get(`${BASE}/savings/balance/?user_id=${user?.id}`);
+            setBalance(balRes.data.balance);
+        } catch (e) { console.error('Delete transaction error:', e); }
     };
 
     const deleteGoal = async (id: number) => {
         try {
             await axios.delete(`${BASE}/savings/goal/${id}?user_id=${user?.id}`);
             setGoals(prev => prev.filter(g => g.id !== id));
-        } catch (e) { console.error('Error deleting goal:', e); }
+        } catch (e) { console.error('Delete goal error:', e); }
     };
 
-    const renderActiveGoalCards = () => goals.map(g => {
-        const daysLeft = getDaysRemaining(g.target_month, g.target_year);
-        const progress = Math.min(1, g.allocated_amount / g.target_amount);
-        const { perWeek, perMonth } = getFixedRate(g.target_amount, g.created_at, g.target_month, g.target_year);
-        const isAchieved = g.allocated_amount >= g.target_amount;
-        const barColor = isAchieved ? theme.success : theme.action;
+    // Jar fill: use first goal target as max, fallback $3,000
+    const jarMax = goals.length > 0 ? goals[0].target_amount : 3000;
+    const jarFill = balance > 0 ? Math.min(1, balance / jarMax) : 0.05;
+    const isDeposit = activeForm === 'deposit';
 
-        return (
-            <View key={g.id} style={[styles.goalCard, { backgroundColor: theme.surface, borderLeftColor: barColor }]}>
-                <View style={styles.goalHeader}>
-                    <Text style={[styles.goalTitle, { color: theme.text }]}>🎯 {g.title}</Text>
-                    <Pressable onPress={() => deleteGoal(g.id)} hitSlop={8}>
-                        <Text style={[styles.deleteIcon, { color: theme.textMuted }]}>✕</Text>
-                    </Pressable>
-                </View>
-                <Text style={[styles.goalProgress, { color: theme.text }]}>
-                    ${g.allocated_amount.toFixed(2)}
-                    <Text style={[styles.goalProgressOf, { color: theme.textMuted }]}> / ${g.target_amount.toFixed(2)}</Text>
-                </Text>
-                <View style={[styles.barBg, { backgroundColor: theme.border }]}>
-                    <View style={[styles.barFill, { width: `${progress * 100}%` as any, backgroundColor: barColor }]} />
-                </View>
-                {isAchieved ? (
-                    <Text style={[styles.goalAchieved, { color: theme.success }]}>Goal achieved! 🎉</Text>
-                ) : (
-                    <>
-                        <Text style={[styles.goalDeadline, { color: theme.textSecondary }]}>
-                            Target: {g.target_month} {g.target_year} · {daysLeft} days left
-                        </Text>
-                        <Text style={[styles.goalRate, { color: theme.action }]}>
-                            Save ${perWeek.toFixed(2)}/week · ${perMonth.toFixed(2)}/month
-                        </Text>
-                    </>
-                )}
-            </View>
-        );
-    });
-
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={styles.content}>
+        <ScrollView
+            style={{ flex: 1, backgroundColor: theme.bg }}
+            contentContainerStyle={{ paddingBottom: 120 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+        >
+            {/* ── Hero ─────────────────────────────────────────────── */}
+            <HeroBg brand={theme.brand} brand2={theme.brand2} style={{ paddingBottom: 50 }}>
+                <View style={[styles.heroInner, { zIndex: 1 }]}>
 
-            {/* Tabs */}
-            <View style={[styles.tabRow, { backgroundColor: theme.border }]}>
-                {(['active', 'completed'] as const).map(tab => (
-                    <Pressable
-                        key={tab}
-                        style={[styles.tab, activeTab === tab && [styles.tabActive, { backgroundColor: theme.surface }]]}
-                        onPress={() => setActiveTab(tab)}
-                    >
-                        <Text style={[styles.tabText, { color: activeTab === tab ? theme.text : theme.textMuted }]}>
-                            {tab === 'active' ? 'Active Goals' : `Completed${completedGoals.length > 0 ? ` (${completedGoals.length})` : ''}`}
-                        </Text>
-                    </Pressable>
-                ))}
-            </View>
-
-            {activeTab === 'completed' ? (
-                <View style={styles.completedList}>
-                    {completedGoals.length === 0 ? (
-                        <Text style={[styles.emptyText, { color: theme.textMuted }]}>No completed goals yet. Keep saving!</Text>
-                    ) : completedGoals.map(g => (
-                        <View key={g.id} style={[styles.completedCard, { backgroundColor: theme.surface, borderLeftColor: theme.success }]}>
-                            <View style={[styles.completedBadge, { backgroundColor: theme.success }]}>
-                                <Text style={styles.completedBadgeText}>✓</Text>
-                            </View>
-                            <View style={styles.completedInfo}>
-                                <Text style={[styles.completedTitle, { color: theme.success }]}>{g.title}</Text>
-                                <Text style={[styles.completedAmount, { color: theme.textSecondary }]}>
-                                    Goal: ${g.target_amount.toFixed(2)} · Saved: ${g.allocated_amount.toFixed(2)}
-                                </Text>
-                                <Text style={[styles.completedTarget, { color: theme.textMuted }]}>
-                                    {g.target_month} {g.target_year}
-                                </Text>
-                            </View>
-                        </View>
-                    ))}
-                </View>
-            ) : (
-                <>
-                    {/* Balance hero */}
-                    <View style={[styles.hero, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-                        <Text style={styles.piggyIcon}>🐷</Text>
-                        <Text style={[styles.balanceLabel, { color: theme.textMuted }]}>YOUR PIGGY BANK</Text>
-                        <Text style={[styles.balance, { color: theme.text }]}>${balance.toFixed(2)}</Text>
-                        <Text style={[styles.balanceSub, { color: theme.textMuted }]}>Saved so far — keep it up!</Text>
+                    {/* Top row: label + plus btn */}
+                    <View style={styles.heroTopRow}>
+                        <Text style={styles.heroEyebrow}>SAVINGS</Text>
+                        <Pressable
+                            onPress={() => {
+                                setShowGoalForm(true);
+                                setActiveForm(null);
+                            }}
+                            style={({ pressed }) => [styles.circleBtn, pressed && { opacity: 0.7 }]}
+                        >
+                            <IconPlus size={18} color="#fff" />
+                        </Pressable>
                     </View>
 
-                    {/* Goal cards */}
-                    <View style={styles.section}>
-                        {renderActiveGoalCards()}
+                    {/* Jar + balance */}
+                    <View style={styles.jarRow}>
+                        <SavingsJar fill={jarFill} size={92} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.heroBalanceLabel}>SEEDS PLANTED</Text>
+                            <AnimatedAmount value={balance} size={48} color="#fff" decimals={2} />
+                            <Text style={styles.heroTagline}>Little by little, it grows</Text>
+                        </View>
+                    </View>
 
+                    {/* Action buttons */}
+                    <View style={styles.actionRow}>
                         <Pressable
-                            style={[styles.addGoalBtn, { borderColor: theme.action }]}
-                            onPress={() => { setShowGoalForm(!showGoalForm); setGoalError(''); }}
+                            onPress={() => toggleForm('deposit')}
+                            style={({ pressed }) => [
+                                styles.actionBtn,
+                                {
+                                    backgroundColor: activeForm === 'deposit'
+                                        ? 'rgba(255,255,255,0.28)'
+                                        : 'rgba(255,255,255,0.16)',
+                                    borderColor: 'rgba(255,255,255,0.22)',
+                                },
+                                pressed && { opacity: 0.85 },
+                            ]}
                         >
-                            <Text style={[styles.addGoalBtnText, { color: theme.action }]}>
-                                🎯 {goals.length > 0 ? 'Add Another Goal' : 'Set a Savings Goal'}
+                            <IconPlus size={15} color="#fff" />
+                            <Text style={styles.actionBtnText}>Set aside</Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={() => toggleForm('withdrawal')}
+                            style={({ pressed }) => [
+                                styles.actionBtn,
+                                {
+                                    backgroundColor: activeForm === 'withdrawal'
+                                        ? 'rgba(255,255,255,0.22)'
+                                        : 'rgba(0,0,0,0.18)',
+                                    borderColor: 'rgba(255,255,255,0.18)',
+                                },
+                                pressed && { opacity: 0.85 },
+                            ]}
+                        >
+                            <Text style={styles.actionBtnText}>I bought it</Text>
+                        </Pressable>
+                    </View>
+
+                </View>
+            </HeroBg>
+
+            <View style={styles.content}>
+
+                {/* ── Inline transaction form ───────────────────────── */}
+                {activeForm !== null && (
+                    <Card theme={theme} depth={5} padding={20} style={styles.txForm}>
+                        <Text style={[styles.formTitle, { color: theme.ink }]}>
+                            {isDeposit ? 'Set aside money' : 'I bought it'}
+                        </Text>
+
+                        {/* Amount */}
+                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>AMOUNT</Text>
+                        <View style={[styles.amountInputRow, {
+                            backgroundColor: theme.surfaceSoft, borderColor: theme.border,
+                        }]}>
+                            <Text style={[styles.dollarSign, { color: theme.ink2 }]}>$</Text>
+                            <TextInput
+                                style={[styles.amountField, { color: theme.ink }]}
+                                value={txAmount}
+                                onChangeText={setTxAmount}
+                                placeholder="0"
+                                placeholderTextColor={theme.ink3}
+                                keyboardType="decimal-pad"
+                                returnKeyType="done"
+                                selectionColor={theme.brand}
+                            />
+                        </View>
+
+                        {/* Goal chips */}
+                        {goals.length > 0 && (
+                            <>
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
+                                    {isDeposit ? 'WHICH GOAL' : 'GOAL COMPLETED'}
+                                </Text>
+                                <View style={styles.chipWrap}>
+                                    {goals.map(g => {
+                                        const active = txGoalId === g.id;
+                                        return (
+                                            <Pressable
+                                                key={g.id}
+                                                onPress={() => setTxGoalId(active ? null : g.id)}
+                                                style={({ pressed }) => [
+                                                    styles.chip,
+                                                    {
+                                                        backgroundColor: active ? theme.goals : theme.surface,
+                                                        borderColor: active ? theme.goals : theme.border,
+                                                    },
+                                                    pressed && { opacity: 0.8 },
+                                                ]}
+                                            >
+                                                <Text style={[
+                                                    styles.chipText,
+                                                    { color: active ? '#fff' : theme.ink2 },
+                                                ]}>
+                                                    {g.title}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        )}
+
+                        {/* Submit / Cancel */}
+                        <View style={styles.formBtnRow}>
+                            <Pressable
+                                onPress={submitTransaction}
+                                style={({ pressed }) => [
+                                    styles.submitBtn,
+                                    { backgroundColor: isDeposit ? theme.goals : theme.danger },
+                                    pressed && { opacity: 0.85 },
+                                ]}
+                            >
+                                <IconCheck size={15} color="#fff" />
+                                <Text style={styles.submitBtnText}>
+                                    {isDeposit ? 'Plant Seed' : 'Withdraw'}
+                                </Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => { setActiveForm(null); setTxAmount(''); setTxGoalId(null); }}
+                                style={({ pressed }) => [
+                                    styles.cancelBtn, { borderColor: theme.border },
+                                    pressed && { opacity: 0.7 },
+                                ]}
+                            >
+                                <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>Cancel</Text>
+                            </Pressable>
+                        </View>
+                    </Card>
+                )}
+
+                {/* ── Tabs ─────────────────────────────────────────── */}
+                <View style={[styles.tabPill, {
+                    backgroundColor: theme.surfaceSoft,
+                    borderColor: theme.borderSoft,
+                }]}>
+                    {(['active', 'completed'] as const).map(t => (
+                        <Pressable
+                            key={t}
+                            onPress={() => setActiveTab(t)}
+                            style={[
+                                styles.tabItem,
+                                activeTab === t && [
+                                    styles.tabItemActive,
+                                    { backgroundColor: theme.surface, ...(shadow(2) as object) },
+                                ],
+                            ]}
+                        >
+                            <Text style={[
+                                styles.tabText,
+                                { color: activeTab === t ? theme.ink : theme.ink3 },
+                            ]}>
+                                {t === 'active'
+                                    ? 'Active goals'
+                                    : `Completed${completedGoals.length > 0 ? ` (${completedGoals.length})` : ''}`}
+                            </Text>
+                        </Pressable>
+                    ))}
+                </View>
+
+                {activeTab === 'completed' ? (
+
+                    /* ── Completed goals ─────────────────────────── */
+                    <View style={{ marginTop: 16 }}>
+                        {completedGoals.length === 0 ? (
+                            <Text style={[styles.emptyText, { color: theme.ink3 }]}>
+                                No completed goals yet. Keep saving!
+                            </Text>
+                        ) : completedGoals.map(g => (
+                            <Card key={g.id} theme={theme} depth={4} padding={16} style={{ marginBottom: 12 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                    <View style={[styles.goalIconTile, { backgroundColor: theme.goalsSoft }]}>
+                                        <IconCheck size={18} color={theme.goals} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.goalTitle, { color: theme.goals }]}>{g.title}</Text>
+                                        <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
+                                            ${fmtAmt(g.allocated_amount)} of ${fmtAmt(g.target_amount)} · {g.target_month} {g.target_year}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </Card>
+                        ))}
+                    </View>
+
+                ) : (
+
+                    /* ── Active goals ────────────────────────────── */
+                    <>
+                        <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 18 }]}>
+                            GROWING NOW
+                        </Text>
+
+                        {goals.length === 0 && !showGoalForm && (
+                            <Text style={[styles.emptyText, { color: theme.ink3 }]}>
+                                No goals yet. Plant your first one!
+                            </Text>
+                        )}
+
+                        {goals.map(g => {
+                            const pct = Math.min(100, (g.allocated_amount / g.target_amount) * 100);
+                            const monthsLeft = getMonthsLeft(g.target_month, g.target_year);
+                            const weekly = getWeeklyRate(
+                                g.target_amount, g.allocated_amount,
+                                g.target_month, g.target_year, g.created_at,
+                            );
+                            const achieved = g.allocated_amount >= g.target_amount;
+                            const barColor = achieved ? theme.success : theme.goals;
+
+                            return (
+                                <Card key={g.id} theme={theme} depth={5} padding={16} style={{ marginBottom: 12 }}>
+                                    {/* Header row */}
+                                    <View style={styles.goalHeader}>
+                                        <View style={[styles.goalIconTile, { backgroundColor: theme.goalsSoft }]}>
+                                            <IconTarget size={22} color={achieved ? theme.success : theme.goals} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.goalTitle, { color: theme.ink }]}>{g.title}</Text>
+                                            {achieved ? (
+                                                <Text style={[styles.goalMeta, { color: theme.success }]}>
+                                                    Goal achieved! 🎉
+                                                </Text>
+                                            ) : (
+                                                <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
+                                                    Save ${weekly.toFixed(0)}/week · {monthsLeft}mo left
+                                                </Text>
+                                            )}
+                                        </View>
+                                        <Pressable onPress={() => deleteGoal(g.id)} hitSlop={10}>
+                                            <IconTrash size={14} color={theme.ink3} />
+                                        </Pressable>
+                                    </View>
+
+                                    {/* Saved / target */}
+                                    <View style={styles.goalAmtRow}>
+                                        <Text style={[styles.goalSaved, { color: theme.ink }]}>
+                                            ${fmtAmt(g.allocated_amount)}
+                                        </Text>
+                                        <Text style={[styles.goalOf, { color: theme.ink3 }]}>
+                                            {' '}of ${fmtAmt(g.target_amount)}
+                                        </Text>
+                                    </View>
+
+                                    <AnimatedProgressBar
+                                        value={pct}
+                                        color={barColor}
+                                        bg={theme.borderSoft}
+                                        height={7}
+                                    />
+                                </Card>
+                            );
+                        })}
+
+                        {/* Plant new goal */}
+                        <Pressable
+                            onPress={() => { setShowGoalForm(!showGoalForm); setGoalError(''); }}
+                            style={({ pressed }) => [
+                                styles.plantBtn, { borderColor: theme.border },
+                                pressed && { opacity: 0.7 },
+                            ]}
+                        >
+                            <IconPlus size={16} color={theme.brand} />
+                            <Text style={[styles.plantBtnText, { color: theme.brand }]}>
+                                Plant a new goal
                             </Text>
                         </Pressable>
 
+                        {/* Goal creation form */}
                         {showGoalForm && (
-                            <View style={[styles.goalForm, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                                <Text style={[styles.goalFormTitle, { color: theme.text }]}>New Savings Goal</Text>
+                            <Card theme={theme} depth={4} padding={18} style={{ marginBottom: 16 }}>
+                                <Text style={[styles.formTitle, { color: theme.ink }]}>New savings goal</Text>
+
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>GOAL NAME</Text>
                                 <TextInput
-                                    style={[styles.goalInput, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.inputText }]}
-                                    placeholder="Goal name (e.g. New Car)"
-                                    placeholderTextColor={theme.inputPlaceholder}
+                                    style={[styles.textInput, {
+                                        backgroundColor: theme.surfaceSoft,
+                                        borderColor: theme.border,
+                                        color: theme.ink,
+                                    }]}
+                                    placeholder="Emergency fund, New laptop…"
+                                    placeholderTextColor={theme.ink3}
                                     value={goalTitle}
                                     onChangeText={t => { setGoalTitle(t); setGoalError(''); }}
                                     maxLength={30}
                                 />
                                 {goalError !== '' && (
-                                    <Text style={[styles.goalError, { color: theme.danger }]}>{goalError}</Text>
+                                    <Text style={[styles.errorText, { color: theme.danger }]}>{goalError}</Text>
                                 )}
+
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET AMOUNT</Text>
                                 <TextInput
-                                    style={[styles.goalInput, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.inputText }]}
-                                    placeholder="Target amount (e.g. 5000)"
-                                    placeholderTextColor={theme.inputPlaceholder}
+                                    style={[styles.textInput, {
+                                        backgroundColor: theme.surfaceSoft,
+                                        borderColor: theme.border,
+                                        color: theme.ink,
+                                    }]}
+                                    placeholder="5,000"
+                                    placeholderTextColor={theme.ink3}
                                     value={goalAmount}
                                     onChangeText={setGoalAmount}
                                     keyboardType="decimal-pad"
                                     maxLength={10}
                                 />
 
-                                <Text style={[styles.formLabel, { color: theme.textMuted }]}>Target Month</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-                                    {MONTHS.map(m => (
-                                        <Pressable
-                                            key={m}
-                                            style={[
-                                                styles.chip,
-                                                { borderColor: theme.border, backgroundColor: theme.inputBg },
-                                                goalMonth === m && { backgroundColor: theme.action, borderColor: theme.action },
-                                            ]}
-                                            onPress={() => setGoalMonth(m)}
-                                        >
-                                            <Text style={[styles.chipText, { color: theme.textSecondary }, goalMonth === m && { color: '#fff' }]}>
-                                                {m.slice(0, 3)}
-                                            </Text>
-                                        </Pressable>
-                                    ))}
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET MONTH</Text>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    style={{ marginBottom: 14 }}
+                                    contentContainerStyle={{ flexDirection: 'row', gap: 8 }}
+                                >
+                                    {MONTH_ABBRS.map((abbr, i) => {
+                                        const active = goalMonth === MONTHS[i];
+                                        return (
+                                            <Pressable
+                                                key={abbr}
+                                                onPress={() => setGoalMonth(MONTHS[i])}
+                                                style={[
+                                                    styles.chip,
+                                                    {
+                                                        backgroundColor: active ? theme.brand : theme.surface,
+                                                        borderColor: active ? theme.brand : theme.border,
+                                                    },
+                                                ]}
+                                            >
+                                                <Text style={[styles.chipText, { color: active ? '#fff' : theme.ink2 }]}>
+                                                    {abbr}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
                                 </ScrollView>
 
-                                <Text style={[styles.formLabel, { color: theme.textMuted }]}>Target Year</Text>
-                                <View style={styles.yearRow}>
-                                    {[2026, 2027, 2028].map(y => (
-                                        <Pressable
-                                            key={y}
-                                            style={[
-                                                styles.chip,
-                                                { borderColor: theme.border, backgroundColor: theme.inputBg },
-                                                goalYear === y && { backgroundColor: theme.action, borderColor: theme.action },
-                                            ]}
-                                            onPress={() => setGoalYear(y)}
-                                        >
-                                            <Text style={[styles.chipText, { color: theme.textSecondary }, goalYear === y && { color: '#fff' }]}>
-                                                {y}
-                                            </Text>
-                                        </Pressable>
-                                    ))}
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET YEAR</Text>
+                                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                                    {[today.getFullYear(), today.getFullYear() + 1, today.getFullYear() + 2].map(y => {
+                                        const active = goalYear === y;
+                                        return (
+                                            <Pressable
+                                                key={y}
+                                                onPress={() => setGoalYear(y)}
+                                                style={[
+                                                    styles.chip,
+                                                    {
+                                                        backgroundColor: active ? theme.brand : theme.surface,
+                                                        borderColor: active ? theme.brand : theme.border,
+                                                    },
+                                                ]}
+                                            >
+                                                <Text style={[styles.chipText, { color: active ? '#fff' : theme.ink2 }]}>
+                                                    {y}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
                                 </View>
 
-                                <View style={styles.formBtns}>
+                                <View style={styles.formBtnRow}>
                                     <Pressable
-                                        style={[styles.submitBtn, { backgroundColor: theme.action }]}
                                         onPress={submitGoal}
+                                        style={({ pressed }) => [
+                                            styles.submitBtn, { backgroundColor: theme.brand },
+                                            pressed && { opacity: 0.85 },
+                                        ]}
                                     >
+                                        <IconCheck size={15} color="#fff" />
                                         <Text style={styles.submitBtnText}>Save Goal</Text>
                                     </Pressable>
                                     <Pressable
-                                        style={[styles.cancelBtn, { borderColor: theme.border }]}
                                         onPress={() => { setShowGoalForm(false); setGoalError(''); }}
+                                        style={({ pressed }) => [
+                                            styles.cancelBtn, { borderColor: theme.border },
+                                            pressed && { opacity: 0.7 },
+                                        ]}
                                     >
-                                        <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
+                                        <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>Cancel</Text>
                                     </Pressable>
                                 </View>
-                            </View>
+                            </Card>
                         )}
-                    </View>
+                    </>
+                )}
 
-                    {/* Deposit / Withdraw */}
-                    <View style={styles.actionRow}>
-                        <Pressable
-                            style={[
-                                styles.actionBtn,
-                                { backgroundColor: theme.goalsSoft, borderColor: activeForm === 'deposit' ? theme.goals : 'transparent' },
-                            ]}
-                            onPress={() => setActiveForm(activeForm === 'deposit' ? null : 'deposit')}
-                        >
-                            <Text style={[styles.actionBtnText, { color: theme.goals }]}>+ Set aside money</Text>
-                        </Pressable>
-                        <Pressable
-                            style={[
-                                styles.actionBtn,
-                                { backgroundColor: theme.dangerSoft, borderColor: activeForm === 'withdrawal' ? theme.danger : 'transparent' },
-                            ]}
-                            onPress={() => setActiveForm(activeForm === 'withdrawal' ? null : 'withdrawal')}
-                        >
-                            <Text style={[styles.actionBtnText, { color: theme.danger }]}>- I bought it</Text>
-                        </Pressable>
-                    </View>
+                {/* ── Recent activity ──────────────────────────────── */}
+                <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 24 }]}>
+                    RECENT ACTIVITY
+                </Text>
 
-                    {activeForm && (
-                        <SavingsContainer
-                            transactionType={activeForm}
-                            currentBalance={balance}
-                            onSuccess={handleFormSuccess}
-                            goals={goals as any}
-                        />
-                    )}
+                {history.length === 0 && (
+                    <Text style={[styles.emptyText, { color: theme.ink3 }]}>
+                        No transactions yet. Start saving!
+                    </Text>
+                )}
 
-                    {/* History */}
-                    <Text style={[styles.historyTitle, { color: theme.text }]}>History</Text>
-                    {history.length === 0 && (
-                        <Text style={[styles.emptyText, { color: theme.textMuted }]}>No transactions yet. Start saving!</Text>
-                    )}
-                    {history.map(tx => (
-                        <View key={tx.id} style={[styles.txRow, { backgroundColor: theme.surface }]}>
-                            <View style={styles.txLeft}>
-                                <Text style={[styles.txTitle, { color: theme.text }]}>{tx.title}</Text>
-                                <Text style={[styles.txDate, { color: theme.textMuted }]}>{tx.month} {tx.day}</Text>
+                {history.map(tx => (
+                    <Card key={tx.id} theme={theme} depth={2} padding={14} style={{ marginBottom: 8 }}>
+                        <View style={styles.txRow}>
+                            <View style={[
+                                styles.txIconTile,
+                                {
+                                    backgroundColor: tx.type === 'deposit'
+                                        ? theme.goalsSoft
+                                        : theme.dangerSoft,
+                                },
+                            ]}>
+                                <IconArrow
+                                    size={16}
+                                    color={tx.type === 'deposit' ? theme.goals : theme.danger}
+                                    dir={tx.type === 'deposit' ? 'down' : 'up'}
+                                />
                             </View>
-                            <View style={styles.txRight}>
-                                <Text style={[styles.txAmount, { color: tx.type === 'deposit' ? theme.success : theme.danger }]}>
-                                    {tx.type === 'deposit' ? '+' : '-'}${tx.amount.toFixed(2)}
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.txTitle, { color: theme.ink }]}>{tx.title}</Text>
+                                <Text style={[styles.txDate, { color: theme.ink3 }]}>
+                                    {tx.month.slice(0, 3)} {tx.day}
                                 </Text>
-                                <Pressable onPress={() => deleteTransaction(tx.id)} hitSlop={8}>
-                                    <Text style={[styles.deleteIcon, { color: theme.textMuted }]}>✕</Text>
-                                </Pressable>
                             </View>
+                            <Text style={[
+                                styles.txAmt,
+                                { color: tx.type === 'deposit' ? theme.success : theme.danger },
+                            ]}>
+                                {tx.type === 'deposit' ? '+' : '−'}${tx.amount.toFixed(2)}
+                            </Text>
+                            <Pressable onPress={() => deleteTransaction(tx.id)} hitSlop={10}>
+                                <IconTrash size={14} color={theme.ink3} />
+                            </Pressable>
                         </View>
-                    ))}
-                </>
-            )}
+                    </Card>
+                ))}
+
+            </View>
         </ScrollView>
     );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    container: { flex: 1, marginTop: 40 },
-    content: { paddingBottom: 40, paddingTop: 20 },
-
-    tabRow: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, borderRadius: 12, padding: 4 },
-    tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-    tabActive: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
-    tabText: { fontSize: 13, fontWeight: '600' },
-
-    completedList: { paddingHorizontal: 16 },
-    completedCard: {
-        flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 16,
-        marginBottom: 10, borderLeftWidth: 4, gap: 14,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+    // Hero
+    heroInner: {
+        paddingHorizontal: 22,
+        paddingTop: 52,
     },
-    completedBadge: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center' },
-    completedBadgeText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-    completedInfo: { flex: 1 },
-    completedTitle: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
-    completedAmount: { fontSize: 13, marginBottom: 2 },
-    completedTarget: { fontSize: 12, fontStyle: 'italic' },
-
-    hero: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 16 },
-    piggyIcon: { fontSize: 52, marginBottom: 8 },
-    balanceLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, marginBottom: 4 },
-    balance: { fontSize: 48, fontWeight: '800', letterSpacing: -1, marginBottom: 4 },
-    balanceSub: { fontSize: 13, fontStyle: 'italic' },
-
-    section: { paddingHorizontal: 16, marginBottom: 8 },
-
-    goalCard: {
-        borderRadius: 12, padding: 16, marginBottom: 12, borderLeftWidth: 4,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+    heroTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 24,
     },
-    goalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-    goalTitle: { fontSize: 15, fontWeight: '700' },
-    goalProgress: { fontSize: 22, fontWeight: '800', marginBottom: 8 },
-    goalProgressOf: { fontSize: 16, fontWeight: '400' },
-    barBg: { height: 8, borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
-    barFill: { height: '100%', borderRadius: 4 },
-    goalDeadline: { fontSize: 12, marginBottom: 2 },
-    goalRate: { fontSize: 12, fontWeight: '600' },
-    goalAchieved: { fontSize: 14, fontWeight: '700', textAlign: 'center', marginTop: 4 },
-
-    addGoalBtn: {
-        borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 10,
-        paddingVertical: 14, alignItems: 'center', marginBottom: 12,
+    heroEyebrow: {
+        color: 'rgba(255,255,255,0.7)',
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 11,
+        letterSpacing: 1.6,
     },
-    addGoalBtnText: { fontWeight: '600', fontSize: 14 },
-
-    goalForm: {
-        borderWidth: 1, borderRadius: 12, padding: 16, marginBottom: 12,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+    circleBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 999,
+        backgroundColor: 'rgba(255,255,255,0.16)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.22)',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    goalFormTitle: { fontSize: 15, fontWeight: '700', marginBottom: 12 },
-    goalInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, marginBottom: 10 },
-    goalError: { fontSize: 12, marginTop: -6, marginBottom: 8, fontStyle: 'italic' },
-    formLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginTop: 4 },
-    chipScroll: { marginBottom: 10 },
-    chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, marginRight: 6 },
-    chipText: { fontSize: 13, fontWeight: '500' },
-    yearRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-    formBtns: { flexDirection: 'row', gap: 10 },
-    submitBtn: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-    submitBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-    cancelBtn: { flex: 1, borderWidth: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-    cancelBtnText: { fontWeight: '600', fontSize: 15 },
+    jarRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 18,
+        marginBottom: 22,
+    },
+    heroBalanceLabel: {
+        color: 'rgba(255,255,255,0.7)',
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 11,
+        letterSpacing: 1.6,
+        marginBottom: 2,
+    },
+    heroTagline: {
+        color: 'rgba(255,255,255,0.7)',
+        fontFamily: 'InstrumentSerif-Italic',
+        fontSize: 12,
+        marginTop: 4,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    actionBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 14,
+        borderWidth: 1,
+    },
+    actionBtnText: {
+        color: '#fff',
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 13,
+    },
 
-    actionRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 16 },
-    actionBtn: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center', borderWidth: 2 },
-    actionBtnText: { fontWeight: '700', fontSize: 14 },
+    // Content wrapper
+    content: {
+        paddingHorizontal: 18,
+        paddingTop: 24,
+    },
 
-    historyTitle: { fontSize: 15, fontWeight: '700', paddingHorizontal: 16, marginTop: 8, marginBottom: 10 },
-    emptyText: { textAlign: 'center', marginTop: 20, fontSize: 14 },
+    // Transaction form
+    txForm: {
+        marginBottom: 20,
+    },
+    formTitle: {
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: 20,
+        letterSpacing: -0.3,
+        marginBottom: 16,
+    },
+    fieldLabel: {
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 10,
+        letterSpacing: 1.6,
+        marginBottom: 8,
+        marginTop: 2,
+    },
+    amountInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 12,
+        borderWidth: 1,
+        paddingHorizontal: 14,
+        marginBottom: 16,
+    },
+    dollarSign: {
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: 22,
+        marginRight: 4,
+    },
+    amountField: {
+        flex: 1,
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: 32,
+        lineHeight: 44,
+        paddingVertical: 10,
+        letterSpacing: -0.5,
+    },
+    chipWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 18,
+    },
+    chip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 999,
+        borderWidth: 1,
+    },
+    chipText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 12,
+    },
+    formBtnRow: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    submitBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 7,
+        paddingVertical: 13,
+        borderRadius: 12,
+    },
+    submitBtnText: {
+        color: '#fff',
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 14,
+    },
+    cancelBtn: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 13,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
+    cancelBtnText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 14,
+    },
+
+    // Tabs
+    tabPill: {
+        flexDirection: 'row',
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 4,
+    },
+    tabItem: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 10,
+    },
+    tabItemActive: {},
+    tabText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 13,
+        textTransform: 'capitalize',
+    },
+
+    // Section label
+    sectionLabel: {
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 10,
+        letterSpacing: 1.6,
+        marginBottom: 10,
+    },
+
+    // Goal cards
+    goalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 12,
+    },
+    goalIconTile: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    goalTitle: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 14,
+        letterSpacing: -0.1,
+    },
+    goalMeta: {
+        fontFamily: 'JetBrainsMono-Regular',
+        fontSize: 11,
+        marginTop: 2,
+    },
+    goalAmtRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        marginBottom: 8,
+    },
+    goalSaved: {
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: 26,
+        letterSpacing: -0.5,
+    },
+    goalOf: {
+        fontFamily: 'Geist-Regular',
+        fontSize: 13,
+    },
+
+    // Plant new goal button
+    plantBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        borderWidth: 1.5,
+        borderStyle: 'dashed',
+        borderRadius: 14,
+        paddingVertical: 14,
+        marginBottom: 12,
+    },
+    plantBtnText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 13,
+    },
+
+    // Goal creation form inputs
+    textInput: {
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        fontSize: 15,
+        fontFamily: 'Geist-Regular',
+        marginBottom: 14,
+    },
+    errorText: {
+        fontFamily: 'Geist-Regular',
+        fontSize: 12,
+        marginTop: -10,
+        marginBottom: 10,
+        fontStyle: 'italic',
+    },
+
+    // Transaction history
     txRow: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        marginHorizontal: 16, marginBottom: 8, padding: 14, borderRadius: 10,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
     },
-    txLeft: { flex: 1 },
-    txTitle: { fontSize: 14, fontWeight: '500' },
-    txDate: { fontSize: 12, marginTop: 2 },
-    txRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    txAmount: { fontSize: 15, fontWeight: '700' },
-    deleteIcon: { fontSize: 14, padding: 4 },
+    txIconTile: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    txTitle: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 13,
+    },
+    txDate: {
+        fontFamily: 'JetBrainsMono-Regular',
+        fontSize: 11,
+        marginTop: 2,
+    },
+    txAmt: {
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 14,
+    },
+
+    // Empty state
+    emptyText: {
+        fontFamily: 'InstrumentSerif-Italic',
+        fontSize: 14,
+        textAlign: 'center',
+        marginTop: 12,
+        marginBottom: 16,
+    },
 });

@@ -1,63 +1,26 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/context/ThemeContext';
+import CustomTabBar from '@/components/ui/CustomTabBar';
 
 export default function TabLayout() {
     const { theme } = useTheme();
 
     return (
         <Tabs
+            tabBar={(props) => <CustomTabBar {...props} />}
             screenOptions={{
-                tabBarActiveTintColor: theme.tabActive,
-                tabBarInactiveTintColor: theme.tabInactive,
-                tabBarStyle: {
-                    backgroundColor: theme.tabBar,
-                    borderTopColor: theme.tabBarBorder,
-                    borderTopWidth: 1,
-                },
-                tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
                 headerShown: false,
-                tabBarButton: HapticTab,
+                // The custom tab bar handles its own background and positioning.
+                // Keep the system tab bar hidden so it doesn't double-render.
+                tabBarStyle: { display: 'none' },
             }}
         >
-            <Tabs.Screen
-                name="index"
-                options={{
-                    title: 'Home',
-                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="house.fill" color={color} />,
-                }}
-            />
-            <Tabs.Screen
-                name="add"
-                options={{
-                    title: 'Expense',
-                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="minus.circle.fill" color={color} />,
-                }}
-            />
-            <Tabs.Screen
-                name="addIncome"
-                options={{
-                    title: 'Income',
-                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="plus.circle.fill" color={color} />,
-                }}
-            />
-            <Tabs.Screen
-                name="piggyBank"
-                options={{
-                    title: 'Savings',
-                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="banknote.fill" color={color} />,
-                }}
-            />
-            <Tabs.Screen
-                name="lessons"
-                options={{
-                    title: 'Lessons',
-                    tabBarIcon: ({ color }) => <IconSymbol size={26} name="book.fill" color={color} />,
-                }}
-            />
+            <Tabs.Screen name="index" options={{ title: 'Home' }} />
+            <Tabs.Screen name="add" options={{ title: 'Expense' }} />
+            <Tabs.Screen name="addIncome" options={{ title: 'Income' }} />
+            <Tabs.Screen name="piggyBank" options={{ title: 'Savings' }} />
+            <Tabs.Screen name="lessons" options={{ title: 'Lessons' }} />
         </Tabs>
     );
 }

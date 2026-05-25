@@ -29,14 +29,18 @@ class Expense(BaseModel):
     day: int
     month: str
     user_id: str
+    sub_category: Optional[str] = None
+    note: Optional[str] = None
 
 class Income(BaseModel):
-    jobTitle: str
     amount: float
-    jobType: str
     day: int
     month: str
     user_id: str
+    source: Optional[str] = None
+    # Legacy fields — kept optional so old rows and new posts both work
+    jobTitle: Optional[str] = None
+    jobType: Optional[str] = None
 
 class SavingsEntry(BaseModel):
     user_id: str
@@ -78,9 +82,9 @@ def get_spending_trends(user_id: str):
 
     # Fetch all data in 5 queries instead of per-month queries
     all_income = supabase.table("income").select("amount, month").eq("user_id", user_id).execute()
-    all_needs = supabase.table("expenses").select("amount, day, month").eq("category", "Need").eq("user_id", user_id).execute()
-    all_wants = supabase.table("expenses").select("amount, day, month").eq("category", "Want").eq("user_id", user_id).execute()
-    all_goals_exp = supabase.table("expenses").select("amount, day, month").eq("category", "Debt").eq("user_id", user_id).execute()
+    all_needs = supabase.table("expenses").select("amount, day, month").eq("category", "Needs").eq("user_id", user_id).execute()
+    all_wants = supabase.table("expenses").select("amount, day, month").eq("category", "Wants").eq("user_id", user_id).execute()
+    all_goals_exp = supabase.table("expenses").select("amount, day, month").eq("category", "Goals").eq("user_id", user_id).execute()
     all_savings = supabase.table("savings_transactions").select("amount, day, month").eq("type", "deposit").eq("user_id", user_id).execute()
 
     def group_by_month(items):
@@ -159,9 +163,9 @@ def get_dashboard_data(current_month: str, user_id: str):
     wants_budget = total_income * .30
     goals_budget = total_income * .20
 
-    expense_needs_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Need").eq("user_id", user_id).execute()
-    expense_wants_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Want").eq("user_id", user_id).execute()
-    expense_goals_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Debt").eq("user_id", user_id).execute()
+    expense_needs_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Needs").eq("user_id", user_id).execute()
+    expense_wants_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Wants").eq("user_id", user_id).execute()
+    expense_goals_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Goals").eq("user_id", user_id).execute()
     savings_deposits_response = supabase.table("savings_transactions").select("amount").eq("month", current_month).eq("type", "deposit").eq("user_id", user_id).execute()
 
     total_needs = sum(item["amount"] for item in expense_needs_response.data)
@@ -210,14 +214,9 @@ def create_income(income: Income):
 
 @app.get("/expenses/details/")
 def get_expense_details(month: str, category: str, user_id: str):
-    if category == "Needs":
-        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Need").eq("user_id", user_id).execute()
-    elif category == "Wants":
-        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Want").eq("user_id", user_id).execute()
-    elif category == "Goals":
-        response = supabase.table("expenses").select("*").eq("month", month).eq("category", "Debt").eq("user_id", user_id).execute()
-    else:
+    if category not in ("Needs", "Wants", "Goals"):
         return {"data": []}
+    response = supabase.table("expenses").select("*").eq("month", month).eq("category", category).eq("user_id", user_id).execute()
     return {"data": response.data}
 
 @app.delete("/expenses/delete/{id}")

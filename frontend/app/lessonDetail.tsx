@@ -1,13 +1,22 @@
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+/**
+ * LessonDetailScreen — visual revamp (DollarSeeds design system)
+ *
+ * Behaviour preserved:
+ * ✅ Marks lesson as completed in AsyncStorage on "Mark as Complete"
+ * ✅ Navigates back after completion
+ * ✅ Back chevron returns to lessons list
+ */
 import React from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../context/ThemeContext';
+
+import { useTheme, shadow } from '../context/ThemeContext';
+import { IconChevronLeft, IconCheck, IconScripture } from '../components/icons';
+import Card from '../components/ui/Card';
 import { LESSONS } from '../constants/lessons';
-import Button from '../components/ui/Button';
 
 const STORAGE_KEY = 'completed_lessons';
-const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' });
 
 export default function LessonDetailScreen() {
     const router = useRouter();
@@ -30,159 +39,204 @@ export default function LessonDetailScreen() {
         router.back();
     };
 
-    const styles = makeStyles(theme);
-
     if (!lesson) {
         return (
-            <View style={styles.container}>
-                <Text style={styles.errorText}>Lesson not found.</Text>
+            <View style={[styles.errorWrap, { backgroundColor: theme.bg }]}>
+                <Text style={[styles.errorText, { color: theme.ink }]}>Lesson not found.</Text>
             </View>
         );
     }
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-            {/* Back button */}
-            <Pressable onPress={() => router.back()} style={styles.backRow}>
-                <Text style={styles.backChevron}>‹</Text>
-                <Text style={styles.backLabel}>Back</Text>
+        <ScrollView
+            style={{ flex: 1, backgroundColor: theme.bg }}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+        >
+            {/* ── Back button ─────────────────────────────────────── */}
+            <Pressable
+                onPress={() => router.back()}
+                style={({ pressed }) => [
+                    styles.backBtn,
+                    { backgroundColor: theme.surface, borderColor: theme.border },
+                    pressed && { opacity: 0.7 },
+                ]}
+            >
+                <IconChevronLeft size={18} color={theme.ink} />
             </Pressable>
 
-            {/* Title */}
-            <Text style={styles.title}>{lesson.title}</Text>
+            {/* ── Title ───────────────────────────────────────────── */}
+            <Text style={[styles.title, { color: theme.ink }]}>{lesson.title}</Text>
 
-            {/* Passage */}
-            <View style={styles.passageBlock}>
-                <Text style={styles.passageText}>{lesson.passage}</Text>
-                <Text style={styles.passageRef}>{lesson.passageRef}</Text>
-            </View>
+            {/* ── Scripture card ──────────────────────────────────── */}
+            <Card theme={theme} depth={4} padding={24} style={styles.passageCard}>
+                {/* Quote mark flourish */}
+                <Text style={[styles.quoteMarkTop, { color: theme.brand }]}>"</Text>
 
-            {/* Sections */}
+                <Text style={[styles.passageText, { color: theme.ink }]}>
+                    {lesson.passage.replace(/^"|"$/g, '')}
+                </Text>
+
+                {/* Reference badge */}
+                <View style={[styles.refBadge, { backgroundColor: theme.surfaceSoft }]}>
+                    <IconScripture size={13} color={theme.brand} />
+                    <Text style={[styles.refText, { color: theme.brand }]}>
+                        {lesson.passageRef}
+                    </Text>
+                </View>
+            </Card>
+
+            {/* ── Sections ────────────────────────────────────────── */}
             {lesson.sections.map((section, i) => (
                 <View key={i} style={styles.section}>
-                    <Text style={styles.sectionHeading}>{section.heading}</Text>
-                    <Text style={styles.sectionBody}>{section.body}</Text>
+                    <Text style={[styles.sectionHeading, { color: theme.ink }]}>
+                        {section.heading}
+                    </Text>
+                    <Text style={[styles.sectionBody, { color: theme.ink2 }]}>
+                        {section.body.trim()}
+                    </Text>
                 </View>
             ))}
 
-            {/* Prayer */}
-            <View style={styles.prayerBlock}>
-                <Text style={styles.prayerHeading}>Prayer</Text>
-                <Text style={styles.prayerText}>{lesson.prayer}</Text>
-            </View>
+            {/* ── Prayer ──────────────────────────────────────────── */}
+            <Card theme={theme} depth={3} padding={22} style={styles.prayerCard}>
+                <Text style={[styles.prayerHeading, { color: theme.ink3 }]}>PRAYER</Text>
+                <Text style={[styles.prayerText, { color: theme.ink }]}>
+                    {lesson.prayer}
+                </Text>
+            </Card>
 
-            {/* Complete button */}
-            <View style={styles.completeRow}>
-                <Button
-                    label="Mark as Complete"
-                    onPress={handleComplete}
-                    variant="success"
-                    size="lg"
-                    fullWidth
-                />
-            </View>
+            {/* ── Complete button ─────────────────────────────────── */}
+            <Pressable
+                onPress={handleComplete}
+                style={({ pressed }) => [
+                    styles.completeBtn,
+                    { backgroundColor: theme.success, ...(shadow(5) as object) },
+                    pressed && { transform: [{ scale: 0.97 }] },
+                ]}
+            >
+                <IconCheck size={16} color="#fff" />
+                <Text style={styles.completeBtnText}>Mark as Complete</Text>
+            </Pressable>
         </ScrollView>
     );
 }
 
-const makeStyles = (theme: ReturnType<typeof import('../context/ThemeContext').useTheme>['theme']) =>
-    StyleSheet.create({
-        container: {
-            flex: 1,
-            backgroundColor: theme.background,
-        },
-        content: {
-            padding: 20,
-            paddingBottom: 48,
-        },
-        errorText: {
-            color: theme.text,
-            padding: 20,
-        },
-        backRow: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginTop: 16,
-            marginBottom: 24,
-            gap: 4,
-        },
-        backChevron: {
-            fontSize: 26,
-            color: theme.action,
-            lineHeight: 28,
-        },
-        backLabel: {
-            fontSize: 16,
-            color: theme.action,
-            fontWeight: '500',
-        },
-        title: {
-            fontSize: 22,
-            fontWeight: '700',
-            color: theme.text,
-            textAlign: 'left',
-            marginBottom: 24,
-        },
-        passageBlock: {
-            backgroundColor: theme.surface,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: theme.border,
-            padding: 20,
-            marginBottom: 28,
-            alignItems: 'center',
-        },
-        passageText: {
-            fontFamily: SERIF,
-            fontSize: 17,
-            fontStyle: 'italic',
-            color: theme.text,
-            textAlign: 'center',
-            lineHeight: 28,
-            marginBottom: 10,
-        },
-        passageRef: {
-            fontFamily: SERIF,
-            fontSize: 14,
-            color: theme.textSecondary,
-            textAlign: 'center',
-        },
-        section: {
-            marginBottom: 24,
-        },
-        sectionHeading: {
-            fontSize: 15,
-            fontWeight: '700',
-            color: theme.text,
-            textAlign: 'left',
-            marginBottom: 8,
-        },
-        sectionBody: {
-            fontSize: 15,
-            color: theme.textSecondary,
-            textAlign: 'left',
-            lineHeight: 24,
-        },
-        prayerBlock: {
-            marginTop: 4,
-            marginBottom: 32,
-        },
-        prayerHeading: {
-            fontSize: 15,
-            fontWeight: '700',
-            color: theme.text,
-            textAlign: 'left',
-            marginBottom: 12,
-        },
-        prayerText: {
-            fontFamily: SERIF,
-            fontSize: 16,
-            fontStyle: 'italic',
-            color: theme.textSecondary,
-            textAlign: 'center',
-            lineHeight: 26,
-        },
-        completeRow: {
-            marginTop: 8,
-        },
-    });
+const styles = StyleSheet.create({
+    content: {
+        paddingHorizontal: 20,
+        paddingTop: 54,
+        paddingBottom: 56,
+    },
+    errorWrap: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    errorText: {
+        fontFamily: 'Geist-Regular',
+        fontSize: 15,
+    },
+
+    // Back button
+    backBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 22,
+        alignSelf: 'flex-start',
+    },
+
+    // Title
+    title: {
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: 30,
+        letterSpacing: -0.5,
+        lineHeight: 34,
+        marginBottom: 22,
+    },
+
+    // Passage card
+    passageCard: {
+        marginBottom: 28,
+        alignItems: 'center',
+    },
+    quoteMarkTop: {
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: 72,
+        lineHeight: 48,
+        marginBottom: 4,
+        alignSelf: 'flex-start',
+    },
+    passageText: {
+        fontFamily: 'InstrumentSerif-Italic',
+        fontSize: 17,
+        lineHeight: 27,
+        textAlign: 'center',
+        marginBottom: 18,
+    },
+    refBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+    },
+    refText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 12,
+    },
+
+    // Sections
+    section: {
+        marginBottom: 26,
+    },
+    sectionHeading: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 16,
+        letterSpacing: -0.1,
+        marginBottom: 10,
+    },
+    sectionBody: {
+        fontFamily: 'Geist-Regular',
+        fontSize: 15,
+        lineHeight: 24,
+    },
+
+    // Prayer card
+    prayerCard: {
+        marginBottom: 28,
+    },
+    prayerHeading: {
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 10,
+        letterSpacing: 1.6,
+        marginBottom: 12,
+    },
+    prayerText: {
+        fontFamily: 'InstrumentSerif-Italic',
+        fontSize: 16,
+        lineHeight: 26,
+        textAlign: 'center',
+    },
+
+    // Complete button
+    completeBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        borderRadius: 14,
+    },
+    completeBtnText: {
+        color: '#fff',
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 15,
+    },
+});

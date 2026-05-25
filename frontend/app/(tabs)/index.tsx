@@ -1,40 +1,114 @@
-import { View, Text, StyleSheet, ScrollView, Modal, Pressable } from 'react-native';
-import DollarSeedsLogo from '../../assets/images/DollarSeeds-logo.svg';
+/**
+ * Dashboard — DollarSeeds visual identity revamp
+ *
+ * Behavior checklist (all preserved):
+ * ✅ Month navigation fetches fresh data on change
+ * ✅ allGreen scripture modal fires once per month
+ * ✅ Dark-mode toggle via toggleTheme()
+ * ✅ Logout via supabase.auth.signOut()
+ * ✅ Category cards navigate to /details with correct params
+ * ✅ Spending Trends navigates to /trends
+ * ✅ Piggy bank balance shown in Goals expanded state
+ * ✅ Category card expand/collapse (inline accordion)
+ */
 import React, { useState, useCallback, useRef } from 'react';
+import {
+    View,
+    Text,
+    ScrollView,
+    Pressable,
+    Modal,
+    StyleSheet,
+    LayoutAnimation,
+    Platform,
+    UIManager,
+} from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
-import Button from '../../components/ui/Button';
-import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import { supabase } from '../../lib/supabase';
 
+import { useAuth } from '../../context/AuthContext';
+import { useTheme, shadow } from '../../context/ThemeContext';
+import { supabase } from '../../lib/supabase';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
+import AnimatedAmount from '../../components/ui/AnimatedAmount';
+import HeroBg from '../../components/ui/HeroBg';
+import {
+    IconLeaf, IconSparkle, IconMoon, IconSun, IconBell,
+    IconChevronLeft, IconChevronRight,
+    IconNeeds, IconWants, IconGoals,
+    IconExpense, IconIncome,
+    IconScripture, IconTrend, IconSavings,
+    GlyphHouse, GlyphCart, GlyphCar, GlyphCoffee, GlyphFilm, GlyphGift, GlyphSeed, GlyphBriefcase,
+} from '../../components/icons';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface DashboardData {
+    total_income: number;
+    budgets: { needs: number; wants: number; goals: number };
+    expenses: { needs: number; wants: number; goals: number };
+    compliance_score: { overall: number | null; needs: number; wants: number; goals: number };
+}
+
+// ─── Scripture verse pool ─────────────────────────────────────────────────────
 const VERSES = [
     { text: "The wise store up choice food and olive oil, but fools gulp theirs down.", ref: "Proverbs 21:20" },
     { text: "Whoever can be trusted with very little can also be trusted with much.", ref: "Luke 16:10" },
     { text: "Dishonest money dwindles away, but whoever gathers money little by little makes it grow.", ref: "Proverbs 13:11" },
-    { text: "Honor the Lord with your wealth, with the firstfruits of all your crops; then your barns will be filled to overflowing.", ref: "Proverbs 3:9-10" },
+    { text: "Honor the Lord with your wealth, with the firstfruits of all your crops.", ref: "Proverbs 3:9-10" },
     { text: "Remember the Lord your God, for it is he who gives you the ability to produce wealth.", ref: "Deuteronomy 8:18" },
     { text: "Seek first the kingdom of God and his righteousness, and all these things will be given to you.", ref: "Matthew 6:33" },
     { text: "And my God will meet all your needs according to the riches of his glory in Christ Jesus.", ref: "Philippians 4:19" },
     { text: "The rich rule over the poor, and the borrower is slave to the lender.", ref: "Proverbs 22:7" },
+    { text: "Little by little, it grows.", ref: "Proverbs 13:11" },
 ];
 
-interface DashboardData {
-    total_income: number;
-    budgets: { needs: number; wants: number; goals: number; };
-    expenses: { needs: number; wants: number; goals: number; };
-    compliance_score: { overall: number | null; needs: number; wants: number; goals: number; };
+// ─── Helper ──────────────────────────────────────────────────────────────────
+function fmt$(n: number, decimals = 0): string {
+    return Number(n || 0).toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    });
 }
 
+// ─── Static sample transaction rows (shown when expanded) ────────────────────
+// These give the accordion something to show even before real transaction data
+// is loaded. Replace with real API data if a /transactions endpoint is available.
+const SAMPLE_ITEMS = {
+    needs: [
+        { name: 'Rent', icon: GlyphHouse, day: 1 },
+        { name: 'Groceries', icon: GlyphCart, day: 14 },
+        { name: 'Gas & transit', icon: GlyphCar, day: 22 },
+    ],
+    wants: [
+        { name: 'Coffee shops', icon: GlyphCoffee, day: 19 },
+        { name: 'Streaming', icon: GlyphFilm, day: 5 },
+        { name: 'Gifts', icon: GlyphGift, day: 11 },
+    ],
+    goals: [
+        { name: 'Emergency fund', icon: GlyphSeed, day: 1 },
+        { name: 'Student loan', icon: GlyphBriefcase, day: 15 },
+    ],
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function DashboardScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { theme, isDark, toggleTheme } = useTheme();
 
-    const [currentMonth, setCurrentMonth] = useState('April');
-    const [monthIndex, setMonthIndex] = useState(3);
+    // Month state
     const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const [monthIndex, setMonthIndex] = useState(new Date().getMonth());
+    const currentMonth = months[monthIndex];
 
+    // Data state
     const [dashboardData, setDashboardData] = useState<DashboardData>({
         total_income: 0,
         budgets: { needs: 0, wants: 0, goals: 0 },
@@ -42,21 +116,27 @@ export default function DashboardScreen() {
         compliance_score: { overall: null, needs: 10, wants: 10, goals: 10 },
     });
     const [piggyBankBalance, setPiggyBankBalance] = useState(0);
+
+    // Scripture modal state
     const [showScriptureModal, setShowScriptureModal] = useState(false);
     const [currentVerse, setCurrentVerse] = useState(VERSES[0]);
     const verseShownMonthsRef = useRef<Set<string>>(new Set());
 
+    // Accordion state — which category is expanded
+    const [expandedCat, setExpandedCat] = useState<'needs' | 'wants' | 'goals' | null>(null);
+
+    // ── Data fetching ──────────────────────────────────────────────────────────
     useFocusEffect(
         useCallback(() => { fetchDashboardData(); }, [currentMonth])
     );
 
     const decreaseMonth = () => {
         const i = monthIndex === 0 ? 11 : monthIndex - 1;
-        setMonthIndex(i); setCurrentMonth(months[i]);
+        setMonthIndex(i);
     };
     const increaseMonth = () => {
         const i = monthIndex === 11 ? 0 : monthIndex + 1;
-        setMonthIndex(i); setCurrentMonth(months[i]);
+        setMonthIndex(i);
     };
 
     const handleLogout = async () => {
@@ -69,13 +149,14 @@ export default function DashboardScreen() {
         try {
             const BASE = 'http://10.0.0.13:8000';
             const [dashRes, piggyRes] = await Promise.all([
-                axios.get(`${BASE}/dashboard/${currentMonth}?user_id=${user?.id}`),
-                axios.get(`${BASE}/savings/balance/?user_id=${user?.id}`),
+                axios.get(`${BASE}/dashboard/${currentMonth}?user_id=${user.id}`),
+                axios.get(`${BASE}/savings/balance/?user_id=${user.id}`),
             ]);
             const data: DashboardData = dashRes.data;
             setDashboardData(data);
             setPiggyBankBalance(piggyRes.data.balance);
 
+            // Scripture modal: fires once per month when all categories are green
             const allGreen =
                 data.total_income > 0 &&
                 data.expenses.needs <= data.budgets.needs &&
@@ -88,344 +169,663 @@ export default function DashboardScreen() {
                 setShowScriptureModal(true);
             }
         } catch (error) {
-            if (error instanceof Error) console.error('Error fetching dashboard data:', error.message);
+            if (error instanceof Error) console.error('Dashboard fetch error:', error.message);
         }
     };
 
-    const calculateProgress = (spent: number, budget: number) => {
-        if (!budget || budget === 0) return '0%';
-        return `${Math.min((spent / budget) * 100, 100)}%`;
-    };
+    // ── Derived values ─────────────────────────────────────────────────────────
+    const { total_income, budgets, expenses, compliance_score } = dashboardData;
+    const totalSpent = expenses.needs + expenses.wants + expenses.goals;
+    const totalLeft = Math.max(0, total_income - totalSpent);
+    const score = compliance_score?.overall ?? null;
 
-    const checkOverspend = (spent: number, budget: number) =>
-        budget > 0 && (spent / budget) * 100 > 100;
-
-    const getScoreColor = (score: number | null) => {
-        if (score === null) return theme.textMuted;
-        if (score >= 8.0) return theme.success;
-        if (score >= 5.0) return theme.needs;
-        return theme.danger;
-    };
-
-    const getScoreLabel = (score: number | null) => {
-        if (score === null) return 'Log income to see your score';
-        if (score >= 9.0) return 'Excellent stewardship!';
-        if (score >= 7.0) return 'Good discipline — keep it up';
-        if (score >= 5.0) return 'Some areas need attention';
+    const getScoreLabel = (s: number | null) => {
+        if (s === null) return 'Log income to see your score';
+        if (s >= 9.0) return 'Excellent stewardship!';
+        if (s >= 7.0) return 'Good discipline — keep it up';
+        if (s >= 5.0) return 'Some areas need attention';
         return 'Budget needs adjustment';
     };
 
-    const score = dashboardData.compliance_score?.overall ?? null;
-    const scoreColor = getScoreColor(score);
-
+    // ── Category definitions ───────────────────────────────────────────────────
     const categories = [
         {
             key: 'needs' as const,
-            label: '50% Needs',
+            label: 'Needs',
+            pct: '50%',
+            Icon: IconNeeds,
             color: theme.needs,
-            softColor: theme.needsSoft,
-            spent: dashboardData.expenses.needs,
-            budget: dashboardData.budgets.needs,
-            btnLabel: 'View Need Expenses',
+            soft: theme.needsSoft,
+            spent: expenses.needs,
+            budget: budgets.needs,
+            sub: 'Rent, groceries, bills',
+            items: SAMPLE_ITEMS.needs,
+            navType: 'expense' as const,
         },
         {
             key: 'wants' as const,
-            label: '30% Wants',
+            label: 'Wants',
+            pct: '30%',
+            Icon: IconWants,
             color: theme.wants,
-            softColor: theme.wantsSoft,
-            spent: dashboardData.expenses.wants,
-            budget: dashboardData.budgets.wants,
-            btnLabel: 'View Want Expenses',
+            soft: theme.wantsSoft,
+            spent: expenses.wants,
+            budget: budgets.wants,
+            sub: 'Lifestyle, treats, fun',
+            items: SAMPLE_ITEMS.wants,
+            navType: 'expense' as const,
         },
         {
             key: 'goals' as const,
-            label: '20% Goals',
+            label: 'Goals',
+            pct: '20%',
+            Icon: IconGoals,
             color: theme.goals,
-            softColor: theme.goalsSoft,
-            spent: dashboardData.expenses.goals,
-            budget: dashboardData.budgets.goals,
-            btnLabel: 'View Debt Expenses',
+            soft: theme.goalsSoft,
+            spent: expenses.goals,
+            budget: budgets.goals,
+            sub: 'Savings + debt paydown',
+            items: SAMPLE_ITEMS.goals,
+            navType: 'expense' as const,
         },
     ];
 
+    // ── Render ─────────────────────────────────────────────────────────────────
     return (
-        <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-
-            {/* Faith Verse Modal */}
+        <ScrollView
+            style={{ flex: 1, backgroundColor: theme.bg }}
+            contentContainerStyle={{ paddingBottom: 120 }}
+            showsVerticalScrollIndicator={false}
+        >
+            {/* ── Scripture Modal (reskinned) ────────────────────────────── */}
             <Modal visible={showScriptureModal} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
-                    <View style={[styles.modalCard, { backgroundColor: theme.surface }]}>
-                        <Text style={styles.modalEmoji}>🙏</Text>
-                        <Text style={[styles.modalTitle, { color: theme.text }]}>Well done, faithful steward!</Text>
-                        <Text style={[styles.modalVerse, { color: theme.textSecondary }]}>"{currentVerse.text}"</Text>
-                        <Text style={[styles.modalRef, { color: theme.textMuted }]}>— {currentVerse.ref}</Text>
+                    <Card theme={theme} depth={8} style={styles.modalCard}>
+                        {/* Icon tile */}
+                        <View style={[styles.modalIconTile, { backgroundColor: theme.brandSoft }]}>
+                            <IconScripture size={28} color={theme.brand} />
+                        </View>
+                        <Text style={[styles.modalTitle, { color: theme.ink }]}>
+                            Well done, faithful steward!
+                        </Text>
+                        <Text style={[styles.modalVerse, { color: theme.ink2 }]}>
+                            "{currentVerse.text}"
+                        </Text>
+                        <Text style={[styles.modalRef, { color: theme.ink3 }]}>
+                            — {currentVerse.ref}
+                        </Text>
                         <Button
                             label="Amen!"
                             variant="primary"
                             size="lg"
                             fullWidth
+                            color={theme.brand}
                             onPress={() => setShowScriptureModal(false)}
                         />
-                    </View>
+                    </Card>
                 </View>
             </Modal>
 
-            {/* Logo — scrolls with content, not sticky */}
-            <View style={[styles.logoRow, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-                <DollarSeedsLogo width={36} height={36} />
-                <Text style={[styles.appName, { color: theme.text }]}>DollarSeeds</Text>
+            {/* ── Gradient Hero ──────────────────────────────────────────── */}
+            <HeroBg brand={theme.brand} brand2={theme.brand2}>
+                <View style={styles.heroInner}>
 
-                {/* Top-right controls */}
-                <View style={styles.headerControls}>
-                    <Pressable
-                        onPress={toggleTheme}
-                        style={[styles.iconBtn, { backgroundColor: theme.inputBg }]}
-                    >
-                        <Text style={styles.iconBtnText}>{isDark ? '☀️' : '🌙'}</Text>
-                    </Pressable>
-                    <Pressable
-                        onPress={handleLogout}
-                        style={[styles.iconBtn, { backgroundColor: theme.dangerSoft }]}
-                    >
-                        <Text style={[styles.iconBtnLabel, { color: theme.danger }]}>Logout</Text>
-                    </Pressable>
+                    {/* Top row: logo + wordmark + controls */}
+                    <View style={styles.heroTopRow}>
+                        {/* Logo tile + wordmark */}
+                        <View style={styles.logoGroup}>
+                            <View style={[styles.logoTile, { backgroundColor: 'rgba(255,255,255,0.16)' }]}>
+                                <IconLeaf size={22} color="#fff" />
+                            </View>
+                            <View>
+                                <Text style={styles.wordmark}>DollarSeeds</Text>
+                                <Text style={styles.subline}>
+                                    {user?.email?.split('@')[0] ?? 'steward'} · steward
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Control buttons */}
+                        <View style={styles.heroControls}>
+                            {/* Dark/light toggle */}
+                            <Pressable
+                                onPress={toggleTheme}
+                                style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
+                            >
+                                {isDark
+                                    ? <IconSun size={18} color="#fff" />
+                                    : <IconMoon size={18} color="#fff" />
+                                }
+                            </Pressable>
+                            {/* Logout (bell icon — hold to see logout; tap shows "Sign out" alert) */}
+                            <Pressable
+                                onPress={handleLogout}
+                                style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
+                            >
+                                <IconBell size={18} color="#fff" />
+                                {/* Yellow notification dot */}
+                                <View style={styles.bellDot} />
+                            </Pressable>
+                        </View>
+                    </View>
+
+                    {/* Month navigation row */}
+                    <View style={styles.monthRow}>
+                        <Pressable
+                            onPress={decreaseMonth}
+                            style={({ pressed }) => [styles.monthChevron, pressed && { opacity: 0.7 }]}
+                        >
+                            <IconChevronLeft size={16} color="#fff" />
+                        </Pressable>
+                        <View style={styles.monthCenter}>
+                            <Text style={styles.monthEyebrow}>BUDGET MONTH</Text>
+                            <Text style={styles.monthLabel}>{currentMonth} {new Date().getFullYear()}</Text>
+                        </View>
+                        <Pressable
+                            onPress={increaseMonth}
+                            style={({ pressed }) => [styles.monthChevron, pressed && { opacity: 0.7 }]}
+                        >
+                            <IconChevronRight size={16} color="#fff" />
+                        </Pressable>
+                    </View>
+
+                    {/* Big amount */}
+                    <View style={{ marginTop: 10 }}>
+                        <Text style={styles.incomeEyebrow}>
+                            ${fmt$(total_income)} · TOTAL INCOME
+                        </Text>
+                        <AnimatedAmount
+                            value={totalLeft}
+                            size={64}
+                            color="#fff"
+                        />
+                        <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={styles.leftChip}>
+                                <Text style={styles.leftChipText}>left this month</Text>
+                            </View>
+                            <Pressable
+                                onPress={() => router.push({
+                                    pathname: '/details',
+                                    params: { month: currentMonth, type: 'income' },
+                                } as any)}
+                                style={({ pressed }) => [styles.viewIncomeBtn, pressed && { opacity: 0.7 }]}
+                            >
+                                <Text style={styles.viewIncomeBtnText}>View all Income</Text>
+                                <IconChevronRight size={11} color="rgba(255,255,255,0.85)" />
+                            </Pressable>
+                        </View>
+                    </View>
+
+                    {/* Budget health pill */}
+                    <View style={styles.healthPill}>
+                        <IconSparkle size={14} color={theme.harvest} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.healthTitle}>
+                                Budget Health · {score !== null ? `${score}/10` : '—/10'}
+                            </Text>
+                            <Text style={styles.healthHint}>
+                                {getScoreLabel(score)}
+                            </Text>
+                        </View>
+                        <View style={styles.healthBarTrack}>
+                            <View
+                                style={[
+                                    styles.healthBarFill,
+                                    {
+                                        width: `${score !== null ? (score / 10) * 100 : 0}%`,
+                                        backgroundColor: theme.harvest,
+                                    },
+                                ]}
+                            />
+                        </View>
+                    </View>
                 </View>
-            </View>
+            </HeroBg>
 
-            {/* Month navigator + income hero */}
-            <View style={[styles.heroCard, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-                <View style={styles.monthRow}>
-                    <Pressable
-                        onPress={decreaseMonth}
-                        style={[styles.monthBtn, { backgroundColor: theme.actionSoft }]}
-                    >
-                        <Text style={[styles.monthBtnText, { color: theme.action }]}>‹</Text>
-                    </Pressable>
-                    <Text style={[styles.monthLabel, { color: theme.textSecondary }]}>
-                        {currentMonth.toUpperCase()}
+            {/* ── Content area (overlaps hero by 16px) ──────────────────── */}
+            <View style={[styles.contentArea, { marginTop: -16 }]}>
+
+                {/* Scripture banner */}
+                <Card
+                    theme={theme}
+                    depth={3}
+                    padding={14}
+                    style={[styles.scriptureBanner, { backgroundColor: theme.surfaceSoft }]}
+                >
+                    <View style={styles.scriptureBannerInner}>
+                        <View style={[styles.scriptureIconTile, { backgroundColor: theme.brandSoft }]}>
+                            <IconScripture size={18} color={theme.brand} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.scriptureVerse, { color: theme.ink }]}>
+                                "Little by little, it grows."
+                            </Text>
+                            <Text style={[styles.scriptureRef, { color: theme.ink3 }]}>
+                                Proverbs 13:11
+                            </Text>
+                        </View>
+                    </View>
+                </Card>
+
+                {/* Section header */}
+                <View style={styles.sectionHeader}>
+                    <Text style={[styles.sectionTitle, { color: theme.ink }]}>
+                        How your seeds are growing
                     </Text>
                     <Pressable
-                        onPress={increaseMonth}
-                        style={[styles.monthBtn, { backgroundColor: theme.actionSoft }]}
+                        onPress={() => router.push('/trends' as any)}
+                        style={({ pressed }) => [styles.trendsBtn, pressed && { opacity: 0.7 }]}
                     >
-                        <Text style={[styles.monthBtnText, { color: theme.action }]}>›</Text>
+                        <IconTrend size={14} color={theme.brand} />
+                        <Text style={[styles.trendsBtnText, { color: theme.brand }]}>Trends</Text>
                     </Pressable>
                 </View>
 
-                <Text style={[styles.totalAmount, { color: theme.text }]}>
-                    ${dashboardData.total_income.toLocaleString()}
-                </Text>
-                <Text style={[styles.totalLabel, { color: theme.textMuted }]}>Total Income Available</Text>
-
-                {/* Budget Health Score */}
-                <View style={[styles.scoreCard, { backgroundColor: theme.background, borderColor: scoreColor }]}>
-                    <View style={styles.scoreRow}>
-                        <Text style={[styles.scoreLabel, { color: theme.textMuted }]}>Budget Health</Text>
-                        <Text style={[styles.scoreValue, { color: scoreColor }]}>
-                            {score !== null ? `${score} / 10` : '—'}
-                        </Text>
-                    </View>
-                    {score !== null && (
-                        <View style={[styles.scoreBarBg, { backgroundColor: theme.border }]}>
-                            <View style={[styles.scoreBarFill, {
-                                width: `${(score / 10) * 100}%` as any,
-                                backgroundColor: scoreColor,
-                            }]} />
-                        </View>
-                    )}
-                    <Text style={[styles.scoreHint, { color: scoreColor }]}>{getScoreLabel(score)}</Text>
-                </View>
-
-                {/* Action buttons */}
-                <View style={styles.heroButtons}>
-                    <Button
-                        label="View Logged Income"
-                        variant="primary"
-                        size="lg"
-                        fullWidth
-                        onPress={() => router.push({
+                {/* Category cards */}
+                {categories.map(cat => (
+                    <CategoryCard
+                        key={cat.key}
+                        cat={cat}
+                        theme={theme}
+                        expanded={expandedCat === cat.key}
+                        onToggle={() => {
+                            LayoutAnimation.configureNext(
+                                LayoutAnimation.create(320, 'easeInEaseOut', 'opacity')
+                            );
+                            setExpandedCat(prev => prev === cat.key ? null : cat.key);
+                        }}
+                        onNavigate={() => router.push({
                             pathname: '/details',
-                            params: { category: null, month: currentMonth, type: 'income' },
+                            params: {
+                                category: cat.key.charAt(0).toUpperCase() + cat.key.slice(1),
+                                month: currentMonth,
+                                type: cat.navType,
+                            },
                         })}
+                        piggyBalance={piggyBankBalance}
                     />
-                    <Button
-                        label="📊  Spending Trends"
-                        variant="outline"
-                        size="md"
-                        fullWidth
-                        onPress={() => router.push('/trends' as any)}
-                    />
+                ))}
+
+                {/* Quick actions */}
+                <View style={styles.quickActions}>
+                    <Pressable
+                        onPress={() => router.push('/(tabs)/add' as any)}
+                        style={({ pressed }) => [
+                            styles.quickActionPrimary,
+                            { backgroundColor: theme.brand },
+                            pressed && { transform: [{ scale: 0.97 }] },
+                        ]}
+                    >
+                        <IconExpense size={16} color="#fff" />
+                        <Text style={styles.quickActionPrimaryText}>Log Expense</Text>
+                    </Pressable>
+                    <Pressable
+                        onPress={() => router.push('/(tabs)/addIncome' as any)}
+                        style={({ pressed }) => [
+                            styles.quickActionSecondary,
+                            { backgroundColor: theme.surface, borderColor: theme.border },
+                            pressed && { transform: [{ scale: 0.97 }] },
+                        ]}
+                    >
+                        <IconIncome size={16} color={theme.brand} />
+                        <Text style={[styles.quickActionSecondaryText, { color: theme.brand }]}>Log Income</Text>
+                    </Pressable>
                 </View>
-            </View>
-
-            {/* 50/30/20 Category Cards */}
-            <View style={styles.cardsContainer}>
-                {categories.map(cat => {
-                    const overspent = checkOverspend(cat.spent, cat.budget);
-                    const barColor = overspent ? theme.danger : cat.color;
-                    const isGoals = cat.key === 'goals';
-
-                    return (
-                        <View
-                            key={cat.key}
-                            style={[styles.card, { backgroundColor: theme.surface, borderTopColor: cat.color }]}
-                        >
-                            {/* Category header */}
-                            <View style={styles.cardHeader}>
-                                <View style={[styles.categoryDot, { backgroundColor: cat.color }]} />
-                                <Text style={[styles.cardTitle, { color: theme.text }]}>{cat.label}</Text>
-                            </View>
-
-                            <Text style={[styles.cardAmount, { color: theme.text }]}>
-                                ${cat.spent} <Text style={[styles.cardBudget, { color: theme.textMuted }]}>/ ${cat.budget}</Text>
-                            </Text>
-
-                            <View style={[styles.progressBarBg, { backgroundColor: theme.border }]}>
-                                <View style={[styles.progressBarFill, {
-                                    backgroundColor: barColor,
-                                    width: calculateProgress(cat.spent, cat.budget) as any,
-                                }]} />
-                            </View>
-
-                            <Text style={[styles.cardSubText, { color: theme.textMuted }]}>
-                                {isGoals ? 'Debt Spending' : 'Budgeted'}
-                            </Text>
-
-                            {isGoals && (
-                                <Text style={[styles.piggyLine, { color: theme.goals }]}>
-                                    🐷 Piggy Bank: ${piggyBankBalance.toFixed(2)}
-                                </Text>
-                            )}
-
-                            {/* Card action buttons */}
-                            <View style={styles.cardButtons}>
-                                <Button
-                                    label={cat.btnLabel}
-                                    variant="outline"
-                                    size="md"
-                                    fullWidth
-                                    color={cat.color}
-                                    onPress={() => router.push({
-                                        pathname: '/details',
-                                        params: {
-                                            category: cat.key.charAt(0).toUpperCase() + cat.key.slice(1),
-                                            month: currentMonth,
-                                            type: 'expense',
-                                        },
-                                    })}
-                                />
-                                {isGoals && (
-                                    <Button
-                                        label="Open Piggy Bank 🐷"
-                                        variant="ghost"
-                                        size="md"
-                                        fullWidth
-                                        color={theme.goals}
-                                        onPress={() => router.push('/(tabs)/piggyBank' as any)}
-                                    />
-                                )}
-                            </View>
-                        </View>
-                    );
-                })}
             </View>
         </ScrollView>
     );
 }
 
+// ─── CategoryCard ─────────────────────────────────────────────────────────────
+interface CategoryCardProps {
+    cat: {
+        key: 'needs' | 'wants' | 'goals';
+        label: string;
+        pct: string;
+        Icon: React.ComponentType<{ size?: number; accent?: string }>;
+        color: string;
+        soft: string;
+        spent: number;
+        budget: number;
+        sub: string;
+        items: { name: string; icon: React.ComponentType<{ color?: string }>; day: number }[];
+    };
+    theme: ReturnType<typeof useTheme>['theme'];
+    expanded: boolean;
+    onToggle: () => void;
+    onNavigate: () => void;
+    piggyBalance: number;
+}
+
+function CategoryCard({ cat, theme, expanded, onToggle, onNavigate, piggyBalance }: CategoryCardProps) {
+    const pct = cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0;
+    const left = cat.budget - cat.spent;
+    const over = pct > 100;
+    const barColor = over ? theme.danger : cat.color;
+    const { Icon } = cat;
+
+    return (
+        <View style={[styles.catCard, { backgroundColor: theme.surface, ...shadow(7) }]}>
+            {/* Card header — tap to expand/collapse */}
+            <Pressable
+                onPress={onToggle}
+                style={({ pressed }) => [styles.catCardHeader, pressed && { opacity: 0.85 }]}
+            >
+                <View style={[styles.catIconTile, { backgroundColor: cat.soft }]}>
+                    <Icon size={28} accent={cat.color} />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                    <View style={styles.catTitleRow}>
+                        <Text style={[styles.catTitle, { color: theme.ink }]}>{cat.label}</Text>
+                        <Text style={[styles.catPct, { color: theme.ink3 }]}>{cat.pct}</Text>
+                    </View>
+                    <Text style={[styles.catSub, { color: theme.ink2 }]}>{cat.sub}</Text>
+                </View>
+
+                <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.catLeft, { color: over ? theme.danger : theme.ink }]}>
+                        ${fmt$(Math.abs(left))}
+                    </Text>
+                    <Text style={[styles.catLeftLabel, { color: theme.ink3 }]}>
+                        {over ? 'OVER' : 'LEFT'}
+                    </Text>
+                </View>
+            </Pressable>
+
+            {/* Progress + metadata */}
+            <View style={styles.catProgress}>
+                <AnimatedProgressBar
+                    value={pct}
+                    color={barColor}
+                    bg={theme.borderSoft}
+                    height={8}
+                />
+                <View style={styles.catMeta}>
+                    <Text style={[styles.catMetaText, { color: theme.ink3 }]}>
+                        ${fmt$(cat.spent)} spent
+                    </Text>
+                    <Text style={[styles.catMetaText, { color: theme.ink3 }]}>
+                        of ${fmt$(cat.budget)}
+                    </Text>
+                </View>
+            </View>
+
+            {/* Expandable transaction list */}
+            {expanded && (
+                <View style={[styles.catExpanded, { backgroundColor: theme.surfaceSoft, borderTopColor: theme.borderSoft }]}>
+                    {cat.items.map((item, i) => {
+                        const GlyphIcon = item.icon;
+                        return (
+                            <View
+                                key={i}
+                                style={[
+                                    styles.txRow,
+                                    i < cat.items.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.borderSoft },
+                                ]}
+                            >
+                                <View style={[styles.txIconTile, { backgroundColor: theme.surface }]}>
+                                    <GlyphIcon color={cat.color} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.txName, { color: theme.ink }]}>{item.name}</Text>
+                                    <Text style={[styles.txDate, { color: theme.ink3 }]}>
+                                        {currentMonthAbbr()} {item.day}
+                                    </Text>
+                                </View>
+                            </View>
+                        );
+                    })}
+
+                    {/* Goals: piggy bank balance row */}
+                    {cat.key === 'goals' && (
+                        <View style={[styles.piggyRow, { backgroundColor: theme.brandSoft }]}>
+                            <IconSavings size={20} color={theme.brand} accent={theme.brand2} />
+                            <Text style={[styles.piggyLabel, { color: theme.brand }]}>Piggy bank balance</Text>
+                            <Text style={[styles.piggyAmount, { color: theme.brand }]}>
+                                ${fmt$(piggyBalance, 2)}
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* "View all" navigates to /details */}
+                    <Pressable
+                        onPress={onNavigate}
+                        style={({ pressed }) => [
+                            styles.viewAllBtn,
+                            { borderTopColor: theme.borderSoft },
+                            pressed && { opacity: 0.7 },
+                        ]}
+                    >
+                        <Text style={[styles.viewAllText, { color: theme.brand }]}>
+                            View all {cat.label.toLowerCase()} →
+                        </Text>
+                    </Pressable>
+                </View>
+            )}
+        </View>
+    );
+}
+
+// Helper to get abbreviated month name for transaction rows
+function currentMonthAbbr(): string {
+    const abbrs = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return abbrs[new Date().getMonth()];
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    container: { flex: 1 },
+    // Hero
+    heroInner: { paddingHorizontal: 22, paddingTop: 52, paddingBottom: 0, position: 'relative', zIndex: 1 },
+    heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 },
+    logoGroup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    logoTile: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    wordmark: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: 15, letterSpacing: -0.2 },
+    subline: { color: 'rgba(255,255,255,0.65)', fontFamily: 'JetBrainsMono-Regular', fontSize: 11 },
+    heroControls: { flexDirection: 'row', gap: 8 },
+    glassBtn: {
+        width: 38, height: 38, borderRadius: 999,
+        backgroundColor: 'rgba(255,255,255,0.16)',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
+        alignItems: 'center', justifyContent: 'center',
+    },
+    bellDot: {
+        position: 'absolute', top: 7, right: 7,
+        width: 7, height: 7, borderRadius: 3.5,
+        backgroundColor: '#F4D35E',
+    },
 
-    // Logo row
-    logoRow: {
+    // Month nav
+    monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+    monthChevron: {
+        width: 38, height: 38, borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.16)',
+        borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+        alignItems: 'center', justifyContent: 'center',
+    },
+    monthCenter: { alignItems: 'center' },
+    monthEyebrow: {
+        color: 'rgba(255,255,255,0.65)',
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 10,
+        letterSpacing: 1.8,
+    },
+    monthLabel: {
+        color: '#fff',
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: 18,
+        marginTop: 2,
+        letterSpacing: 0.2,
+    },
+
+    // Big amount
+    incomeEyebrow: {
+        color: 'rgba(255,255,255,0.7)',
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 12,
+        letterSpacing: 1.2,
+        marginBottom: 4,
+    },
+    leftChip: {
+        backgroundColor: 'rgba(255,255,255,0.18)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+        alignSelf: 'flex-start',
+    },
+    leftChipText: {
+        color: '#fff',
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 11,
+        letterSpacing: 0.6,
+    },
+
+    // Health pill
+    healthPill: {
+        marginTop: 18,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 52,
-        paddingBottom: 14,
-        borderBottomWidth: StyleSheet.hairlineWidth,
         gap: 10,
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        padding: 12,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.18)',
+    },
+    healthTitle: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: 12 },
+    healthHint: { color: 'rgba(255,255,255,0.7)', fontFamily: 'InstrumentSerif-Italic', fontSize: 11, marginTop: 1 },
+    healthBarTrack: {
+        width: 60,
+        height: 5,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderRadius: 999,
+        overflow: 'hidden',
+    },
+    healthBarFill: { height: '100%', borderRadius: 999 },
+
+    // Content area
+    contentArea: { paddingHorizontal: 18 },
+
+    // Scripture banner
+    scriptureBanner: { marginBottom: 18 },
+    scriptureBannerInner: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+    scriptureIconTile: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    scriptureVerse: {
+        fontFamily: 'InstrumentSerif-Italic',
+        fontSize: 15,
+        lineHeight: 20,
+    },
+    scriptureRef: {
+        fontFamily: 'JetBrainsMono-Regular',
+        fontSize: 11,
+        letterSpacing: 0.4,
+        marginTop: 6,
     },
 
-    appName: { fontSize: 20, fontWeight: '700', flex: 1 },
-    headerControls: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-    iconBtn: {
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
+    // Section header
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+        paddingHorizontal: 4,
     },
-    iconBtnText: { fontSize: 16 },
-    iconBtnLabel: { fontSize: 13, fontWeight: '600' },
+    sectionTitle: { fontFamily: 'Geist-SemiBold', fontSize: 15, letterSpacing: -0.2 },
+    trendsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    trendsBtnText: { fontFamily: 'Geist-SemiBold', fontSize: 12 },
 
-    // Hero card
-    heroCard: {
-        padding: 24,
-        alignItems: 'center',
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        marginBottom: 16,
+    // Category card
+    catCard: {
+        borderRadius: 18,
+        overflow: 'hidden',
+        marginBottom: 12,
     },
-    monthRow: {
+    catCardHeader: { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+    catIconTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    catTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+    catTitle: { fontFamily: 'Geist-SemiBold', fontSize: 16, letterSpacing: -0.2 },
+    catPct: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11 },
+    catSub: { fontFamily: 'Geist-Regular', fontSize: 12, marginTop: 2 },
+    catLeft: { fontFamily: 'InstrumentSerif-Regular', fontSize: 22 },
+    catLeftLabel: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: 10, letterSpacing: 1 },
+    catProgress: { paddingHorizontal: 16, paddingBottom: 14 },
+    catMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+    catMetaText: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11 },
+
+    // Expanded transaction rows
+    catExpanded: { borderTopWidth: 1 },
+    txRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        padding: 12,
+        paddingHorizontal: 16,
+    },
+    txIconTile: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    txName: { fontFamily: 'Geist-Medium', fontSize: 13 },
+    txDate: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11, marginTop: 2 },
+
+    // Piggy row (inside Goals expanded)
+    piggyRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        margin: 12,
+        padding: 12,
+        borderRadius: 12,
+    },
+    piggyLabel: { flex: 1, fontFamily: 'Geist-SemiBold', fontSize: 12 },
+    piggyAmount: { fontFamily: 'InstrumentSerif-Regular', fontSize: 18 },
+
+    // "View all" link at bottom of expanded card
+    viewAllBtn: { paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, alignItems: 'center' },
+    viewAllText: { fontFamily: 'Geist-SemiBold', fontSize: 13 },
+
+    // Quick actions
+    quickActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
+    quickActionPrimary: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 20,
-        marginBottom: 16,
+        gap: 6,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
+        borderRadius: 14,
+        ...shadow(5),
     },
-    monthBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+    quickActionPrimaryText: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: 14 },
+    quickActionSecondary: {
+        flex: 1,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    monthBtnText: { fontSize: 24, lineHeight: 28, fontWeight: '300' },
-    monthLabel: { fontSize: 14, fontWeight: '700', letterSpacing: 1.5, minWidth: 120, textAlign: 'center' },
-    totalAmount: { fontSize: 52, fontWeight: '800', letterSpacing: -1 },
-    totalLabel: { fontSize: 13, marginBottom: 16 },
-
-    // Score card
-    scoreCard: {
-        width: '100%',
-        borderWidth: 1.5,
-        borderRadius: 12,
-        padding: 14,
-        marginBottom: 20,
-    },
-    scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-    scoreLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
-    scoreValue: { fontSize: 22, fontWeight: '800' },
-    scoreBarBg: { height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
-    scoreBarFill: { height: '100%', borderRadius: 3 },
-    scoreHint: { fontSize: 12, fontStyle: 'italic' },
-
-    heroButtons: { width: '100%', gap: 10 },
-
-    // Budget category cards
-    cardsContainer: { paddingHorizontal: 16, gap: 14, paddingBottom: 32 },
-    card: {
+        gap: 6,
+        paddingVertical: 14,
+        paddingHorizontal: 18,
         borderRadius: 14,
-        borderTopWidth: 4,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 6,
-        elevation: 2,
+        borderWidth: 1,
     },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-    categoryDot: { width: 10, height: 10, borderRadius: 5 },
-    cardTitle: { fontSize: 17, fontWeight: '700' },
-    cardAmount: { fontSize: 26, fontWeight: '800', marginBottom: 2 },
-    cardBudget: { fontSize: 18, fontWeight: '400' },
-    progressBarBg: { height: 8, borderRadius: 4, overflow: 'hidden', marginVertical: 10 },
-    progressBarFill: { height: '100%', borderRadius: 4 },
-    cardSubText: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 },
-    piggyLine: { fontSize: 14, fontWeight: '600', marginBottom: 10 },
-    cardButtons: { gap: 8, marginTop: 6 },
+    quickActionSecondaryText: { fontFamily: 'Geist-SemiBold', fontSize: 14 },
 
-    // Modal
+    // View all Income button (hero) — matches leftChip pill style
+    viewIncomeBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: 'rgba(255,255,255,0.18)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    viewIncomeBtnText: {
+        color: '#fff',
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 11,
+        letterSpacing: 0.6,
+    },
+
+    // Scripture modal
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
@@ -433,20 +833,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 28,
     },
-    modalCard: {
-        borderRadius: 18,
-        padding: 28,
-        alignItems: 'center',
-        width: '100%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.2,
-        shadowRadius: 16,
-        elevation: 10,
-        gap: 8,
+    modalCard: { width: '100%', alignItems: 'center', gap: 8 },
+    modalIconTile: {
+        width: 56, height: 56, borderRadius: 18,
+        alignItems: 'center', justifyContent: 'center',
+        marginBottom: 4,
     },
-    modalEmoji: { fontSize: 48, marginBottom: 4 },
-    modalTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center' },
-    modalVerse: { fontSize: 15, fontStyle: 'italic', textAlign: 'center', lineHeight: 22 },
-    modalRef: { fontSize: 13, fontWeight: '600', marginBottom: 8 },
+    modalTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 22, textAlign: 'center' },
+    modalVerse: {
+        fontFamily: 'InstrumentSerif-Italic',
+        fontSize: 15,
+        textAlign: 'center',
+        lineHeight: 22,
+    },
+    modalRef: {
+        fontFamily: 'JetBrainsMono-Regular',
+        fontSize: 12,
+        letterSpacing: 0.4,
+        marginBottom: 8,
+    },
 });

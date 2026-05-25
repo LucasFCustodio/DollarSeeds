@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
+import { useFonts } from 'expo-font';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../context/AuthContext';
@@ -21,6 +22,29 @@ function RootLayoutNav() {
     const router = useRouter();
     const segments = useSegments();
 
+    // Load custom font families via @expo-google-fonts packages
+    // (files live inside node_modules — no manual TTF download needed)
+    const [fontsLoaded] = useFonts({
+        'InstrumentSerif-Regular':
+            require('@expo-google-fonts/instrument-serif/400Regular/InstrumentSerif_400Regular.ttf'),
+        'InstrumentSerif-Italic':
+            require('@expo-google-fonts/instrument-serif/400Regular_Italic/InstrumentSerif_400Regular_Italic.ttf'),
+        'Geist-Regular':
+            require('@expo-google-fonts/geist/400Regular/Geist_400Regular.ttf'),
+        'Geist-Medium':
+            require('@expo-google-fonts/geist/500Medium/Geist_500Medium.ttf'),
+        'Geist-SemiBold':
+            require('@expo-google-fonts/geist/600SemiBold/Geist_600SemiBold.ttf'),
+        'Geist-Bold':
+            require('@expo-google-fonts/geist/700Bold/Geist_700Bold.ttf'),
+        'JetBrainsMono-Regular':
+            require('@expo-google-fonts/jetbrains-mono/400Regular/JetBrainsMono_400Regular.ttf'),
+        'JetBrainsMono-Medium':
+            require('@expo-google-fonts/jetbrains-mono/500Medium/JetBrainsMono_500Medium.ttf'),
+        'JetBrainsMono-SemiBold':
+            require('@expo-google-fonts/jetbrains-mono/600SemiBold/JetBrainsMono_600SemiBold.ttf'),
+    });
+
     useNotifications(initialized && !!user);
 
     useEffect(() => {
@@ -35,8 +59,8 @@ function RootLayoutNav() {
 
     if (!initialized) {
         return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.background }}>
-                <ActivityIndicator size="large" color={theme.action} />
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.bg }}>
+                <ActivityIndicator size="large" color={theme.brand} />
             </View>
         );
     }

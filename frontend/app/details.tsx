@@ -9,7 +9,13 @@ interface Expense {
     id: number; title: string; amount: number; day: number; category: string; month: string;
 }
 interface Income {
-    id: number; jobTitle: string; amount: number; jobType: string; day: number; month: string;
+    id: number;
+    jobTitle?: string;
+    source?: string;
+    amount: number;
+    jobType?: string;
+    day: number;
+    month: string;
 }
 
 const CATEGORY_COLOR: Record<string, string | undefined> = {
@@ -121,7 +127,7 @@ export default function DetailsScreen() {
                         <View key={index} style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                             <View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
                             <View style={styles.rowInfo}>
-                                <Text style={[styles.rowTitle, { color: theme.text }]}>{item.jobTitle}</Text>
+                                <Text style={[styles.rowTitle, { color: theme.text }]}>{item.source ?? item.jobTitle ?? 'Income'}</Text>
                                 <Text style={[styles.rowDate, { color: theme.textMuted }]}>Day {item.day}</Text>
                             </View>
                             <Text style={[styles.rowAmount, { color: theme.text }]}>${item.amount.toFixed(2)}</Text>
