@@ -1,12 +1,15 @@
 /**
- * PiggyBankScreen — visual revamp (DollarSeeds design system)
+ * PiggyBankScreen — General Savings + Goal Funding Source
  *
- * Behaviour preserved:
+ * Behaviour:
  * ✅ Fetch balance, history, active goals, completed goals on focus
- * ✅ POST deposit / withdrawal to /savings/transaction/
+ * ✅ General Savings goal auto-seeded on first load (pinned card, no delete)
+ * ✅ POST deposit / withdrawal to /savings/transaction/ (source='income')
+ * ✅ POST transfer from General Savings → specific goal to /savings/transfer/
+ * ✅ Funding source chips shown when depositing to a specific (non-general) goal
  * ✅ PATCH goal to completed on withdrawal with a linked goal
  * ✅ POST new goal to /savings/goal/
- * ✅ DELETE transaction + DELETE goal
+ * ✅ DELETE transaction + DELETE goal (with current_month redistribution)
  * ✅ Negative-balance alert on withdrawal
  * ✅ Active / Completed tabs
  */
@@ -26,7 +29,7 @@ import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
 import {
     SavingsJar, IconPlus, IconArrow, IconTarget,
-    IconTrash, IconCheck,
+    IconTrash, IconCheck, IconSavings,
 } from '../../components/icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -41,11 +44,15 @@ const MONTH_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'
 type Transaction = {
     id: number; title: string; amount: number;
     type: 'deposit' | 'withdrawal'; day: number; month: string;
+    source?: string;
 };
 type Goal = {
-    id: number; title: string; target_amount: number;
-    target_month: string; target_year: number;
+    id: number; title: string;
+    target_amount: number | null;
+    target_month: string | null;
+    target_year: number | null;
     allocated_amount: number; created_at: string;
+    is_general: boolean;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,11 +77,13 @@ export default function PiggyBankScreen() {
     const { user } = useAuth();
     const { theme } = useTheme();
     const today = new Date();
+    const currentMonth = MONTHS[today.getMonth()];
 
     // ── Remote data ───────────────────────────────────────────────────────────
     const [balance, setBalance]               = useState(0);
     const [history, setHistory]               = useState<Transaction[]>([]);
-    const [goals, setGoals]                   = useState<Goal[]>([]);
+    const [goals, setGoals]                   = useState<Goal[]>([]);        // specific goals only
+    const [generalGoal, setGeneralGoal]       = useState<Goal | null>(null); // pinned General Savings
     const [completedGoals, setCompletedGoals] = useState<Goal[]>([]);
 
     // ── UI state ──────────────────────────────────────────────────────────────
@@ -83,8 +92,9 @@ export default function PiggyBankScreen() {
     const [showGoalForm, setShowGoalForm] = useState(false);
 
     // Transaction form
-    const [txAmount, setTxAmount] = useState('');
-    const [txGoalId, setTxGoalId] = useState<number | null>(null);
+    const [txAmount,      setTxAmount]      = useState('');
+    const [txGoalId,      setTxGoalId]      = useState<number | null>(null);
+    const [fundingSource, setFundingSource] = useState<'income' | 'general'>('income');
 
     // Goal creation form
     const [goalTitle,  setGoalTitle]  = useState('');
@@ -104,42 +114,97 @@ export default function PiggyBankScreen() {
             ]);
             setBalance(balRes.data.balance);
             setHistory(histRes.data.data);
-            setGoals(goalRes.data.data);
+            const allGoals: Goal[] = goalRes.data.data ?? [];
+            setGeneralGoal(allGoals.find(g => g.is_general) ?? null);
+            setGoals(allGoals.filter(g => !g.is_general));
             setCompletedGoals(completedRes.data.data);
         } catch (e) { console.error('Savings fetch error:', e); }
     };
 
     useFocusEffect(useCallback(() => { fetchData(); }, []));
 
+    // ── Derived ───────────────────────────────────────────────────────────────
+    // All goals shown as chips in the form (General Savings first, then specific goals)
+    const allGoalsForChips: Goal[] = [
+        ...(generalGoal ? [generalGoal] : []),
+        ...goals,
+    ];
+
+    // Jar fill: use first specific goal's target; fallback $3,000
+    const firstGoalWithTarget = goals.find(g => g.target_amount);
+    const jarMax = firstGoalWithTarget?.target_amount ?? 3000;
+    const jarFill = balance > 0 ? Math.min(1, balance / jarMax) : 0.05;
+    const isDeposit = activeForm === 'deposit';
+
+    // Is the currently-selected goal the General Savings pool?
+    const isGeneralSelected = txGoalId !== null && txGoalId === generalGoal?.id;
+
+    // Show funding source only when depositing to a SPECIFIC (non-general) goal
+    // and General Savings has money to draw from
+    const showFundingSource =
+        isDeposit &&
+        txGoalId !== null &&
+        !isGeneralSelected &&
+        (generalGoal?.allocated_amount ?? 0) > 0;
+
     // ── Handlers ──────────────────────────────────────────────────────────────
     const toggleForm = (type: 'deposit' | 'withdrawal') => {
         if (activeForm === type) {
-            setActiveForm(null); setTxAmount(''); setTxGoalId(null);
+            setActiveForm(null); setTxAmount(''); setTxGoalId(null); setFundingSource('income');
         } else {
-            setActiveForm(type); setTxAmount(''); setTxGoalId(null);
+            setActiveForm(type); setTxAmount(''); setTxGoalId(null); setFundingSource('income');
         }
+    };
+
+    const selectGoalChip = (id: number) => {
+        const next = txGoalId === id ? null : id;
+        setTxGoalId(next);
+        // Reset funding source when goal selection changes
+        setFundingSource('income');
     };
 
     const doSubmitTransaction = async () => {
         const parsed = parseFloat(txAmount);
         if (!txAmount || isNaN(parsed) || parsed <= 0) return;
 
-        const selectedGoal = goals.find(g => g.id === txGoalId) ?? null;
+        const selectedGoal = allGoalsForChips.find(g => g.id === txGoalId) ?? null;
 
         try {
-            await axios.post(`${BASE}/savings/transaction/`, {
-                user_id: user?.id,
-                title: selectedGoal?.title ?? (activeForm === 'deposit' ? 'Deposit' : 'Withdrawal'),
-                amount: parsed,
-                type: activeForm,
-                day: today.getDate(),
-                month: MONTHS[today.getMonth()],
-                goal_id: txGoalId ?? null,
-            });
-            if (activeForm === 'withdrawal' && selectedGoal) {
-                await axios.patch(`${BASE}/savings/goal/${selectedGoal.id}/complete?user_id=${user?.id}`);
+            if (
+                isDeposit &&
+                fundingSource === 'general' &&
+                txGoalId !== null &&
+                !isGeneralSelected &&
+                generalGoal !== null
+            ) {
+                // ── Transfer: General Savings → specific goal ──────────────
+                await axios.post(`${BASE}/savings/transfer/`, {
+                    user_id: user?.id,
+                    amount: parsed,
+                    to_goal_id: txGoalId,
+                    general_goal_id: generalGoal.id,
+                    day: today.getDate(),
+                    month: currentMonth,
+                    to_goal_title: selectedGoal?.title ?? 'Savings goal',
+                });
+            } else {
+                // ── Normal deposit / withdrawal ────────────────────────────
+                await axios.post(`${BASE}/savings/transaction/`, {
+                    user_id: user?.id,
+                    title: selectedGoal?.title ?? (isDeposit ? 'Deposit' : 'Withdrawal'),
+                    amount: parsed,
+                    type: activeForm,
+                    day: today.getDate(),
+                    month: currentMonth,
+                    goal_id: txGoalId ?? null,
+                    source: 'income',
+                });
+                // Mark goal complete on withdrawal (not for General Savings)
+                if (activeForm === 'withdrawal' && selectedGoal && !selectedGoal.is_general) {
+                    await axios.patch(`${BASE}/savings/goal/${selectedGoal.id}/complete?user_id=${user?.id}`);
+                }
             }
-            setTxAmount(''); setTxGoalId(null); setActiveForm(null);
+            setTxAmount(''); setTxGoalId(null); setActiveForm(null); setFundingSource('income');
             fetchData();
         } catch (err) { console.error('Transaction error:', err); }
     };
@@ -192,15 +257,13 @@ export default function PiggyBankScreen() {
 
     const deleteGoal = async (id: number) => {
         try {
-            await axios.delete(`${BASE}/savings/goal/${id}?user_id=${user?.id}`);
-            setGoals(prev => prev.filter(g => g.id !== id));
+            await axios.delete(
+                `${BASE}/savings/goal/${id}?user_id=${user?.id}&current_month=${currentMonth}`
+            );
+            // Full refresh so General Savings balance updates if funds were redistributed
+            fetchData();
         } catch (e) { console.error('Delete goal error:', e); }
     };
-
-    // Jar fill: use first goal target as max, fallback $3,000
-    const jarMax = goals.length > 0 ? goals[0].target_amount : 3000;
-    const jarFill = balance > 0 ? Math.min(1, balance / jarMax) : 0.05;
-    const isDeposit = activeForm === 'deposit';
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
@@ -304,23 +367,63 @@ export default function PiggyBankScreen() {
                         </View>
 
                         {/* Goal chips */}
-                        {goals.length > 0 && (
+                        {allGoalsForChips.length > 0 && (
                             <>
                                 <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
                                     {isDeposit ? 'WHICH GOAL' : 'GOAL COMPLETED'}
                                 </Text>
                                 <View style={styles.chipWrap}>
-                                    {goals.map(g => {
+                                    {allGoalsForChips.map(g => {
                                         const active = txGoalId === g.id;
                                         return (
                                             <Pressable
                                                 key={g.id}
-                                                onPress={() => setTxGoalId(active ? null : g.id)}
+                                                onPress={() => selectGoalChip(g.id)}
+                                                style={({ pressed }) => [
+                                                    styles.chip,
+                                                    g.is_general && styles.chipGeneral,
+                                                    {
+                                                        backgroundColor: active
+                                                            ? (g.is_general ? theme.brand : theme.goals)
+                                                            : theme.surface,
+                                                        borderColor: active
+                                                            ? (g.is_general ? theme.brand : theme.goals)
+                                                            : (g.is_general ? theme.brand : theme.border),
+                                                    },
+                                                    pressed && { opacity: 0.8 },
+                                                ]}
+                                            >
+                                                <Text style={[
+                                                    styles.chipText,
+                                                    { color: active ? '#fff' : (g.is_general ? theme.brand : theme.ink2) },
+                                                ]}>
+                                                    {g.title}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        )}
+
+                        {/* Funding source — only for deposits to a specific (non-general) goal */}
+                        {showFundingSource && (
+                            <>
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
+                                    FUNDING SOURCE
+                                </Text>
+                                <View style={[styles.chipWrap, { marginBottom: 16 }]}>
+                                    {(['income', 'general'] as const).map(src => {
+                                        const active = fundingSource === src;
+                                        return (
+                                            <Pressable
+                                                key={src}
+                                                onPress={() => setFundingSource(src)}
                                                 style={({ pressed }) => [
                                                     styles.chip,
                                                     {
-                                                        backgroundColor: active ? theme.goals : theme.surface,
-                                                        borderColor: active ? theme.goals : theme.border,
+                                                        backgroundColor: active ? theme.brand : theme.surface,
+                                                        borderColor: active ? theme.brand : theme.border,
                                                     },
                                                     pressed && { opacity: 0.8 },
                                                 ]}
@@ -329,7 +432,10 @@ export default function PiggyBankScreen() {
                                                     styles.chipText,
                                                     { color: active ? '#fff' : theme.ink2 },
                                                 ]}>
-                                                    {g.title}
+                                                    {src === 'income'
+                                                        ? "This month's income"
+                                                        : `From General Savings ($${fmtAmt(generalGoal?.allocated_amount ?? 0)})`
+                                                    }
                                                 </Text>
                                             </Pressable>
                                         );
@@ -350,11 +456,17 @@ export default function PiggyBankScreen() {
                             >
                                 <IconCheck size={15} color="#fff" />
                                 <Text style={styles.submitBtnText}>
-                                    {isDeposit ? 'Plant Seed' : 'Withdraw'}
+                                    {isDeposit
+                                        ? (fundingSource === 'general' ? 'Transfer' : 'Plant Seed')
+                                        : 'Withdraw'
+                                    }
                                 </Text>
                             </Pressable>
                             <Pressable
-                                onPress={() => { setActiveForm(null); setTxAmount(''); setTxGoalId(null); }}
+                                onPress={() => {
+                                    setActiveForm(null); setTxAmount('');
+                                    setTxGoalId(null); setFundingSource('income');
+                                }}
                                 style={({ pressed }) => [
                                     styles.cancelBtn, { borderColor: theme.border },
                                     pressed && { opacity: 0.7 },
@@ -412,7 +524,7 @@ export default function PiggyBankScreen() {
                                     <View style={{ flex: 1 }}>
                                         <Text style={[styles.goalTitle, { color: theme.goals }]}>{g.title}</Text>
                                         <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
-                                            ${fmtAmt(g.allocated_amount)} of ${fmtAmt(g.target_amount)} · {g.target_month} {g.target_year}
+                                            ${fmtAmt(g.allocated_amount ?? 0)} of ${fmtAmt(g.target_amount ?? 0)} · {g.target_month} {g.target_year}
                                         </Text>
                                     </View>
                                 </View>
@@ -428,6 +540,39 @@ export default function PiggyBankScreen() {
                             GROWING NOW
                         </Text>
 
+                        {/* ── General Savings pinned card ────────── */}
+                        {generalGoal && (
+                            <Card
+                                theme={theme}
+                                depth={6}
+                                padding={16}
+                                style={[styles.generalCard, { borderColor: theme.brand }]}
+                            >
+                                <View style={styles.goalHeader}>
+                                    <View style={[styles.goalIconTile, { backgroundColor: theme.brandSoft }]}>
+                                        <IconSavings size={22} color={theme.brand} accent={theme.brand2} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.goalTitle, { color: theme.brand }]}>
+                                            General Savings
+                                        </Text>
+                                        <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
+                                            ALWAYS ON · No target
+                                        </Text>
+                                    </View>
+                                    {/* No delete button for General Savings */}
+                                </View>
+                                <View style={styles.goalAmtRow}>
+                                    <Text style={[styles.goalSaved, { color: theme.brand }]}>
+                                        ${fmtAmt(generalGoal.allocated_amount)}
+                                    </Text>
+                                    <Text style={[styles.goalOf, { color: theme.ink3 }]}>
+                                        {' '}available
+                                    </Text>
+                                </View>
+                            </Card>
+                        )}
+
                         {goals.length === 0 && !showGoalForm && (
                             <Text style={[styles.emptyText, { color: theme.ink3 }]}>
                                 No goals yet. Plant your first one!
@@ -435,13 +580,15 @@ export default function PiggyBankScreen() {
                         )}
 
                         {goals.map(g => {
-                            const pct = Math.min(100, (g.allocated_amount / g.target_amount) * 100);
-                            const monthsLeft = getMonthsLeft(g.target_month, g.target_year);
-                            const weekly = getWeeklyRate(
-                                g.target_amount, g.allocated_amount,
-                                g.target_month, g.target_year, g.created_at,
-                            );
-                            const achieved = g.allocated_amount >= g.target_amount;
+                            const target = g.target_amount ?? 0;
+                            const pct = target > 0 ? Math.min(100, (g.allocated_amount / target) * 100) : 0;
+                            const monthsLeft = g.target_month && g.target_year
+                                ? getMonthsLeft(g.target_month, g.target_year)
+                                : 0;
+                            const weekly = g.target_month && g.target_year
+                                ? getWeeklyRate(target, g.allocated_amount, g.target_month, g.target_year, g.created_at)
+                                : 0;
+                            const achieved = target > 0 && g.allocated_amount >= target;
                             const barColor = achieved ? theme.success : theme.goals;
 
                             return (
@@ -474,7 +621,7 @@ export default function PiggyBankScreen() {
                                             ${fmtAmt(g.allocated_amount)}
                                         </Text>
                                         <Text style={[styles.goalOf, { color: theme.ink3 }]}>
-                                            {' '}of ${fmtAmt(g.target_amount)}
+                                            {' '}of ${fmtAmt(target)}
                                         </Text>
                                     </View>
 
@@ -795,6 +942,9 @@ const styles = StyleSheet.create({
         borderRadius: 999,
         borderWidth: 1,
     },
+    chipGeneral: {
+        borderWidth: 1.5,
+    },
     chipText: {
         fontFamily: 'Geist-SemiBold',
         fontSize: 12,
@@ -856,6 +1006,12 @@ const styles = StyleSheet.create({
         fontSize: 10,
         letterSpacing: 1.6,
         marginBottom: 10,
+    },
+
+    // General Savings card
+    generalCard: {
+        marginBottom: 12,
+        borderWidth: 1.5,
     },
 
     // Goal cards

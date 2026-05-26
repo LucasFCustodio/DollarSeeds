@@ -11,7 +11,7 @@
  * ✅ Piggy bank balance shown in Goals expanded state
  * ✅ Category card expand/collapse (inline accordion)
  */
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -22,6 +22,7 @@ import {
     LayoutAnimation,
     Platform,
     UIManager,
+    ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
@@ -40,7 +41,6 @@ import {
     IconNeeds, IconWants, IconGoals,
     IconExpense, IconIncome,
     IconScripture, IconTrend, IconSavings,
-    GlyphHouse, GlyphCart, GlyphCar, GlyphCoffee, GlyphFilm, GlyphGift, GlyphSeed, GlyphBriefcase,
 } from '../../components/icons';
 
 // Enable LayoutAnimation on Android
@@ -77,25 +77,22 @@ function fmt$(n: number, decimals = 0): string {
     });
 }
 
-// ─── Static sample transaction rows (shown when expanded) ────────────────────
-// These give the accordion something to show even before real transaction data
-// is loaded. Replace with real API data if a /transactions endpoint is available.
-const SAMPLE_ITEMS = {
-    needs: [
-        { name: 'Rent', icon: GlyphHouse, day: 1 },
-        { name: 'Groceries', icon: GlyphCart, day: 14 },
-        { name: 'Gas & transit', icon: GlyphCar, day: 22 },
-    ],
-    wants: [
-        { name: 'Coffee shops', icon: GlyphCoffee, day: 19 },
-        { name: 'Streaming', icon: GlyphFilm, day: 5 },
-        { name: 'Gifts', icon: GlyphGift, day: 11 },
-    ],
-    goals: [
-        { name: 'Emergency fund', icon: GlyphSeed, day: 1 },
-        { name: 'Student loan', icon: GlyphBriefcase, day: 15 },
-    ],
+// ─── Month abbreviation lookup ────────────────────────────────────────────────
+const MONTH_ABBR: Record<string, string> = {
+    January: 'Jan', February: 'Feb', March: 'Mar', April: 'Apr',
+    May: 'May', June: 'Jun', July: 'Jul', August: 'Aug',
+    September: 'Sep', October: 'Oct', November: 'Nov', December: 'Dec',
 };
+
+// ─── Real transaction type (expenses/details + savings/history) ──────────────
+interface TxItem {
+    id: number | string;
+    title: string;
+    sub_category: string;
+    amount: number;
+    day: number;
+    month: string;
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function DashboardScreen() {
@@ -125,10 +122,21 @@ export default function DashboardScreen() {
     // Accordion state — which category is expanded
     const [expandedCat, setExpandedCat] = useState<'needs' | 'wants' | 'goals' | null>(null);
 
+    // Real transaction rows for the expanded accordion (null = not yet fetched)
+    const [categoryTxs, setCategoryTxs] = useState<Record<'needs' | 'wants' | 'goals', TxItem[] | null>>({
+        needs: null, wants: null, goals: null,
+    });
+
     // ── Data fetching ──────────────────────────────────────────────────────────
     useFocusEffect(
         useCallback(() => { fetchDashboardData(); }, [currentMonth])
     );
+
+    // Reset accordion + transaction cache whenever the month changes
+    useEffect(() => {
+        setExpandedCat(null);
+        setCategoryTxs({ needs: null, wants: null, goals: null });
+    }, [monthIndex]);
 
     const decreaseMonth = () => {
         const i = monthIndex === 0 ? 11 : monthIndex - 1;
@@ -173,6 +181,66 @@ export default function DashboardScreen() {
         }
     };
 
+    const CAT_API_MAP = { needs: 'Needs', wants: 'Wants', goals: 'Goals' } as const;
+
+    const fetchCategoryTxs = async (catKey: 'needs' | 'wants' | 'goals') => {
+        if (!user?.id) return;
+        try {
+            const BASE = 'http://10.0.0.13:8000';
+
+            if (catKey === 'goals') {
+                // Goals = expense "Goals" rows + savings deposits — fetch both in parallel
+                const [expRes, savRes] = await Promise.all([
+                    axios.get(`${BASE}/expenses/details/`, {
+                        params: { month: currentMonth, category: 'Goals', user_id: user.id },
+                    }),
+                    axios.get(`${BASE}/savings/history/`, {
+                        params: { user_id: user.id, month: currentMonth },
+                    }),
+                ]);
+                const expItems: TxItem[] = (expRes.data.data ?? []).map((i: any) => ({
+                    id: i.id,
+                    title: i.title || i.sub_category,
+                    sub_category: i.sub_category,
+                    amount: i.amount,
+                    day: i.day,
+                    month: i.month,
+                }));
+                const savItems: TxItem[] = (savRes.data.data ?? [])
+                    .filter((i: any) => i.type === 'deposit')
+                    .map((i: any) => ({
+                        id: `sav-${i.id}`,
+                        title: i.title,
+                        sub_category: 'Savings',
+                        amount: i.amount,
+                        day: i.day,
+                        month: i.month,
+                    }));
+                const merged = [...expItems, ...savItems]
+                    .sort((a, b) => b.day - a.day)
+                    .slice(0, 3);
+                setCategoryTxs(prev => ({ ...prev, goals: merged }));
+            } else {
+                const res = await axios.get(`${BASE}/expenses/details/`, {
+                    params: { month: currentMonth, category: CAT_API_MAP[catKey], user_id: user.id },
+                });
+                const items: TxItem[] = (res.data.data ?? []).map((i: any) => ({
+                    id: i.id,
+                    title: i.title || i.sub_category,
+                    sub_category: i.sub_category,
+                    amount: i.amount,
+                    day: i.day,
+                    month: i.month,
+                }));
+                const sorted = [...items].sort((a, b) => b.day - a.day).slice(0, 3);
+                setCategoryTxs(prev => ({ ...prev, [catKey]: sorted }));
+            }
+        } catch (err) {
+            console.error('Category tx fetch error:', err);
+            setCategoryTxs(prev => ({ ...prev, [catKey]: [] }));
+        }
+    };
+
     // ── Derived values ─────────────────────────────────────────────────────────
     const { total_income, budgets, expenses, compliance_score } = dashboardData;
     const totalSpent = expenses.needs + expenses.wants + expenses.goals;
@@ -199,7 +267,6 @@ export default function DashboardScreen() {
             spent: expenses.needs,
             budget: budgets.needs,
             sub: 'Rent, groceries, bills',
-            items: SAMPLE_ITEMS.needs,
             navType: 'expense' as const,
         },
         {
@@ -212,7 +279,6 @@ export default function DashboardScreen() {
             spent: expenses.wants,
             budget: budgets.wants,
             sub: 'Lifestyle, treats, fun',
-            items: SAMPLE_ITEMS.wants,
             navType: 'expense' as const,
         },
         {
@@ -225,7 +291,6 @@ export default function DashboardScreen() {
             spent: expenses.goals,
             budget: budgets.goals,
             sub: 'Savings + debt paydown',
-            items: SAMPLE_ITEMS.goals,
             navType: 'expense' as const,
         },
     ];
@@ -428,11 +493,17 @@ export default function DashboardScreen() {
                         cat={cat}
                         theme={theme}
                         expanded={expandedCat === cat.key}
+                        txs={categoryTxs[cat.key]}
                         onToggle={() => {
                             LayoutAnimation.configureNext(
                                 LayoutAnimation.create(320, 'easeInEaseOut', 'opacity')
                             );
+                            const opening = expandedCat !== cat.key;
                             setExpandedCat(prev => prev === cat.key ? null : cat.key);
+                            // Fetch real transactions on first open for this month
+                            if (opening && categoryTxs[cat.key] === null) {
+                                fetchCategoryTxs(cat.key);
+                            }
                         }}
                         onNavigate={() => router.push({
                             pathname: '/details',
@@ -488,16 +559,16 @@ interface CategoryCardProps {
         spent: number;
         budget: number;
         sub: string;
-        items: { name: string; icon: React.ComponentType<{ color?: string }>; day: number }[];
     };
     theme: ReturnType<typeof useTheme>['theme'];
     expanded: boolean;
+    txs: TxItem[] | null;
     onToggle: () => void;
     onNavigate: () => void;
     piggyBalance: number;
 }
 
-function CategoryCard({ cat, theme, expanded, onToggle, onNavigate, piggyBalance }: CategoryCardProps) {
+function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBalance }: CategoryCardProps) {
     const pct = cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0;
     const left = cat.budget - cat.spent;
     const over = pct > 100;
@@ -554,31 +625,43 @@ function CategoryCard({ cat, theme, expanded, onToggle, onNavigate, piggyBalance
             {/* Expandable transaction list */}
             {expanded && (
                 <View style={[styles.catExpanded, { backgroundColor: theme.surfaceSoft, borderTopColor: theme.borderSoft }]}>
-                    {cat.items.map((item, i) => {
-                        const GlyphIcon = item.icon;
-                        return (
-                            <View
-                                key={i}
-                                style={[
-                                    styles.txRow,
-                                    i < cat.items.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.borderSoft },
-                                ]}
-                            >
-                                <View style={[styles.txIconTile, { backgroundColor: theme.surface }]}>
-                                    <GlyphIcon color={cat.color} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={[styles.txName, { color: theme.ink }]}>{item.name}</Text>
-                                    <Text style={[styles.txDate, { color: theme.ink3 }]}>
-                                        {currentMonthAbbr()} {item.day}
-                                    </Text>
-                                </View>
-                            </View>
-                        );
-                    })}
+                    {/* Loading state */}
+                    {txs === null && (
+                        <ActivityIndicator
+                            size="small"
+                            color={cat.color}
+                            style={{ marginVertical: 14 }}
+                        />
+                    )}
 
-                    {/* Goals: piggy bank balance row */}
-                    {cat.key === 'goals' && (
+                    {/* Real transaction rows (up to 3, most recent first) */}
+                    {txs !== null && txs.length > 0 && txs.map((item, i) => (
+                        <View
+                            key={item.id}
+                            style={[
+                                styles.txRow,
+                                i < txs.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.borderSoft },
+                            ]}
+                        >
+                            <View style={[styles.txIconTile, { backgroundColor: cat.soft }]}>
+                                <cat.Icon size={16} accent={cat.color} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.txName, { color: theme.ink }]} numberOfLines={1}>
+                                    {item.title || item.sub_category}
+                                </Text>
+                                <Text style={[styles.txDate, { color: theme.ink3 }]}>
+                                    {MONTH_ABBR[item.month] ?? ''} {item.day}
+                                </Text>
+                            </View>
+                            <Text style={[styles.txAmount, { color: theme.ink2 }]}>
+                                ${fmt$(item.amount, 2)}
+                            </Text>
+                        </View>
+                    ))}
+
+                    {/* Goals: show piggy bank total only when no individual transactions are loaded */}
+                    {cat.key === 'goals' && txs !== null && txs.length === 0 && (
                         <View style={[styles.piggyRow, { backgroundColor: theme.brandSoft }]}>
                             <IconSavings size={20} color={theme.brand} accent={theme.brand2} />
                             <Text style={[styles.piggyLabel, { color: theme.brand }]}>Piggy bank balance</Text>
@@ -588,30 +671,27 @@ function CategoryCard({ cat, theme, expanded, onToggle, onNavigate, piggyBalance
                         </View>
                     )}
 
-                    {/* "View all" navigates to /details */}
-                    <Pressable
-                        onPress={onNavigate}
-                        style={({ pressed }) => [
-                            styles.viewAllBtn,
-                            { borderTopColor: theme.borderSoft },
-                            pressed && { opacity: 0.7 },
-                        ]}
-                    >
-                        <Text style={[styles.viewAllText, { color: theme.brand }]}>
-                            View all {cat.label.toLowerCase()} →
-                        </Text>
-                    </Pressable>
+                    {/* "View all" — always shown; only element when no transactions logged */}
+                    {txs !== null && (
+                        <Pressable
+                            onPress={onNavigate}
+                            style={({ pressed }) => [
+                                styles.viewAllBtn,
+                                { borderTopColor: theme.borderSoft },
+                                pressed && { opacity: 0.7 },
+                            ]}
+                        >
+                            <Text style={[styles.viewAllText, { color: theme.brand }]}>
+                                View all {cat.label.toLowerCase()} →
+                            </Text>
+                        </Pressable>
+                    )}
                 </View>
             )}
         </View>
     );
 }
 
-// Helper to get abbreviated month name for transaction rows
-function currentMonthAbbr(): string {
-    const abbrs = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return abbrs[new Date().getMonth()];
-}
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -764,6 +844,7 @@ const styles = StyleSheet.create({
     txIconTile: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     txName: { fontFamily: 'Geist-Medium', fontSize: 13 },
     txDate: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11, marginTop: 2 },
+    txAmount: { fontFamily: 'Geist-Medium', fontSize: 13 },
 
     // Piggy row (inside Goals expanded)
     piggyRow: {

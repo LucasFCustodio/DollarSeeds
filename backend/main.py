@@ -49,13 +49,24 @@ class SavingsEntry(BaseModel):
     day: int
     month: str
     goal_id: Optional[int] = None
+    source: str = "income"  # "income" | "transfer"
 
 class SavingsGoal(BaseModel):
     user_id: str
     title: str
-    target_amount: float
-    target_month: str
-    target_year: int
+    target_amount: Optional[float] = None   # nullable for General Savings
+    target_month: Optional[str] = None
+    target_year: Optional[int] = None
+    is_general: bool = False
+
+class SavingsTransfer(BaseModel):
+    user_id: str
+    amount: float
+    to_goal_id: int        # destination specific goal
+    general_goal_id: int   # General Savings goal id
+    day: int
+    month: str
+    to_goal_title: str     # label for the deposit row
 
 
 def calculate_category_score(spent: float, budget: float) -> float:
@@ -84,7 +95,8 @@ def get_spending_trends(user_id: str):
     all_needs = supabase.table("expenses").select("amount, day, month").eq("category", "Needs").eq("user_id", user_id).execute()
     all_wants = supabase.table("expenses").select("amount, day, month").eq("category", "Wants").eq("user_id", user_id).execute()
     all_goals_exp = supabase.table("expenses").select("amount, day, month").eq("category", "Goals").eq("user_id", user_id).execute()
-    all_savings = supabase.table("savings_transactions").select("amount, day, month").eq("type", "deposit").eq("user_id", user_id).execute()
+    # Only count income-sourced deposits toward Goals budget (not transfers between goals)
+    all_savings = supabase.table("savings_transactions").select("amount, day, month").eq("type", "deposit").eq("source", "income").eq("user_id", user_id).execute()
 
     def group_by_month(items):
         grouped = {}
@@ -165,7 +177,8 @@ def get_dashboard_data(current_month: str, user_id: str):
     expense_needs_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Needs").eq("user_id", user_id).execute()
     expense_wants_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Wants").eq("user_id", user_id).execute()
     expense_goals_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Goals").eq("user_id", user_id).execute()
-    savings_deposits_response = supabase.table("savings_transactions").select("amount").eq("month", current_month).eq("type", "deposit").eq("user_id", user_id).execute()
+    # Only count income-sourced deposits toward Goals budget (not transfers between goals)
+    savings_deposits_response = supabase.table("savings_transactions").select("amount").eq("month", current_month).eq("type", "deposit").eq("source", "income").eq("user_id", user_id).execute()
 
     total_needs = sum(item["amount"] for item in expense_needs_response.data)
     total_wants = sum(item["amount"] for item in expense_wants_response.data)
@@ -247,6 +260,34 @@ def create_savings_transaction(entry: SavingsEntry):
     response = supabase.table("savings_transactions").insert(entry.model_dump()).execute()
     return {"message": "Savings transaction recorded.", "data": response.data}
 
+@app.post("/savings/transfer/")
+def transfer_from_general(transfer: SavingsTransfer):
+    """Move money from General Savings into a specific goal.
+    Creates two transactions with source='transfer' so neither affects the Goals budget."""
+    # Withdrawal from General Savings
+    supabase.table("savings_transactions").insert({
+        "user_id": transfer.user_id,
+        "title": f"Transferred to {transfer.to_goal_title}",
+        "amount": transfer.amount,
+        "type": "withdrawal",
+        "goal_id": transfer.general_goal_id,
+        "source": "transfer",
+        "day": transfer.day,
+        "month": transfer.month,
+    }).execute()
+    # Deposit into the destination goal
+    supabase.table("savings_transactions").insert({
+        "user_id": transfer.user_id,
+        "title": transfer.to_goal_title,
+        "amount": transfer.amount,
+        "type": "deposit",
+        "goal_id": transfer.to_goal_id,
+        "source": "transfer",
+        "day": transfer.day,
+        "month": transfer.month,
+    }).execute()
+    return {"message": "Transfer recorded."}
+
 @app.get("/savings/history/")
 def get_savings_history(user_id: str, month: str = None):
     query = supabase.table("savings_transactions").select("*").eq("user_id", user_id)
@@ -263,16 +304,33 @@ def delete_savings_transaction(id: int, user_id: str):
 def _with_allocated(goals_data: list, user_id: str) -> list:
     if not goals_data:
         return []
-    deposits_res = supabase.table("savings_transactions").select("goal_id, amount").eq("user_id", user_id).eq("type", "deposit").execute()
+    txs_res = supabase.table("savings_transactions") \
+        .select("goal_id, amount, type").eq("user_id", user_id).execute()
     allocated: dict[int, float] = {}
-    for dep in deposits_res.data:
-        gid = dep.get("goal_id")
+    for tx in txs_res.data:
+        gid = tx.get("goal_id")
         if gid is not None:
-            allocated[gid] = allocated.get(gid, 0) + dep["amount"]
-    return [{**g, "allocated_amount": allocated.get(g["id"], 0)} for g in goals_data]
+            delta = tx["amount"] if tx["type"] == "deposit" else -tx["amount"]
+            allocated[gid] = allocated.get(gid, 0) + delta
+    return [{**g, "allocated_amount": max(0.0, allocated.get(g["id"], 0.0))} for g in goals_data]
+
+def _ensure_general_savings(user_id: str) -> int:
+    """Ensure a General Savings goal exists for this user. Returns its id."""
+    gen = supabase.table("savings_goals").select("id").eq("user_id", user_id).eq("is_general", True).execute()
+    if gen.data:
+        return gen.data[0]["id"]
+    result = supabase.table("savings_goals").insert({
+        "user_id": user_id,
+        "title": "General Savings",
+        "is_general": True,
+        "completed": False,
+    }).execute()
+    return result.data[0]["id"]
 
 @app.get("/savings/goal/")
 def get_savings_goals(user_id: str):
+    # Lazily seed General Savings for this user if it doesn't exist yet
+    _ensure_general_savings(user_id)
     goals_res = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", False).order("created_at", desc=True).execute()
     return {"data": _with_allocated(goals_res.data, user_id)}
 
@@ -295,9 +353,47 @@ def create_savings_goal(goal: SavingsGoal):
     return {"message": "Goal created.", "data": response.data}
 
 @app.delete("/savings/goal/{id}")
-def delete_savings_goal(id: int, user_id: str):
-    response = supabase.table("savings_goals").delete().eq("id", id).eq("user_id", user_id).execute()
-    return response.data
+def delete_savings_goal(id: int, user_id: str, current_month: str):
+    # Block deletion of General Savings
+    goal_res = supabase.table("savings_goals").select("is_general").eq("id", id).eq("user_id", user_id).execute()
+    if not goal_res.data:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    if goal_res.data[0].get("is_general"):
+        raise HTTPException(status_code=400, detail="General Savings cannot be deleted.")
+
+    # Ensure General Savings exists to receive redistributed funds
+    general_id = _ensure_general_savings(user_id)
+
+    # Get all deposits for this goal
+    deposits = supabase.table("savings_transactions").select("*") \
+        .eq("goal_id", id).eq("type", "deposit").eq("user_id", user_id).execute()
+
+    for dep in deposits.data:
+        if dep["month"] != current_month:
+            # Previous month: redirect to General Savings (source='transfer' so it
+            # doesn't double-count against any month's Goals budget)
+            supabase.table("savings_transactions").insert({
+                "user_id": user_id,
+                "title": "Returned from deleted goal",
+                "amount": float(dep["amount"]),
+                "type": "deposit",
+                "goal_id": general_id,
+                "source": "transfer",
+                "day": dep["day"],
+                "month": dep["month"],
+            }).execute()
+        # Current-month deposits are simply dropped below when we clear all transactions
+
+    # Remove ALL transactions for this goal so the FK constraint is satisfied,
+    # then delete the goal. (Prior-month amounts were already re-inserted above
+    # under general_id; current-month deposits are intentionally discarded to
+    # refund the budget.)
+    supabase.table("savings_transactions").delete() \
+        .eq("goal_id", id).eq("user_id", user_id).execute()
+
+    # Now safe to delete the goal itself
+    supabase.table("savings_goals").delete().eq("id", id).eq("user_id", user_id).execute()
+    return {"message": "Goal deleted and funds redistributed."}
 
 class LessonRating(BaseModel):
     user_id: str

@@ -39,7 +39,7 @@ const MONTH_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'
 const SUBCATS = {
     needs: ['Rent', 'Groceries', 'Utilities', 'Transit', 'Insurance', 'Healthcare', 'Other'],
     wants: ['Dining', 'Coffee', 'Streaming', 'Shopping', 'Travel', 'Gifts', 'Other'],
-    goals: ['Emergency', 'Retirement', 'Loan', 'Investing', 'Tithe', 'Other'],
+    goals: ['Debt Payoff', 'Student Loan', 'Stocks', 'Roth IRA', 'Index Fund', 'Crypto', 'Tithe', 'Other'],
 };
 
 // Maps UI keys → backend category strings (aligns with /expenses/details/ params)
@@ -135,7 +135,7 @@ export default function ExpenseContainer() {
     const cats = [
         { key: 'needs', label: 'Needs', Icon: IconNeeds, color: theme.needs, soft: theme.needsSoft },
         { key: 'wants', label: 'Wants', Icon: IconWants, color: theme.wants, soft: theme.wantsSoft },
-        { key: 'goals', label: 'Goals', Icon: IconGoals, color: theme.goals, soft: theme.goalsSoft },
+        { key: 'goals', label: 'Investments', Icon: IconGoals, color: theme.goals, soft: theme.goalsSoft },
     ];
     const selected = cats.find(c => c.key === category);
 

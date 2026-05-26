@@ -66,7 +66,8 @@ export default function DetailsScreen() {
             const res = await axios.get(
                 `http://10.0.0.13:8000/income/details/?month=${month}&user_id=${user?.id}`
             );
-            setIncome(res.data.data);
+            const sorted = [...(res.data.data ?? [])].sort((a, b) => b.day - a.day);
+            setIncome(sorted);
         } catch (e) { console.error('Error fetching detailed income:', e); }
     };
 
