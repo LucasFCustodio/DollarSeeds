@@ -6,7 +6,9 @@
       "Bash(python -c \"import sys,json; p=json.load\\(sys.stdin\\); deps={**p.get\\('dependencies',{}\\),**p.get\\('devDependencies',{}\\)}; [print\\(k,v\\) for k,v in sorted\\(deps.items\\(\\)\\)]\")",
       "PowerShell(Set-Location \"c:\\\\DollarSeeds\\\\frontend\"; $result = npx tsc --noEmit --skipLibCheck 2>&1; $myFiles = $result | Where-Object { $_ -match \"components/icons|components/ui/Card|AnimatedProgressBar|AnimatedAmount|HeroBg|CustomTabBar|useTicker|tabs\\\\\\)/index|ThemeContext|_layout\" }; if \\($myFiles\\) { $myFiles } else { Write-Output \"No errors in new files\" })",
       "mcp__claude_ai_Supabase__list_tables",
-      "mcp__claude_ai_Supabase__apply_migration"
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__execute_sql"
     ]
   }
 }

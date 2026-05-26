@@ -8,7 +8,7 @@
  * ✅ 50/30/20 split preview updates live with amount
  * ✅ Back chevron returns to previous screen
  */
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -36,6 +36,72 @@ const MONTH_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'
 
 const SOURCES = ['Paycheck', 'Side gig', 'Gift', 'Refund', 'Bonus', 'Other'];
 
+// ─── Month picker ─────────────────────────────────────────────────────────────
+const ITEM_H = 46;
+
+function MonthPicker({ value, onChange, theme }) {
+    const scrollRef = useRef(null);
+    const selectedIdx = MONTHS.indexOf(value);
+
+    useEffect(() => {
+        if (scrollRef.current && selectedIdx >= 0) {
+            scrollRef.current.scrollTo({
+                y: selectedIdx * ITEM_H,
+                animated: false,
+            });
+        }
+    }, []);
+
+    const onScrollEnd = (e) => {
+        const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_H);
+        const clamped = Math.max(0, Math.min(MONTHS.length - 1, idx));
+        onChange(MONTHS[clamped]);
+    };
+
+    return (
+        <View style={[
+            styles.pickerWrap,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+        ]}>
+            <ScrollView
+                ref={scrollRef}
+                snapToInterval={ITEM_H}
+                decelerationRate="fast"
+                showsVerticalScrollIndicator={false}
+                onMomentumScrollEnd={onScrollEnd}
+                style={{ backgroundColor: 'transparent' }}
+            >
+                {MONTHS.map((item) => {
+                    const active = item === value;
+                    return (
+                        <Pressable
+                            key={item}
+                            onPress={() => {
+                                const idx = MONTHS.indexOf(item);
+                                scrollRef.current?.scrollTo({
+                                    y: idx * ITEM_H,
+                                    animated: true,
+                                });
+                                onChange(item);
+                            }}
+                            style={styles.pickerItem}
+                        >
+                            <Text style={[
+                                styles.pickerItemText,
+                                active
+                                    ? { color: theme.brand, fontFamily: 'Geist-SemiBold', fontSize: 15 }
+                                    : { color: theme.ink3, fontFamily: 'Geist-Regular', fontSize: 13 },
+                            ]}>
+                                {item}
+                            </Text>
+                        </Pressable>
+                    );
+                })}
+            </ScrollView>
+        </View>
+    );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function IncomeContainer() {
     const router = useRouter();
@@ -43,11 +109,13 @@ export default function IncomeContainer() {
     const { theme } = useTheme();
 
     const today = new Date();
-    const dateStr = `${MONTH_ABBRS[today.getMonth()]} ${today.getDate()}, ${today.getFullYear()}`;
 
     // Form state
-    const [amount, setAmount]   = useState('');
-    const [source, setSource]   = useState('Paycheck');
+    const [amount, setAmount]     = useState('');
+    const [source, setSource]     = useState('Paycheck');
+    const [title, setTitle]       = useState('');
+    const [month, setMonth]       = useState(MONTHS[today.getMonth()]);
+    const [day, setDay]           = useState(String(today.getDate()));
     const [submitted, setSubmitted] = useState(false);
 
     const parsedAmt = parseFloat(amount) || 0;
@@ -61,17 +129,24 @@ export default function IncomeContainer() {
     // ── Submit ─────────────────────────────────────────────────────────────────
     const submitIncome = async () => {
         const parsed = parseFloat(amount);
+        const parsedDay = parseInt(day, 10);
         if (!amount || isNaN(parsed) || parsed <= 0) return;
+        if (!month || !MONTHS.includes(month)) return;
+        if (!day || isNaN(parsedDay) || parsedDay < 1 || parsedDay > 31) return;
         try {
             await axios.post('http://10.0.0.13:8000/income/', {
                 amount: parsed,
                 source,
-                day:   today.getDate(),
-                month: MONTHS[today.getMonth()],
+                title: title.trim() || source,
+                day: parsedDay,
+                month,
                 user_id: user?.id,
             });
             setAmount('');
             setSource('Paycheck');
+            setTitle('');
+            setMonth(MONTHS[today.getMonth()]);
+            setDay(String(today.getDate()));
             setSubmitted(true);
             setTimeout(() => setSubmitted(false), 2000);
         } catch (err) {
@@ -210,6 +285,53 @@ export default function IncomeContainer() {
                             </Pressable>
                         );
                     })}
+                </View>
+
+                {/* ── Title ───────────────────────────────────────────── */}
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>TITLE (OPTIONAL)</Text>
+                <TextInput
+                    style={[
+                        styles.fieldInput,
+                        {
+                            backgroundColor: theme.surface,
+                            borderColor: theme.border,
+                            color: theme.ink,
+                        },
+                    ]}
+                    placeholder="January paycheck"
+                    placeholderTextColor={theme.ink3}
+                    value={title}
+                    onChangeText={setTitle}
+                    maxLength={40}
+                />
+
+                {/* ── Month & Day ──────────────────────────────────────── */}
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>DATE</Text>
+                <View style={styles.dateRow}>
+                    <View style={{ flex: 2 }}>
+                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>Month</Text>
+                        <MonthPicker value={month} onChange={setMonth} theme={theme} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>Day</Text>
+                        <TextInput
+                            style={[
+                                styles.fieldInput,
+                                {
+                                    backgroundColor: theme.surface,
+                                    borderColor: theme.border,
+                                    color: theme.ink,
+                                    fontFamily: 'Geist-SemiBold',
+                                },
+                            ]}
+                            placeholder="25"
+                            placeholderTextColor={theme.ink3}
+                            value={day}
+                            onChangeText={setDay}
+                            keyboardType="number-pad"
+                            maxLength={2}
+                        />
+                    </View>
                 </View>
 
                 {/* ── Submit ──────────────────────────────────────────── */}
@@ -409,6 +531,47 @@ const styles = StyleSheet.create({
     chipText: {
         fontFamily: 'Geist-SemiBold',
         fontSize: 12,
+    },
+
+    // Shared text input (title, day)
+    fieldInput: {
+        borderRadius: 12,
+        borderWidth: 1,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        fontSize: 14,
+        fontFamily: 'Geist-Regular',
+        marginBottom: 22,
+    },
+
+    // Date row — month picker + day input side by side
+    dateRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginBottom: 0,
+    },
+    dateFieldLabel: {
+        fontFamily: 'JetBrainsMono-Regular',
+        fontSize: 11,
+        letterSpacing: 0.4,
+        marginBottom: 6,
+    },
+
+    // Month picker — single visible row, matches fieldInput height
+    pickerWrap: {
+        height: ITEM_H,
+        borderRadius: 12,
+        borderWidth: 1,
+        overflow: 'hidden',
+        marginBottom: 22,
+    },
+    pickerItem: {
+        height: ITEM_H,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    pickerItemText: {
+        letterSpacing: -0.1,
     },
 
     // Submit button

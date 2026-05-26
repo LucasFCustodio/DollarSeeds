@@ -30,17 +30,16 @@ class Expense(BaseModel):
     month: str
     user_id: str
     sub_category: Optional[str] = None
-    note: Optional[str] = None
 
 class Income(BaseModel):
     amount: float
     day: int
     month: str
     user_id: str
+    title: Optional[str] = None
     source: Optional[str] = None
-    # Legacy fields — kept optional so old rows and new posts both work
+    # Legacy field — kept optional for backward compat with existing rows
     jobTitle: Optional[str] = None
-    jobType: Optional[str] = None
 
 class SavingsEntry(BaseModel):
     user_id: str

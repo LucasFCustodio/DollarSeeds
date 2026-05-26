@@ -83,3 +83,5 @@ Expo Router maps the file tree to routes.
 - Route params passed via `router.push({ pathname, params })` and read with `useLocalSearchParams()`
 - [frontend/app/details.tsx](../../frontend/app/details.tsx) receives `category`, `month`, and `type` params to show filtered items
 - `Stack` used for modal-style screens; `Tabs` for persistent bottom nav
+
+**Tab bar** — the default Expo tab bar is replaced by `CustomTabBar` (floating pill, Reanimated spring). It is registered in `_layout.tsx` via `screenOptions={{ tabBar: (props) => <CustomTabBar {...props} /> }}`. Do **not** use `tabBarStyle`, `tabBarIcon`, or `tabBarActiveTintColor` on individual tab screens — those target the old bar which is no longer rendered.
