@@ -147,7 +147,7 @@ export default function ExpenseContainer() {
         if (!month || !MONTHS.includes(month)) return;
         if (!day || isNaN(parsedDay) || parsedDay < 1 || parsedDay > 31) return;
         try {
-            await axios.post('http://10.0.0.13:8000/expenses/', {
+            await axios.post('https://dollarseeds-1.onrender.com/expenses/', {
                 title: title.trim() || subcat,
                 sub_category: subcat,
                 amount: parsed,

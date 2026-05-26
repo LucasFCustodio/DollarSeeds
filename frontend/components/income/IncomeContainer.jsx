@@ -134,7 +134,7 @@ export default function IncomeContainer() {
         if (!month || !MONTHS.includes(month)) return;
         if (!day || isNaN(parsedDay) || parsedDay < 1 || parsedDay > 31) return;
         try {
-            await axios.post('http://10.0.0.13:8000/income/', {
+            await axios.post('https://dollarseeds-1.onrender.com/income/', {
                 amount: parsed,
                 source,
                 title: title.trim() || source,

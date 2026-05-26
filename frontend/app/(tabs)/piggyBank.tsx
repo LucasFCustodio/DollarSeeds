@@ -33,7 +33,7 @@ import {
 } from '../../components/icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const BASE = 'http://10.0.0.13:8000';
+const BASE = 'https://dollarseeds-1.onrender.com';
 const MONTHS = [
     'January','February','March','April','May','June',
     'July','August','September','October','November','December',

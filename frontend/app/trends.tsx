@@ -5,7 +5,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
-const BASE = 'http://10.0.0.13:8000';
+const BASE = 'https://dollarseeds-1.onrender.com';
 const BAR_MAX_WIDTH = Dimensions.get('window').width - 170;
 
 interface WantsQuartiles { q25: number | null; q50: number | null; q75: number | null; q100: number | null; }

@@ -48,7 +48,7 @@ export default function DetailsScreen() {
     const fetchDetailedExpenses = async () => {
         try {
             const res = await axios.get(
-                `http://10.0.0.13:8000/expenses/details/?month=${month}&category=${category}&user_id=${user?.id}`
+                `https://dollarseeds-1.onrender.com/expenses/details/?month=${month}&category=${category}&user_id=${user?.id}`
             );
             setExpenses(res.data.data);
         } catch (e) { console.error('Error fetching detailed expenses:', e); }
@@ -56,7 +56,7 @@ export default function DetailsScreen() {
 
     const deleteExpense = async (id: number) => {
         try {
-            await axios.delete(`http://10.0.0.13:8000/expenses/delete/${id}?user_id=${user?.id}`);
+            await axios.delete(`https://dollarseeds-1.onrender.com/expenses/delete/${id}?user_id=${user?.id}`);
             setExpenses(prev => prev.filter(e => e.id !== id));
         } catch (e) { console.error('Error deleting expense:', e); }
     };
@@ -64,7 +64,7 @@ export default function DetailsScreen() {
     const fetchDetailedIncome = async () => {
         try {
             const res = await axios.get(
-                `http://10.0.0.13:8000/income/details/?month=${month}&user_id=${user?.id}`
+                `https://dollarseeds-1.onrender.com/income/details/?month=${month}&user_id=${user?.id}`
             );
             const sorted = [...(res.data.data ?? [])].sort((a, b) => b.day - a.day);
             setIncome(sorted);
@@ -73,7 +73,7 @@ export default function DetailsScreen() {
 
     const deleteIncome = async (id: number) => {
         try {
-            await axios.delete(`http://10.0.0.13:8000/income/delete/${id}?user_id=${user?.id}`);
+            await axios.delete(`https://dollarseeds-1.onrender.com/income/delete/${id}?user_id=${user?.id}`);
             setIncome(prev => prev.filter(i => i.id !== id));
         } catch (e) { console.error('Error deleting income:', e); }
     };

@@ -155,7 +155,7 @@ export default function DashboardScreen() {
     const fetchDashboardData = async () => {
         if (!user?.id) return;
         try {
-            const BASE = 'http://10.0.0.13:8000';
+            const BASE = 'https://dollarseeds-1.onrender.com';
             const [dashRes, piggyRes] = await Promise.all([
                 axios.get(`${BASE}/dashboard/${currentMonth}?user_id=${user.id}`),
                 axios.get(`${BASE}/savings/balance/?user_id=${user.id}`),
@@ -186,7 +186,7 @@ export default function DashboardScreen() {
     const fetchCategoryTxs = async (catKey: 'needs' | 'wants' | 'goals') => {
         if (!user?.id) return;
         try {
-            const BASE = 'http://10.0.0.13:8000';
+            const BASE = 'https://dollarseeds-1.onrender.com';
 
             if (catKey === 'goals') {
                 // Goals = expense "Goals" rows + savings deposits — fetch both in parallel

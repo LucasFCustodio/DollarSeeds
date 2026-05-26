@@ -7,7 +7,7 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
-const BASE = 'http://10.0.0.13:8000';
+const BASE = 'https://dollarseeds-1.onrender.com';
 
 export default function SavingsContainer({ transactionType, currentBalance, onSuccess, goals = [] }) {
     const [amount, setAmount] = useState('');

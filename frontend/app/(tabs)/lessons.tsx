@@ -22,7 +22,7 @@ import Card from '../../components/ui/Card';
 import { IconCheck, IconScripture, IconStar } from '../../components/icons';
 import { LESSONS } from '../../constants/lessons';
 
-const BASE = 'http://10.0.0.13:8000';
+const BASE = 'https://dollarseeds-1.onrender.com';
 const STORAGE_KEY = 'completed_lessons';
 
 export default function LessonsScreen() {
