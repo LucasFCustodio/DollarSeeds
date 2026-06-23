@@ -1,0 +1,93 @@
+/**
+ * TransactionsScreen — unified Expense / Income logging.
+ *
+ * A pinned segmented toggle (Expense | Income) at the top swaps between the
+ * two form containers, which render in `embedded` mode (no internal header).
+ * An optional `type` route param preselects the form (used by the dashboard
+ * quick actions).
+ */
+import React, { useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { useTheme, shadow } from '../../context/ThemeContext';
+import ExpenseContainer from '../../components/expense/ExpenseContainer';
+import IncomeContainer from '../../components/income/IncomeContainer';
+
+type TxType = 'expense' | 'income';
+
+export default function TransactionsScreen() {
+    const { theme } = useTheme();
+    const { type } = useLocalSearchParams<{ type?: string }>();
+    const [active, setActive] = useState<TxType>(type === 'income' ? 'income' : 'expense');
+
+    return (
+        <View style={{ flex: 1, backgroundColor: theme.bg }}>
+            {/* ── Header + segmented toggle ─────────────────────────────── */}
+            <View style={styles.header}>
+                <Text style={[styles.title, { color: theme.ink }]}>Transactions</Text>
+                <Text style={[styles.subtitle, { color: theme.ink3 }]}>Log what comes in and goes out</Text>
+
+                <View style={[styles.tabPill, { backgroundColor: theme.surfaceSoft, borderColor: theme.borderSoft }]}>
+                    {(['expense', 'income'] as const).map(t => (
+                        <Pressable
+                            key={t}
+                            onPress={() => setActive(t)}
+                            style={[
+                                styles.tabItem,
+                                active === t && [
+                                    styles.tabItemActive,
+                                    { backgroundColor: theme.surface, ...(shadow(2) as object) },
+                                ],
+                            ]}
+                        >
+                            <Text style={[styles.tabText, { color: active === t ? theme.ink : theme.ink3 }]}>
+                                {t}
+                            </Text>
+                        </Pressable>
+                    ))}
+                </View>
+            </View>
+
+            {/* ── Active form ───────────────────────────────────────────── */}
+            {active === 'expense' ? <ExpenseContainer embedded /> : <IncomeContainer embedded />}
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    header: {
+        paddingHorizontal: 20,
+        paddingTop: 54,
+        paddingBottom: 12,
+    },
+    title: {
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: 26,
+        letterSpacing: -0.5,
+        lineHeight: 30,
+    },
+    subtitle: {
+        fontFamily: 'InstrumentSerif-Italic',
+        fontSize: 12,
+        marginTop: 2,
+        marginBottom: 16,
+    },
+    tabPill: {
+        flexDirection: 'row',
+        borderRadius: 14,
+        borderWidth: 1,
+        padding: 4,
+    },
+    tabItem: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 10,
+    },
+    tabItemActive: {},
+    tabText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 13,
+        textTransform: 'capitalize',
+    },
+});
