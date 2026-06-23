@@ -113,7 +113,7 @@ function MonthPicker({ value, onChange, theme }) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function ExpenseContainer() {
+export default function ExpenseContainer({ embedded = false }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
@@ -172,27 +172,29 @@ export default function ExpenseContainer() {
     return (
         <ScrollView
             style={{ flex: 1, backgroundColor: theme.bg }}
-            contentContainerStyle={{ paddingBottom: 120 }}
+            contentContainerStyle={{ paddingBottom: 120, paddingTop: embedded ? 8 : 0 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
         >
             {/* ── Header ──────────────────────────────────────────────── */}
-            <View style={styles.header}>
-                <Pressable
-                    onPress={() => router.back()}
-                    style={({ pressed }) => [
-                        styles.backBtn,
-                        { backgroundColor: theme.surface, borderColor: theme.border },
-                        pressed && { opacity: 0.7 },
-                    ]}
-                >
-                    <IconChevronLeft size={18} color={theme.ink} />
-                </Pressable>
-                <View style={{ flex: 1 }}>
-                    <Text style={[styles.screenTitle, { color: theme.ink }]}>New Expense</Text>
-                    <Text style={[styles.screenSubtitle, { color: theme.ink3 }]}>Plant where it counts</Text>
+            {!embedded && (
+                <View style={styles.header}>
+                    <Pressable
+                        onPress={() => router.back()}
+                        style={({ pressed }) => [
+                            styles.backBtn,
+                            { backgroundColor: theme.surface, borderColor: theme.border },
+                            pressed && { opacity: 0.7 },
+                        ]}
+                    >
+                        <IconChevronLeft size={18} color={theme.ink} />
+                    </Pressable>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.screenTitle, { color: theme.ink }]}>New Expense</Text>
+                        <Text style={[styles.screenSubtitle, { color: theme.ink3 }]}>Plant where it counts</Text>
+                    </View>
                 </View>
-            </View>
+            )}
 
             <View style={{ paddingHorizontal: 20 }}>
 

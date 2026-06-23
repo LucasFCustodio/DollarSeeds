@@ -17,8 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import {
     IconHome,
-    IconExpense,
-    IconIncome,
+    IconTransactions,
     IconSavings,
     IconLessons,
 } from '../icons';
@@ -26,16 +25,14 @@ import {
 // Map route name → icon component
 const TAB_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string; accent?: string; filled?: boolean }>> = {
     index: IconHome,
-    add: IconExpense,
-    addIncome: IconIncome,
+    transactions: IconTransactions,
     piggyBank: IconSavings,
     lessons: IconLessons,
 };
 
 const TAB_LABELS: Record<string, string> = {
     index: 'Home',
-    add: 'Expense',
-    addIncome: 'Income',
+    transactions: 'Transactions',
     piggyBank: 'Savings',
     lessons: 'Lessons',
 };

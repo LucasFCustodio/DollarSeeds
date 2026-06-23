@@ -520,7 +520,7 @@ export default function DashboardScreen() {
                 {/* Quick actions */}
                 <View style={styles.quickActions}>
                     <Pressable
-                        onPress={() => router.push('/(tabs)/add' as any)}
+                        onPress={() => router.push({ pathname: '/(tabs)/transactions', params: { type: 'expense' } } as any)}
                         style={({ pressed }) => [
                             styles.quickActionPrimary,
                             { backgroundColor: theme.brand },
@@ -531,7 +531,7 @@ export default function DashboardScreen() {
                         <Text style={styles.quickActionPrimaryText}>Log Expense</Text>
                     </Pressable>
                     <Pressable
-                        onPress={() => router.push('/(tabs)/addIncome' as any)}
+                        onPress={() => router.push({ pathname: '/(tabs)/transactions', params: { type: 'income' } } as any)}
                         style={({ pressed }) => [
                             styles.quickActionSecondary,
                             { backgroundColor: theme.surface, borderColor: theme.border },

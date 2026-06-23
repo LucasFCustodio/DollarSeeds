@@ -131,6 +131,24 @@ export const IconLessons = ({ size = 24, color = '#0F2820', accent, filled }: Ic
     </Svg>
 );
 
+// Transactions — banknote / dollar bill (money in & out)
+export const IconTransactions = ({ size = 24, color = '#0F2820', accent, filled }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        {filled && (
+            <Rect x={3} y={6.5} width={18} height={11} rx={2.2} fill={accent || color} opacity={0.18} />
+        )}
+        <Rect x={3} y={6.5} width={18} height={11} rx={2.2} stroke={color} strokeWidth={1.6} />
+        <Circle cx={12} cy={12} r={2.6} stroke={accent || color} strokeWidth={1.6} />
+        {/* corner value ticks */}
+        <Path
+            d="M6 9.4v0.01M18 14.6v0.01"
+            stroke={accent || color}
+            strokeWidth={1.7}
+            strokeLinecap="round"
+        />
+    </Svg>
+);
+
 // ── Category icons (32×32 viewBox) ────────────────────────────────────────────
 
 // Needs — bread loaf (essentials, sustenance)
