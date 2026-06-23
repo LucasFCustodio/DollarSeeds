@@ -33,7 +33,7 @@ const TAB_ICONS: Record<string, React.ComponentType<{ size?: number; color?: str
 const TAB_LABELS: Record<string, string> = {
     index: 'Home',
     transactions: 'Transactions',
-    piggyBank: 'Savings',
+    piggyBank: 'Goals',
     lessons: 'Lessons',
 };
 

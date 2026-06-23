@@ -58,6 +58,9 @@ class SavingsGoal(BaseModel):
     target_month: Optional[str] = None
     target_year: Optional[int] = None
     is_general: bool = False
+    # "saving" (default) | "debt". Debt goals behave identically to savings goals;
+    # the only difference is grouping/labeling in the Goals tab UI.
+    goal_type: str = "saving"
 
 class SavingsTransfer(BaseModel):
     user_id: str
@@ -182,6 +185,10 @@ def get_dashboard_data(current_month: str, user_id: str):
 
     total_needs = sum(item["amount"] for item in expense_needs_response.data)
     total_wants = sum(item["amount"] for item in expense_wants_response.data)
+    # Goals bucket = historical 'Goals' expenses (legacy "Investments") + income-sourced
+    # savings deposits. Debt-goal payments are just savings_transactions deposits with
+    # source='income', so they flow into this total automatically — no extra query needed.
+    # (Transfers between goals use source='transfer' and are intentionally excluded.)
     total_goals = sum(item["amount"] for item in expense_goals_response.data) + sum(item["amount"] for item in savings_deposits_response.data)
 
     needs_score = calculate_category_score(total_needs, needs_budget)
@@ -226,6 +233,10 @@ def create_income(income: Income):
 
 @app.get("/expenses/details/")
 def get_expense_details(month: str, category: str, user_id: str):
+    # "Goals" is kept allowed for READ-ONLY historical access: the old "Investments"
+    # expense bucket wrote category='Goals', and past-month dashboards still need to
+    # render those rows. No code path CREATES new 'Goals' expenses anymore — debt and
+    # savings goals now live in savings_goals/savings_transactions instead.
     if category not in ("Needs", "Wants", "Goals"):
         return {"data": []}
     response = supabase.table("expenses").select("*").eq("month", month).eq("category", category).eq("user_id", user_id).execute()
@@ -328,15 +339,22 @@ def _ensure_general_savings(user_id: str) -> int:
     return result.data[0]["id"]
 
 @app.get("/savings/goal/")
-def get_savings_goals(user_id: str):
+def get_savings_goals(user_id: str, goal_type: Optional[str] = None):
     # Lazily seed General Savings for this user if it doesn't exist yet
     _ensure_general_savings(user_id)
-    goals_res = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", False).order("created_at", desc=True).execute()
+    query = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", False)
+    # Optional filter: "saving" | "debt". Allocation math is identical for both.
+    if goal_type in ("saving", "debt"):
+        query = query.eq("goal_type", goal_type)
+    goals_res = query.order("created_at", desc=True).execute()
     return {"data": _with_allocated(goals_res.data, user_id)}
 
 @app.get("/savings/goal/completed/")
-def get_completed_goals(user_id: str):
-    goals_res = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", True).order("created_at", desc=True).execute()
+def get_completed_goals(user_id: str, goal_type: Optional[str] = None):
+    query = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", True)
+    if goal_type in ("saving", "debt"):
+        query = query.eq("goal_type", goal_type)
+    goals_res = query.order("created_at", desc=True).execute()
     return {"data": _with_allocated(goals_res.data, user_id)}
 
 @app.patch("/savings/goal/{id}/complete")
