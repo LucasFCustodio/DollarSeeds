@@ -1,17 +1,20 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "DollarSeeds",
+    "slug": "dollarseeds",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "dollarseeds",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.lucasfcustodio.dollarseeds",
+      "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "NSUserNotificationsUsageDescription": "DollarSeeds sends daily reminders to help you log income and spending."
+        "NSUserNotificationsUsageDescription": "DollarSeeds sends daily reminders to help you log income and spending.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -60,7 +63,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "12a226ac-b804-4810-bd38-ca7d2a33427f"
+        "projectId": "81499bfa-a991-4de1-a867-242ef8946c86"
       }
     },
     "owner": "lucasfcustodio"
