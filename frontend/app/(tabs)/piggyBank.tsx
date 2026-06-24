@@ -13,12 +13,12 @@
  * ✅ Negative-balance alert on withdrawal
  * ✅ Active / Completed tabs
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
     View, Text, ScrollView, Pressable,
     TextInput, StyleSheet, Alert,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
@@ -124,6 +124,20 @@ export default function PiggyBankScreen() {
     };
 
     useFocusEffect(useCallback(() => { fetchData(); }, []));
+
+    // Pre-fill + open the goal form when arriving from a suggestion
+    // (e.g. Firm Foundation "Set these up" in Settings). Fires once per arrival.
+    const params = useLocalSearchParams();
+    const prefilledRef = useRef(false);
+    useEffect(() => {
+        if (params.createGoal && !prefilledRef.current) {
+            prefilledRef.current = true;
+            if (params.goalType === 'debt' || params.goalType === 'saving') setGoalType(params.goalType);
+            if (typeof params.title === 'string' && params.title) setGoalTitle(params.title);
+            if (typeof params.amount === 'string' && params.amount) setGoalAmount(params.amount);
+            setShowGoalForm(true);
+        }
+    }, [params.createGoal]);
 
     // ── Derived ───────────────────────────────────────────────────────────────
     // All goals shown as chips in the form (General Savings first, then specific goals).

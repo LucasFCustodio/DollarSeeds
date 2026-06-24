@@ -7,6 +7,11 @@ import { useTheme } from '../context/ThemeContext';
 
 interface Expense {
     id: number; title: string; amount: number; day: number; category: string; month: string;
+    // The Goals view blends two sources: legacy "Goals" expense rows and
+    // income-sourced savings deposits. `kind` tells the delete handler which
+    // endpoint to hit; `note` is an optional subtitle (e.g. "Set aside").
+    kind?: 'expense' | 'savings';
+    note?: string;
 }
 interface Income {
     id: number;
@@ -46,19 +51,50 @@ export default function DetailsScreen() {
     };
 
     const fetchDetailedExpenses = async () => {
+        const BASE = 'https://dollarseeds-1.onrender.com';
         try {
-            const res = await axios.get(
-                `https://dollarseeds-1.onrender.com/expenses/details/?month=${month}&category=${category}&user_id=${user?.id}`
-            );
-            setExpenses(res.data.data);
+            if (category === 'Goals') {
+                // Goals = legacy "Goals" expense rows + income-sourced savings deposits.
+                // Fetch both so users can see (and delete) money set aside toward goals,
+                // which now lives in savings_transactions rather than the expenses table.
+                const [expRes, savRes] = await Promise.all([
+                    axios.get(`${BASE}/expenses/details/`, { params: { month, category, user_id: user?.id } }),
+                    axios.get(`${BASE}/savings/history/`, { params: { user_id: user?.id, month } }),
+                ]);
+                const expItems: Expense[] = (expRes.data.data ?? []).map((i: any) => ({
+                    id: i.id, title: i.title || i.sub_category || 'Goal expense',
+                    amount: i.amount, day: i.day, month: i.month, category: 'Goals', kind: 'expense',
+                }));
+                // Only income-sourced deposits count toward the Goals budget; transfers
+                // between goals (source='transfer') are internal moves — excluded so we
+                // never delete one half of a paired transfer and corrupt the balance.
+                const savItems: Expense[] = (savRes.data.data ?? [])
+                    .filter((i: any) => i.type === 'deposit' && i.source === 'income')
+                    .map((i: any) => ({
+                        id: i.id, title: i.title || 'Savings deposit',
+                        amount: i.amount, day: i.day, month: i.month, category: 'Goals',
+                        kind: 'savings', note: 'Set aside',
+                    }));
+                setExpenses([...expItems, ...savItems].sort((a, b) => b.day - a.day));
+            } else {
+                const res = await axios.get(
+                    `${BASE}/expenses/details/?month=${month}&category=${category}&user_id=${user?.id}`
+                );
+                setExpenses((res.data.data ?? []).map((i: any) => ({ ...i, kind: 'expense' })));
+            }
         } catch (e) { console.error('Error fetching detailed expenses:', e); }
     };
 
-    const deleteExpense = async (id: number) => {
+    const deleteExpense = async (item: Expense) => {
+        const BASE = 'https://dollarseeds-1.onrender.com';
         try {
-            await axios.delete(`https://dollarseeds-1.onrender.com/expenses/delete/${id}?user_id=${user?.id}`);
-            setExpenses(prev => prev.filter(e => e.id !== id));
-        } catch (e) { console.error('Error deleting expense:', e); }
+            if (item.kind === 'savings') {
+                await axios.delete(`${BASE}/savings/transaction/${item.id}?user_id=${user?.id}`);
+            } else {
+                await axios.delete(`${BASE}/expenses/delete/${item.id}?user_id=${user?.id}`);
+            }
+            setExpenses(prev => prev.filter(e => !(e.id === item.id && e.kind === item.kind)));
+        } catch (e) { console.error('Error deleting item:', e); }
     };
 
     const fetchDetailedIncome = async () => {
@@ -111,11 +147,13 @@ export default function DetailsScreen() {
                             <View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
                             <View style={styles.rowInfo}>
                                 <Text style={[styles.rowTitle, { color: theme.text }]}>{item.title}</Text>
-                                <Text style={[styles.rowDate, { color: theme.textMuted }]}>Day {item.day}</Text>
+                                <Text style={[styles.rowDate, { color: theme.textMuted }]}>
+                                    {item.note ? `${item.note} · Day ${item.day}` : `Day ${item.day}`}
+                                </Text>
                             </View>
                             <Text style={[styles.rowAmount, { color: theme.text }]}>${item.amount.toFixed(2)}</Text>
                             <Pressable
-                                onPress={() => deleteExpense(item.id)}
+                                onPress={() => deleteExpense(item)}
                                 style={[styles.deleteBtn, { backgroundColor: theme.dangerSoft }]}
                                 hitSlop={8}
                             >
