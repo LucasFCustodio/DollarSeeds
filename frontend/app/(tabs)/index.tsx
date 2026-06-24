@@ -40,7 +40,7 @@ import {
     IconChevronLeft, IconChevronRight,
     IconNeeds, IconWants, IconGoals,
     IconExpense, IconIncome,
-    IconScripture, IconTrend, IconSavings,
+    IconScripture, IconTrend, IconSavings, IconUser,
 } from '../../components/icons';
 
 // Enable LayoutAnimation on Android
@@ -51,6 +51,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DashboardData {
     total_income: number;
+    tithe?: { enabled: boolean; rate: number; amount: number };
     budgets: { needs: number; wants: number; goals: number };
     expenses: { needs: number; wants: number; goals: number };
     compliance_score: { overall: number | null; needs: number; wants: number; goals: number };
@@ -242,7 +243,8 @@ export default function DashboardScreen() {
     };
 
     // ── Derived values ─────────────────────────────────────────────────────────
-    const { total_income, budgets, expenses, compliance_score } = dashboardData;
+    const { total_income, budgets, expenses, compliance_score, tithe } = dashboardData;
+    const titheActive = !!tithe?.enabled && (tithe?.amount ?? 0) > 0;
     const totalSpent = expenses.needs + expenses.wants + expenses.goals;
     const totalLeft = Math.max(0, total_income - totalSpent);
     const score = compliance_score?.overall ?? null;
@@ -352,6 +354,13 @@ export default function DashboardScreen() {
 
                         {/* Control buttons */}
                         <View style={styles.heroControls}>
+                            {/* Settings (tithing, preferences) */}
+                            <Pressable
+                                onPress={() => router.push('/settings' as any)}
+                                style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
+                            >
+                                <IconUser size={18} color="#fff" />
+                            </Pressable>
                             {/* Dark/light toggle */}
                             <Pressable
                                 onPress={toggleTheme}
@@ -485,6 +494,33 @@ export default function DashboardScreen() {
                         <Text style={[styles.trendsBtnText, { color: theme.brand }]}>Trends</Text>
                     </Pressable>
                 </View>
+
+                {/* Tithe envelope — carved out FIRST, shown above the 50/30/20 split.
+                    Only rendered when tithing is enabled; hidden entirely otherwise. */}
+                {titheActive && (
+                    <View style={[styles.titheCard, { backgroundColor: theme.surface, borderColor: theme.harvest, ...shadow(7) }]}>
+                        <View style={[styles.titheIconTile, { backgroundColor: theme.harvest }]}>
+                            <IconScripture size={26} color={theme.brand} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <View style={styles.titheTitleRow}>
+                                <Text style={[styles.titheTitle, { color: theme.ink }]}>Tithe</Text>
+                                <Text style={[styles.tithePct, { color: theme.ink3 }]}>
+                                    {Math.round((tithe?.rate ?? 0.1) * 100)}%
+                                </Text>
+                            </View>
+                            <Text style={[styles.titheSub, { color: theme.ink2 }]}>
+                                Set aside first · before budgeting
+                            </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[styles.titheAmount, { color: theme.ink }]}>
+                                ${fmt$(tithe?.amount ?? 0)}
+                            </Text>
+                            <Text style={[styles.titheAmountLabel, { color: theme.ink3 }]}>SET ASIDE</Text>
+                        </View>
+                    </View>
+                )}
 
                 {/* Category cards */}
                 {categories.map(cat => (
@@ -813,6 +849,24 @@ const styles = StyleSheet.create({
     sectionTitle: { fontFamily: 'Geist-SemiBold', fontSize: 15, letterSpacing: -0.2 },
     trendsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     trendsBtnText: { fontFamily: 'Geist-SemiBold', fontSize: 12 },
+
+    // Tithe envelope (above the 50/30/20 split)
+    titheCard: {
+        borderRadius: 18,
+        padding: 16,
+        marginBottom: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        borderWidth: 1.5,
+    },
+    titheIconTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    titheTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+    titheTitle: { fontFamily: 'Geist-SemiBold', fontSize: 16, letterSpacing: -0.2 },
+    tithePct: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11 },
+    titheSub: { fontFamily: 'Geist-Regular', fontSize: 12, marginTop: 2 },
+    titheAmount: { fontFamily: 'InstrumentSerif-Regular', fontSize: 22 },
+    titheAmountLabel: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: 10, letterSpacing: 1 },
 
     // Category card
     catCard: {

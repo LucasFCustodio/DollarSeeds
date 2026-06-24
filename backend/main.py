@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import os
+import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -71,6 +72,59 @@ class SavingsTransfer(BaseModel):
     month: str
     to_goal_title: str     # label for the deposit row
 
+class UserSettings(BaseModel):
+    user_id: str
+    # Optional so PATCH /settings/ can update either field independently without
+    # clobbering the other. GET responses return the raw row (all fields populated).
+    tithe_enabled: Optional[bool] = None
+    tithe_rate: Optional[float] = None
+
+
+# ─── Tithing helpers ──────────────────────────────────────────────────────────
+DEFAULT_TITHE_RATE = 0.10
+
+def _get_user_settings(user_id: str) -> dict:
+    """Load a user's settings row, lazily creating a default one if none exists.
+    Returns a dict with at least {user_id, tithe_enabled, tithe_rate}."""
+    res = supabase.table("user_settings").select("*").eq("user_id", user_id).execute()
+    if res.data:
+        return res.data[0]
+    default = {"user_id": user_id, "tithe_enabled": False, "tithe_rate": DEFAULT_TITHE_RATE}
+    ins = supabase.table("user_settings").insert(default).execute()
+    return ins.data[0] if ins.data else default
+
+def _current_month_name() -> str:
+    return datetime.datetime.now().strftime("%B")
+
+def _month_tithe(month: str, total_income: float, income_rows: list, settings: dict) -> dict:
+    """Compute the tithe carve-out for a single month.
+
+    Current real-world month  → uses the LIVE user setting (so toggling the switch
+                                 updates the dashboard immediately).
+    Any other (past) month    → uses the per-row tithe snapshot frozen onto each
+                                 income row at insert time, so past months keep their
+                                 original split no matter how the toggle changes later.
+
+    Returns {enabled, rate, amount, budgetable}. With tithe disabled / no snapshots
+    the carve-out is 0 and budgetable == total_income (behavior identical to before).
+    """
+    if month == _current_month_name():
+        enabled = bool(settings.get("tithe_enabled"))
+        rate = float(settings.get("tithe_rate") if settings.get("tithe_rate") is not None else DEFAULT_TITHE_RATE)
+        amount = total_income * rate if enabled else 0.0
+    else:
+        tithed = [r for r in income_rows if r.get("tithe_enabled")]
+        amount = sum(r["amount"] * float(r.get("tithe_rate") or DEFAULT_TITHE_RATE) for r in tithed)
+        enabled = amount > 0
+        rate = float(tithed[0].get("tithe_rate") or DEFAULT_TITHE_RATE) if tithed else \
+            float(settings.get("tithe_rate") if settings.get("tithe_rate") is not None else DEFAULT_TITHE_RATE)
+    return {
+        "enabled": enabled,
+        "rate": rate,
+        "amount": amount,
+        "budgetable": total_income - amount,
+    }
+
 
 def calculate_category_score(spent: float, budget: float) -> float:
     if budget == 0:
@@ -94,7 +148,8 @@ def get_spending_trends(user_id: str):
                   "August", "September", "October", "November", "December"]
 
     # Fetch all data in 5 queries instead of per-month queries
-    all_income = supabase.table("income").select("amount, month").eq("user_id", user_id).execute()
+    # tithe_enabled/tithe_rate are the per-row snapshot used to freeze past months.
+    all_income = supabase.table("income").select("amount, month, tithe_enabled, tithe_rate").eq("user_id", user_id).execute()
     all_needs = supabase.table("expenses").select("amount, day, month").eq("category", "Needs").eq("user_id", user_id).execute()
     all_wants = supabase.table("expenses").select("amount, day, month").eq("category", "Wants").eq("user_id", user_id).execute()
     all_goals_exp = supabase.table("expenses").select("amount, day, month").eq("category", "Goals").eq("user_id", user_id).execute()
@@ -138,9 +193,12 @@ def get_spending_trends(user_id: str):
             quartiles[key] = None
         return quartiles
 
+    settings = _get_user_settings(user_id)
+
     results = []
     for month in all_months:
-        total_income = sum(i["amount"] for i in income_by_month.get(month, []))
+        month_income_rows = income_by_month.get(month, [])
+        total_income = sum(i["amount"] for i in month_income_rows)
         total_needs = sum(i["amount"] for i in needs_by_month.get(month, []))
         total_wants = sum(i["amount"] for i in wants_by_month.get(month, []))
         total_goals = (
@@ -151,6 +209,11 @@ def get_spending_trends(user_id: str):
         if total_income == 0 and total_needs == 0 and total_wants == 0 and total_goals == 0:
             continue
 
+        # Carve tithe out FIRST, then split the remaining (budgetable) income 50/30/20.
+        # Same rule as the dashboard so the two screens never disagree.
+        tithe = _month_tithe(month, total_income, month_income_rows, settings)
+        budgetable = tithe["budgetable"]
+
         results.append({
             "month": month,
             "total_income": total_income,
@@ -158,9 +221,14 @@ def get_spending_trends(user_id: str):
             "wants": total_wants,
             "goals": total_goals,
             "budgets": {
-                "needs": total_income * 0.5,
-                "wants": total_income * 0.3,
-                "goals": total_income * 0.2
+                "needs": budgetable * 0.5,
+                "wants": budgetable * 0.3,
+                "goals": budgetable * 0.2
+            },
+            "tithe": {
+                "enabled": tithe["enabled"],
+                "rate": tithe["rate"],
+                "amount": tithe["amount"],
             },
             "wants_quartiles": spending_quartiles(wants_by_month.get(month, []))
         })
@@ -170,12 +238,18 @@ def get_spending_trends(user_id: str):
 
 @app.get("/dashboard/{current_month}")
 def get_dashboard_data(current_month: str, user_id: str):
-    income_response = supabase.table("income").select("amount").eq("month", current_month).eq("user_id", user_id).execute()
+    income_response = supabase.table("income").select("amount, tithe_enabled, tithe_rate").eq("month", current_month).eq("user_id", user_id).execute()
     total_income = sum(item["amount"] for item in income_response.data)
 
-    needs_budget = total_income * .50
-    wants_budget = total_income * .30
-    goals_budget = total_income * .20
+    # Tithe is carved out FIRST; the 50/30/20 split then applies to the remainder.
+    # With tithe disabled, budgetable == total_income and budgets are unchanged.
+    settings = _get_user_settings(user_id)
+    tithe = _month_tithe(current_month, total_income, income_response.data, settings)
+    budgetable = tithe["budgetable"]
+
+    needs_budget = budgetable * .50
+    wants_budget = budgetable * .30
+    goals_budget = budgetable * .20
 
     expense_needs_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Needs").eq("user_id", user_id).execute()
     expense_wants_response = supabase.table("expenses").select("amount").eq("month", current_month).eq("category", "Wants").eq("user_id", user_id).execute()
@@ -203,6 +277,11 @@ def get_dashboard_data(current_month: str, user_id: str):
     return {
         "month": current_month,
         "total_income": total_income,
+        "tithe": {
+            "enabled": tithe["enabled"],
+            "rate": tithe["rate"],
+            "amount": tithe["amount"],
+        },
         "budgets": {
             "needs": needs_budget,
             "wants": wants_budget,
@@ -228,8 +307,36 @@ def create_expense(expense: Expense):
 
 @app.post("/income/")
 def create_income(income: Income):
-    response = supabase.table("income").insert(income.model_dump()).execute()
+    # Snapshot the user's CURRENT tithe setting onto the row. This freezes the month's
+    # split: even if the user later toggles tithing, past income keeps its original
+    # treatment. The live current month is still computed from user_settings.
+    settings = _get_user_settings(income.user_id)
+    payload = income.model_dump()
+    payload["tithe_enabled"] = bool(settings.get("tithe_enabled"))
+    payload["tithe_rate"] = float(
+        settings.get("tithe_rate") if settings.get("tithe_rate") is not None else DEFAULT_TITHE_RATE
+    )
+    response = supabase.table("income").insert(payload).execute()
     return {"message": "Income successfully added to database!", "data": response.data}
+
+@app.get("/settings/")
+def get_settings(user_id: str):
+    """Return the user's settings, lazily creating a default row if missing."""
+    return {"data": _get_user_settings(user_id)}
+
+@app.patch("/settings/")
+def update_settings(update: UserSettings):
+    """Update tithe_enabled and/or tithe_rate for a user (partial update)."""
+    _get_user_settings(update.user_id)  # ensure a row exists first
+    fields: dict = {}
+    if update.tithe_enabled is not None:
+        fields["tithe_enabled"] = update.tithe_enabled
+    if update.tithe_rate is not None:
+        fields["tithe_rate"] = update.tithe_rate
+    if not fields:
+        return {"data": _get_user_settings(update.user_id)}
+    res = supabase.table("user_settings").update(fields).eq("user_id", update.user_id).execute()
+    return {"message": "Settings updated.", "data": res.data[0] if res.data else None}
 
 @app.get("/expenses/details/")
 def get_expense_details(month: str, category: str, user_id: str):
