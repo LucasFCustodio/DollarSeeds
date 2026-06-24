@@ -1,9 +1,9 @@
 /**
- * Settings — user preferences (tithing, theme).
+ * Settings — user preferences (budget type, tithing, theme).
  *
  * Reachable from the dashboard hero (user/profile glass button).
- * The tithing toggle reads/writes the backend /settings/ routes so the
- * preference persists per-user across devices.
+ * Preferences read/write the backend /settings/ routes so they persist
+ * per-user across devices.
  */
 import React, { useState, useCallback } from 'react';
 import {
@@ -12,6 +12,7 @@ import {
     ScrollView,
     Pressable,
     Switch,
+    Modal,
     StyleSheet,
     ActivityIndicator,
 } from 'react-native';
@@ -21,8 +22,13 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, shadow } from '../context/ThemeContext';
 import {
-    IconChevronLeft, IconScripture, IconMoon, IconSun,
+    IconChevronLeft, IconScripture, IconMoon, IconSun, IconTarget, IconSparkle,
 } from '../components/icons';
+import Button from '../components/ui/Button';
+import BudgetTypeSelector from '../components/ui/BudgetTypeSelector';
+import {
+    BudgetTypeKey, BUDGET_TYPES, splitLabel, DEFAULT_BUDGET_TYPE,
+} from '../constants/budgetTypes';
 
 const BASE = 'https://dollarseeds-1.onrender.com';
 
@@ -31,10 +37,16 @@ export default function SettingsScreen() {
     const { user } = useAuth();
     const { theme, isDark, toggleTheme } = useTheme();
 
+    const [budgetType, setBudgetType] = useState<BudgetTypeKey>(DEFAULT_BUDGET_TYPE);
+    const [ffPrompted, setFfPrompted] = useState(false);
     const [titheEnabled, setTitheEnabled] = useState(false);
     const [titheRate, setTitheRate] = useState(0.10);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+
+    // Firm Foundation one-time goal suggestion
+    const [showFirmPrompt, setShowFirmPrompt] = useState(false);
+    const [suggestedEmergency, setSuggestedEmergency] = useState<number | null>(null);
 
     useFocusEffect(
         useCallback(() => {
@@ -45,6 +57,8 @@ export default function SettingsScreen() {
                     const res = await axios.get(`${BASE}/settings/`, { params: { user_id: user.id } });
                     if (!active) return;
                     const data = res.data.data ?? {};
+                    setBudgetType((data.budget_type as BudgetTypeKey) ?? DEFAULT_BUDGET_TYPE);
+                    setFfPrompted(!!data.firm_foundation_goals_prompted);
                     setTitheEnabled(!!data.tithe_enabled);
                     setTitheRate(typeof data.tithe_rate === 'number' ? data.tithe_rate : 0.10);
                 } catch (err) {
@@ -57,23 +71,66 @@ export default function SettingsScreen() {
         }, [user?.id])
     );
 
-    const handleToggleTithe = async (value: boolean) => {
-        if (!user?.id) return;
-        // Optimistic update — revert on failure
-        const previous = titheEnabled;
-        setTitheEnabled(value);
+    // Suggest ≈ 3× recent average monthly Needs spend, if trends data exists.
+    const computeEmergencySuggestion = async (): Promise<number | null> => {
+        if (!user?.id) return null;
+        try {
+            const res = await axios.get(`${BASE}/dashboard/trends/`, { params: { user_id: user.id } });
+            const rows: any[] = res.data.data ?? [];
+            const needsMonths = rows.map(r => r.needs).filter((n: number) => n > 0);
+            if (needsMonths.length === 0) return null;
+            const avg = needsMonths.reduce((a: number, b: number) => a + b, 0) / needsMonths.length;
+            return Math.round((avg * 3) / 50) * 50; // round to nearest $50
+        } catch {
+            return null;
+        }
+    };
+
+    const handleSelectBudgetType = async (key: BudgetTypeKey) => {
+        if (!user?.id || key === budgetType) return;
+        const previous = budgetType;
+        setBudgetType(key); // optimistic
         setSaving(true);
         try {
-            await axios.patch(`${BASE}/settings/`, { user_id: user.id, tithe_enabled: value });
+            await axios.patch(`${BASE}/settings/`, { user_id: user.id, budget_type: key });
+            // One-time Firm Foundation goal suggestion
+            if (key === 'firm_foundation' && !ffPrompted) {
+                const suggested = await computeEmergencySuggestion();
+                setSuggestedEmergency(suggested);
+                setShowFirmPrompt(true);
+            }
         } catch (err) {
-            console.error('Settings update error:', err);
-            setTitheEnabled(previous);
+            console.error('Budget type update error:', err);
+            setBudgetType(previous);
         } finally {
             setSaving(false);
         }
     };
 
+    // Mark the suggestion as seen so it never nags again, then optionally route to
+    // the Goals create flow (pre-filled with the emergency fund).
+    const resolveFirmPrompt = async (setUp: boolean) => {
+        setShowFirmPrompt(false);
+        setFfPrompted(true);
+        if (user?.id) {
+            axios.patch(`${BASE}/settings/`, { user_id: user.id, firm_foundation_goals_prompted: true })
+                .catch(err => console.error('Prompt flag update error:', err));
+        }
+        if (setUp) {
+            router.push({
+                pathname: '/(tabs)/piggyBank',
+                params: {
+                    createGoal: '1',
+                    goalType: 'saving',
+                    title: '3-Month Emergency Fund',
+                    amount: suggestedEmergency != null ? String(suggestedEmergency) : '',
+                },
+            } as any);
+        }
+    };
+
     const ratePct = Math.round(titheRate * 100);
+    const activeType = BUDGET_TYPES[budgetType];
 
     return (
         <ScrollView
@@ -81,6 +138,51 @@ export default function SettingsScreen() {
             contentContainerStyle={{ paddingBottom: 60 }}
             showsVerticalScrollIndicator={false}
         >
+            {/* ── Firm Foundation goal suggestion ──────────────────────────── */}
+            <Modal visible={showFirmPrompt} transparent animationType="fade">
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalCard, { backgroundColor: theme.surface, ...shadow(9) }]}>
+                        <View style={[styles.modalIconTile, { backgroundColor: theme.brandSoft }]}>
+                            <IconSparkle size={26} color={theme.brand} />
+                        </View>
+                        <Text style={[styles.modalTitle, { color: theme.ink }]}>
+                            Let's build your foundation
+                        </Text>
+                        <Text style={[styles.modalBody, { color: theme.ink2 }]}>
+                            Firm Foundation is about stability. Two goals make a big difference — and
+                            every dollar toward them is real progress:
+                        </Text>
+
+                        <View style={[styles.suggestRow, { backgroundColor: theme.dangerSoft }]}>
+                            <IconTarget size={18} color={theme.danger} />
+                            <Text style={[styles.suggestText, { color: theme.ink }]}>
+                                A <Text style={{ fontFamily: 'Geist-SemiBold' }}>Debt</Text> goal to pay down what you owe
+                            </Text>
+                        </View>
+                        <View style={[styles.suggestRow, { backgroundColor: theme.goalsSoft }]}>
+                            <IconTarget size={18} color={theme.goals} />
+                            <Text style={[styles.suggestText, { color: theme.ink }]}>
+                                A <Text style={{ fontFamily: 'Geist-SemiBold' }}>3-Month Emergency Fund</Text>
+                                {suggestedEmergency != null ? ` — aim for about $${suggestedEmergency.toLocaleString('en-US')}` : ''}
+                            </Text>
+                        </View>
+
+                        <View style={{ height: 8 }} />
+                        <Button
+                            label="Set these up"
+                            variant="primary"
+                            size="lg"
+                            fullWidth
+                            color={theme.brand}
+                            onPress={() => resolveFirmPrompt(true)}
+                        />
+                        <Pressable onPress={() => resolveFirmPrompt(false)} style={styles.laterBtn}>
+                            <Text style={[styles.laterText, { color: theme.ink3 }]}>Maybe later</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
+
             {/* Header */}
             <View style={[styles.header, { paddingTop: 56 }]}>
                 <Pressable
@@ -103,8 +205,16 @@ export default function SettingsScreen() {
                 <ActivityIndicator size="large" color={theme.brand} style={{ marginTop: 60 }} />
             ) : (
                 <View style={styles.content}>
+                    {/* ── Budget type section ─────────────────────────────── */}
+                    <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>BUDGET SPLIT</Text>
+                    <Text style={[styles.sectionHint, { color: theme.ink2 }]}>
+                        Pick the split that fits your situation. Changes apply to this month and
+                        going forward — past months stay as they were.
+                    </Text>
+                    <BudgetTypeSelector value={budgetType} onSelect={handleSelectBudgetType} disabled={saving} />
+
                     {/* ── Tithing section ─────────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>GIVING</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>GIVING</Text>
 
                     <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                         <View style={styles.rowTop}>
@@ -129,7 +239,7 @@ export default function SettingsScreen() {
                         <View style={[styles.explainBox, { backgroundColor: theme.surfaceSoft, borderTopColor: theme.borderSoft }]}>
                             <Text style={[styles.explainText, { color: theme.ink2 }]}>
                                 When on, {ratePct}% of new income is carved into a Tithe envelope first,
-                                and your 50/30/20 budget is calculated on the remaining {100 - ratePct}%.
+                                and your {splitLabel(activeType)} budget is calculated on the remaining {100 - ratePct}%.
                                 Past months keep their original split.
                             </Text>
                         </View>
@@ -163,6 +273,17 @@ export default function SettingsScreen() {
             )}
         </ScrollView>
     );
+
+    // ── Handlers that need component scope ──────────────────────────────────
+    function handleToggleTithe(value: boolean) {
+        if (!user?.id) return;
+        const previous = titheEnabled;
+        setTitheEnabled(value);
+        setSaving(true);
+        axios.patch(`${BASE}/settings/`, { user_id: user.id, tithe_enabled: value })
+            .catch(err => { console.error('Settings update error:', err); setTitheEnabled(previous); })
+            .finally(() => setSaving(false));
+    }
 }
 
 const styles = StyleSheet.create({
@@ -186,7 +307,14 @@ const styles = StyleSheet.create({
         fontFamily: 'JetBrainsMono-SemiBold',
         fontSize: 11,
         letterSpacing: 1.4,
-        marginBottom: 10,
+        marginBottom: 8,
+        paddingHorizontal: 4,
+    },
+    sectionHint: {
+        fontFamily: 'Geist-Regular',
+        fontSize: 12,
+        lineHeight: 17,
+        marginBottom: 12,
         paddingHorizontal: 4,
     },
     card: { borderRadius: 18, overflow: 'hidden' },
@@ -197,4 +325,28 @@ const styles = StyleSheet.create({
 
     explainBox: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12 },
     explainText: { fontFamily: 'Geist-Regular', fontSize: 12, lineHeight: 18 },
+
+    // Firm Foundation modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 28,
+    },
+    modalCard: { width: '100%', borderRadius: 22, padding: 22, alignItems: 'stretch' },
+    modalIconTile: {
+        width: 52, height: 52, borderRadius: 16,
+        alignItems: 'center', justifyContent: 'center',
+        marginBottom: 12, alignSelf: 'center',
+    },
+    modalTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 24, textAlign: 'center', marginBottom: 6 },
+    modalBody: { fontFamily: 'Geist-Regular', fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 14 },
+    suggestRow: {
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        padding: 12, borderRadius: 12, marginBottom: 8,
+    },
+    suggestText: { flex: 1, fontFamily: 'Geist-Regular', fontSize: 13, lineHeight: 18 },
+    laterBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 4 },
+    laterText: { fontFamily: 'Geist-SemiBold', fontSize: 13 },
 });

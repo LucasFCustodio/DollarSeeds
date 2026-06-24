@@ -35,6 +35,7 @@ import Card from '../../components/ui/Card';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import AnimatedAmount from '../../components/ui/AnimatedAmount';
 import HeroBg from '../../components/ui/HeroBg';
+import { resolveBudgetType, splitLabel } from '../../constants/budgetTypes';
 import {
     IconLeaf, IconSparkle, IconMoon, IconSun, IconBell,
     IconChevronLeft, IconChevronRight,
@@ -52,6 +53,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 interface DashboardData {
     total_income: number;
     tithe?: { enabled: boolean; rate: number; amount: number };
+    budget_type?: { key: string; needs: number; wants: number; savings: number };
     budgets: { needs: number; wants: number; goals: number };
     expenses: { needs: number; wants: number; goals: number };
     compliance_score: { overall: number | null; needs: number; wants: number; goals: number };
@@ -248,6 +250,7 @@ export default function DashboardScreen() {
     // ── Derived values ─────────────────────────────────────────────────────────
     const { total_income, budgets, expenses, compliance_score, tithe } = dashboardData;
     const titheActive = !!tithe?.enabled && (tithe?.amount ?? 0) > 0;
+    const activeBudgetType = resolveBudgetType(dashboardData.budget_type?.key);
     const totalSpent = expenses.needs + expenses.wants + expenses.goals;
     const totalLeft = Math.max(0, total_income - totalSpent);
     const score = compliance_score?.overall ?? null;
@@ -486,9 +489,18 @@ export default function DashboardScreen() {
 
                 {/* Section header */}
                 <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: theme.ink }]}>
-                        How your seeds are growing
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.sectionTitle, { color: theme.ink }]}>
+                            How your seeds are growing
+                        </Text>
+                        {/* Active budget split driving these numbers (from the API) */}
+                        <View style={styles.budgetTypeRow}>
+                            <View style={[styles.budgetTypeDot, { backgroundColor: theme.brand }]} />
+                            <Text style={[styles.budgetTypeText, { color: theme.ink3 }]}>
+                                {activeBudgetType.name} · {splitLabel(activeBudgetType)}
+                            </Text>
+                        </View>
+                    </View>
                     <Pressable
                         onPress={() => router.push('/trends' as any)}
                         style={({ pressed }) => [styles.trendsBtn, pressed && { opacity: 0.7 }]}
@@ -850,6 +862,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 4,
     },
     sectionTitle: { fontFamily: 'Geist-SemiBold', fontSize: 15, letterSpacing: -0.2 },
+    budgetTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
+    budgetTypeDot: { width: 6, height: 6, borderRadius: 3 },
+    budgetTypeText: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11, letterSpacing: 0.2 },
     trendsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     trendsBtnText: { fontFamily: 'Geist-SemiBold', fontSize: 12 },
 

@@ -2,8 +2,8 @@
 // Regenerate after schema changes. The supabase-js client in `lib/supabase.ts`
 // is currently untyped (used only for auth); this file is the canonical schema
 // reference and is kept in sync with the remote DB. Latest change: added
-// `user_settings` table and `income.tithe_enabled` / `income.tithe_rate`
-// (tithing feature).
+// `income.budget_type` and `user_settings.budget_type` /
+// `user_settings.firm_foundation_goals_prompted` (budget-types feature).
 export type Json =
   | string
   | number
@@ -59,6 +59,7 @@ export type Database = {
       income: {
         Row: {
           amount: number | null
+          budget_type: string
           created_at: string
           day: number | null
           id: number
@@ -72,6 +73,7 @@ export type Database = {
         }
         Insert: {
           amount?: number | null
+          budget_type?: string
           created_at?: string
           day?: number | null
           id?: number
@@ -85,6 +87,7 @@ export type Database = {
         }
         Update: {
           amount?: number | null
+          budget_type?: string
           created_at?: string
           day?: number | null
           id?: number
@@ -210,21 +213,27 @@ export type Database = {
       }
       user_settings: {
         Row: {
+          budget_type: string
           created_at: string
+          firm_foundation_goals_prompted: boolean
           tithe_enabled: boolean
           tithe_rate: number
           updated_at: string
           user_id: string
         }
         Insert: {
+          budget_type?: string
           created_at?: string
+          firm_foundation_goals_prompted?: boolean
           tithe_enabled?: boolean
           tithe_rate?: number
           updated_at?: string
           user_id: string
         }
         Update: {
+          budget_type?: string
           created_at?: string
+          firm_foundation_goals_prompted?: boolean
           tithe_enabled?: boolean
           tithe_rate?: number
           updated_at?: string
