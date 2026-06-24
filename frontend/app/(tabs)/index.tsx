@@ -54,6 +54,9 @@ interface DashboardData {
     total_income: number;
     tithe?: { enabled: boolean; rate: number; amount: number };
     budget_type?: { key: string; needs: number; wants: number; savings: number };
+    // Rollover (end-of-month close-out) state for the displayed month. Purely
+    // informational — source='rollover' is excluded from every budget/score number.
+    rollover?: { closed: boolean; closed_at: string | null; amount: number; target: number };
     budgets: { needs: number; wants: number; goals: number };
     expenses: { needs: number; wants: number; goals: number };
     compliance_score: { overall: number | null; needs: number; wants: number; goals: number };
@@ -125,6 +128,10 @@ export default function DashboardScreen() {
     // Accordion state — which category is expanded
     const [expandedCat, setExpandedCat] = useState<'needs' | 'wants' | 'goals' | null>(null);
 
+    // Rollover close-out state
+    const [closingMonth, setClosingMonth] = useState(false);
+    const [dismissedCloseout, setDismissedCloseout] = useState<Set<string>>(new Set());
+
     // Real transaction rows for the expanded accordion (null = not yet fetched)
     const [categoryTxs, setCategoryTxs] = useState<Record<'needs' | 'wants' | 'goals', TxItem[] | null>>({
         needs: null, wants: null, goals: null,
@@ -181,6 +188,34 @@ export default function DashboardScreen() {
             }
         } catch (error) {
             if (error instanceof Error) console.error('Dashboard fetch error:', error.message);
+        }
+    };
+
+    const handleCloseMonth = async () => {
+        if (!user?.id || closingMonth) return;
+        setClosingMonth(true);
+        try {
+            const BASE = 'https://dollarseeds-1.onrender.com';
+            await axios.post(`${BASE}/rollover/close/`, { user_id: user.id, month: currentMonth });
+            await fetchDashboardData();
+        } catch (err) {
+            console.error('Close month error:', err);
+        } finally {
+            setClosingMonth(false);
+        }
+    };
+
+    const handleReopenMonth = async () => {
+        if (!user?.id || closingMonth) return;
+        setClosingMonth(true);
+        try {
+            const BASE = 'https://dollarseeds-1.onrender.com';
+            await axios.post(`${BASE}/rollover/reopen/`, { user_id: user.id, month: currentMonth });
+            await fetchDashboardData();
+        } catch (err) {
+            console.error('Reopen month error:', err);
+        } finally {
+            setClosingMonth(false);
         }
     };
 
@@ -251,6 +286,22 @@ export default function DashboardScreen() {
     const { total_income, budgets, expenses, compliance_score, tithe } = dashboardData;
     const titheActive = !!tithe?.enabled && (tithe?.amount ?? 0) > 0;
     const activeBudgetType = resolveBudgetType(dashboardData.budget_type?.key);
+
+    // ── Rollover close-out visibility ──────────────────────────────────────────
+    // A month is "closeable" once it's over. We never prompt for the in-progress
+    // month; for the month that just ended we wait until a few days in (≥ 4th), and
+    // older un-closed months can be closed anytime they have income.
+    const rollover = dashboardData.rollover;
+    const realMonthIdx = new Date().getMonth();
+    const prevMonthIdx = (realMonthIdx + 11) % 12;
+    const isDisplayedMonthClosed = !!rollover?.closed;
+    const showClosePrompt =
+        !!rollover &&
+        !rollover.closed &&
+        monthIndex !== realMonthIdx &&             // not the in-progress month
+        total_income > 0 &&                        // hides empty future months
+        !dismissedCloseout.has(currentMonth) &&
+        !(monthIndex === prevMonthIdx && new Date().getDate() < 4); // give the new month a few days
     const totalSpent = expenses.needs + expenses.wants + expenses.goals;
     const totalLeft = Math.max(0, total_income - totalSpent);
     const score = compliance_score?.overall ?? null;
@@ -464,6 +515,67 @@ export default function DashboardScreen() {
 
             {/* ── Content area (overlaps hero by 16px) ──────────────────── */}
             <View style={[styles.contentArea, { marginTop: -16 }]}>
+
+                {/* Close-out prompt — nudge to roll last month's leftover into savings */}
+                {showClosePrompt && (
+                    <View style={[styles.rolloverCard, { backgroundColor: theme.surface, borderColor: theme.brand2, ...shadow(7) }]}>
+                        <View style={styles.rolloverHeaderRow}>
+                            <View style={[styles.rolloverIconTile, { backgroundColor: theme.brandSoft }]}>
+                                <IconSavings size={22} color={theme.brand} accent={theme.brand2} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.rolloverTitle, { color: theme.ink }]}>
+                                    Ready to close out {currentMonth}?
+                                </Text>
+                                <Text style={[styles.rolloverSub, { color: theme.ink2 }]}>
+                                    You have ${fmt$(rollover?.target ?? 0, 2)} left to move into General Savings.
+                                </Text>
+                            </View>
+                            <Pressable
+                                onPress={() => setDismissedCloseout(prev => new Set(prev).add(currentMonth))}
+                                hitSlop={10}
+                                style={({ pressed }) => pressed && { opacity: 0.6 }}
+                            >
+                                <Text style={[styles.rolloverDismiss, { color: theme.ink3 }]}>✕</Text>
+                            </Pressable>
+                        </View>
+                        <Button
+                            label={closingMonth ? 'Closing…' : `Close out & save $${fmt$(rollover?.target ?? 0)}`}
+                            variant="primary"
+                            size="md"
+                            fullWidth
+                            color={theme.brand}
+                            disabled={closingMonth}
+                            onPress={handleCloseMonth}
+                        />
+                    </View>
+                )}
+
+                {/* Closed-month banner — show the rolled-over amount + a subtle reopen */}
+                {isDisplayedMonthClosed && (
+                    <View style={[styles.rolloverClosedCard, { backgroundColor: theme.surfaceSoft, borderColor: theme.borderSoft }]}>
+                        <View style={[styles.rolloverIconTile, { backgroundColor: theme.goalsSoft }]}>
+                            <IconSavings size={20} color={theme.goals} accent={theme.brand2} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.rolloverClosedTitle, { color: theme.ink }]}>
+                                {currentMonth} is closed
+                            </Text>
+                            <Text style={[styles.rolloverSub, { color: theme.ink2 }]}>
+                                ${fmt$(rollover?.amount ?? 0, 2)} rolled into General Savings.
+                            </Text>
+                        </View>
+                        <Pressable
+                            onPress={handleReopenMonth}
+                            disabled={closingMonth}
+                            style={({ pressed }) => [styles.reopenBtn, { borderColor: theme.border }, pressed && { opacity: 0.6 }]}
+                        >
+                            <Text style={[styles.reopenBtnText, { color: theme.brand }]}>
+                                {closingMonth ? '…' : 'Reopen'}
+                            </Text>
+                        </Pressable>
+                    </View>
+                )}
 
                 {/* Scripture banner */}
                 <Card
@@ -836,6 +948,32 @@ const styles = StyleSheet.create({
 
     // Content area
     contentArea: { paddingHorizontal: 18 },
+
+    // Rollover close-out card
+    rolloverCard: {
+        borderRadius: 18,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1.5,
+        gap: 14,
+    },
+    rolloverHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    rolloverIconTile: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+    rolloverTitle: { fontFamily: 'Geist-SemiBold', fontSize: 15, letterSpacing: -0.2 },
+    rolloverSub: { fontFamily: 'Geist-Regular', fontSize: 12, marginTop: 3, lineHeight: 17 },
+    rolloverDismiss: { fontFamily: 'Geist-SemiBold', fontSize: 14, paddingHorizontal: 2 },
+    rolloverClosedCard: {
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 16,
+        borderWidth: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    rolloverClosedTitle: { fontFamily: 'Geist-SemiBold', fontSize: 14, letterSpacing: -0.2 },
+    reopenBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
+    reopenBtnText: { fontFamily: 'Geist-SemiBold', fontSize: 12 },
 
     // Scripture banner
     scriptureBanner: { marginBottom: 18 },

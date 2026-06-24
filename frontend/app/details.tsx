@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import axios from 'axios';
@@ -34,9 +34,15 @@ export default function DetailsScreen() {
     const { user } = useAuth();
     const { theme } = useTheme();
     const { category, month, type } = useLocalSearchParams();
+    const monthLabel = Array.isArray(month) ? month[0] : month;
 
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [income, setIncome] = useState<Income[]>([]);
+
+    // A 409 means the month is closed (rollover feature) and is read-only until reopened.
+    const isClosedMonthError = (e: any) => e?.response?.status === 409;
+    const showClosedMonthAlert = () =>
+        Alert.alert('Month closed', `Cannot delete from closed month. Reopen ${monthLabel} to edit`);
 
     useEffect(() => {
         if (type === 'expense') fetchDetailedExpenses();
@@ -94,7 +100,10 @@ export default function DetailsScreen() {
                 await axios.delete(`${BASE}/expenses/delete/${item.id}?user_id=${user?.id}`);
             }
             setExpenses(prev => prev.filter(e => !(e.id === item.id && e.kind === item.kind)));
-        } catch (e) { console.error('Error deleting item:', e); }
+        } catch (e) {
+            if (isClosedMonthError(e)) showClosedMonthAlert();
+            else console.error('Error deleting item:', e);
+        }
     };
 
     const fetchDetailedIncome = async () => {
@@ -111,7 +120,10 @@ export default function DetailsScreen() {
         try {
             await axios.delete(`https://dollarseeds-1.onrender.com/income/delete/${id}?user_id=${user?.id}`);
             setIncome(prev => prev.filter(i => i.id !== id));
-        } catch (e) { console.error('Error deleting income:', e); }
+        } catch (e) {
+            if (isClosedMonthError(e)) showClosedMonthAlert();
+            else console.error('Error deleting income:', e);
+        }
     };
 
     const accentColor = getCategoryColor();

@@ -316,9 +316,23 @@ def get_dashboard_data(current_month: str, user_id: str):
 
     overall_score = round((needs_score + wants_score + goals_score) / 3, 1) if total_income > 0 else None
 
+    # Rollover state for THIS month (source='rollover' is excluded from every
+    # number above, so this is purely informational and can never move the score).
+    general_id = _ensure_general_savings(user_id)
+    roll_entry = _gs_rollover_entry(user_id, current_month, general_id)
+    roll_target, _, _ = _compute_target_rollover(user_id, current_month, settings)
+    st = _month_status(user_id, current_month)
+    rollover_info = {
+        "closed": bool(st and st.get("closed_at")),
+        "closed_at": st.get("closed_at") if st else None,
+        "amount": _r(roll_entry["amount"]) if roll_entry else 0.0,
+        "target": roll_target,
+    }
+
     return {
         "month": current_month,
         "total_income": total_income,
+        "rollover": rollover_info,
         "tithe": {
             "enabled": tithe["enabled"],
             "rate": tithe["rate"],
@@ -350,6 +364,7 @@ def get_dashboard_data(current_month: str, user_id: str):
 
 @app.post("/expenses/")
 def create_expense(expense: Expense):
+    _assert_month_open(expense.user_id, expense.month)
     response = supabase.table("expenses").insert(expense.model_dump()).execute()
     return {"message": "Expense successfully added to database!", "data": response.data}
 
@@ -358,6 +373,7 @@ def create_income(income: Income):
     # Snapshot the user's CURRENT tithe setting onto the row. This freezes the month's
     # split: even if the user later toggles tithing, past income keeps its original
     # treatment. The live current month is still computed from user_settings.
+    _assert_month_open(income.user_id, income.month)
     settings = _get_user_settings(income.user_id)
     payload = income.model_dump()
     payload["tithe_enabled"] = bool(settings.get("tithe_enabled"))
@@ -409,11 +425,17 @@ def get_expense_details(month: str, category: str, user_id: str):
 
 @app.delete("/expenses/delete/{id}")
 def delete_expense(id: int, user_id: str):
+    row = supabase.table("expenses").select("month").eq("id", id).eq("user_id", user_id).execute()
+    if row.data:
+        _assert_month_open(user_id, row.data[0].get("month"))
     response = supabase.table("expenses").delete().eq("id", id).eq("user_id", user_id).execute()
     return response.data
 
 @app.delete("/income/delete/{id}")
 def delete_income(id: int, user_id: str):
+    row = supabase.table("income").select("month").eq("id", id).eq("user_id", user_id).execute()
+    if row.data:
+        _assert_month_open(user_id, row.data[0].get("month"))
     response = supabase.table("income").delete().eq("id", id).eq("user_id", user_id).execute()
     return response.data
 
@@ -433,6 +455,7 @@ def get_savings_balance(user_id: str):
 
 @app.post("/savings/transaction/")
 def create_savings_transaction(entry: SavingsEntry):
+    _assert_month_open(entry.user_id, entry.month)
     response = supabase.table("savings_transactions").insert(entry.model_dump()).execute()
     return {"message": "Savings transaction recorded.", "data": response.data}
 
@@ -440,6 +463,7 @@ def create_savings_transaction(entry: SavingsEntry):
 def transfer_from_general(transfer: SavingsTransfer):
     """Move money from General Savings into a specific goal.
     Creates two transactions with source='transfer' so neither affects the Goals budget."""
+    _assert_month_open(transfer.user_id, transfer.month)
     # Withdrawal from General Savings
     supabase.table("savings_transactions").insert({
         "user_id": transfer.user_id,
@@ -474,6 +498,9 @@ def get_savings_history(user_id: str, month: str = None):
 
 @app.delete("/savings/transaction/{id}")
 def delete_savings_transaction(id: int, user_id: str):
+    row = supabase.table("savings_transactions").select("month").eq("id", id).eq("user_id", user_id).execute()
+    if row.data:
+        _assert_month_open(user_id, row.data[0].get("month"))
     response = supabase.table("savings_transactions").delete().eq("id", id).eq("user_id", user_id).execute()
     return response.data
 
@@ -512,7 +539,24 @@ def get_savings_goals(user_id: str, goal_type: Optional[str] = None):
     if goal_type in ("saving", "debt"):
         query = query.eq("goal_type", goal_type)
     goals_res = query.order("created_at", desc=True).execute()
-    return {"data": _with_allocated(goals_res.data, user_id)}
+    return {"data": _decorate_reconciliation(_with_allocated(goals_res.data, user_id), user_id)}
+
+def _decorate_reconciliation(goals: list, user_id: str) -> list:
+    """The Reconciliation goal's funded math is owed/repaid (not the generic
+    deposits−withdrawals _with_allocated gives), so override its fields:
+    target_amount = owed, allocated_amount = repaid, plus an `outstanding` field.
+    The frontend renders it as a special auto-generated card and hides it when
+    outstanding is 0. It stays in the list so users can pay it down like any debt
+    goal (normal source='income' deposits)."""
+    if not any(g.get("is_reconciliation") for g in goals):
+        return goals
+    owed, repaid, outstanding, _ = _recon_summary(user_id)
+    for g in goals:
+        if g.get("is_reconciliation"):
+            g["target_amount"] = owed
+            g["allocated_amount"] = repaid
+            g["outstanding"] = outstanding
+    return goals
 
 @app.get("/savings/goal/completed/")
 def get_completed_goals(user_id: str, goal_type: Optional[str] = None):
@@ -538,11 +582,13 @@ def create_savings_goal(goal: SavingsGoal):
 @app.delete("/savings/goal/{id}")
 def delete_savings_goal(id: int, user_id: str, current_month: str):
     # Block deletion of General Savings
-    goal_res = supabase.table("savings_goals").select("is_general").eq("id", id).eq("user_id", user_id).execute()
+    goal_res = supabase.table("savings_goals").select("is_general, is_reconciliation").eq("id", id).eq("user_id", user_id).execute()
     if not goal_res.data:
         raise HTTPException(status_code=404, detail="Goal not found.")
     if goal_res.data[0].get("is_general"):
         raise HTTPException(status_code=400, detail="General Savings cannot be deleted.")
+    if goal_res.data[0].get("is_reconciliation"):
+        raise HTTPException(status_code=400, detail="The Reconciliation goal is managed automatically and cannot be deleted.")
 
     # Ensure General Savings exists to receive redistributed funds
     general_id = _ensure_general_savings(user_id)
@@ -577,6 +623,269 @@ def delete_savings_goal(id: int, user_id: str, current_month: str):
     # Now safe to delete the goal itself
     supabase.table("savings_goals").delete().eq("id", id).eq("user_id", user_id).execute()
     return {"message": "Goal deleted and funds redistributed."}
+
+
+# ─── End-of-month rollover ────────────────────────────────────────────────────
+# When a month is "closed out", its leftover (income not spent or already saved)
+# moves into General Savings as a SINGLE adjustable rollover entry, recomputed
+# deterministically by reconcile_month whenever that month changes. Late edits to
+# a closed month are reconciled safely against an auto-managed Reconciliation debt
+# goal. ISOLATION: every transaction this feature writes uses source='rollover',
+# which the budget/score math excludes (those paths allowlist source='income'),
+# so a rollover bug can only ever move a savings balance — never the budgeting.
+ROLLOVER_SOURCE = "rollover"
+RECON_TITLE = "Reconciliation"
+
+def _r(x) -> float:
+    """Round to cents to keep float dust out of the ledger."""
+    return round(float(x or 0.0), 2)
+
+def _month_status(user_id: str, month: str) -> Optional[dict]:
+    res = supabase.table("month_status").select("*").eq("user_id", user_id).eq("month", month).execute()
+    return res.data[0] if res.data else None
+
+def _is_month_closed(user_id: str, month: str) -> bool:
+    st = _month_status(user_id, month)
+    return bool(st and st.get("closed_at"))
+
+def _assert_month_open(user_id: str, month: Optional[str]):
+    """Closed months are read-only. Edit routes call this so a user must explicitly
+    Reopen before changing a closed month (the safer of the two options in the spec).
+    Old clients never close a month, so this guard is inert for them."""
+    if month and _is_month_closed(user_id, month):
+        raise HTTPException(status_code=409, detail=f"{month} is closed. Reopen it before making changes.")
+
+def _sum_expenses(user_id: str, month: str, category: str) -> float:
+    res = supabase.table("expenses").select("amount").eq("user_id", user_id).eq("month", month).eq("category", category).execute()
+    return sum(r["amount"] for r in res.data)
+
+def _rollover_income_rows(user_id: str, month: str) -> list:
+    return supabase.table("income").select("amount, day, month, tithe_enabled, tithe_rate, budget_type") \
+        .eq("user_id", user_id).eq("month", month).execute().data
+
+def _goal_balance(user_id: str, goal_id: Optional[int]) -> float:
+    """Liquid balance held in a single goal = deposits − withdrawals (all sources)."""
+    if goal_id is None:
+        return 0.0
+    res = supabase.table("savings_transactions").select("amount, type").eq("user_id", user_id).eq("goal_id", goal_id).execute()
+    return _r(sum(t["amount"] if t["type"] == "deposit" else -t["amount"] for t in res.data))
+
+def _compute_target_rollover(user_id: str, month: str, settings: Optional[dict] = None):
+    """Pure function of the month's data: the leftover the dashboard implies.
+
+    budgetable is computed with the SAME _month_tithe the dashboard uses (live
+    setting for the current month, per-row snapshot for past months) and the goals
+    actual is the SAME (legacy 'Goals' expenses + income-sourced deposits), so the
+    rollover amount always equals the "leftover" the user actually sees — they can
+    never diverge. The budget-type split does NOT affect the target (it's NET
+    leftover); the split is only used for the per-category breakdown shown in the UI.
+
+    Returns (target_rollover, breakdown, budgetable).
+    """
+    settings = settings or _get_user_settings(user_id)
+    irows = _rollover_income_rows(user_id, month)
+    total_income = sum(r["amount"] for r in irows)
+    budgetable = _month_tithe(month, total_income, irows, settings)["budgetable"]
+    bt = BUDGET_TYPES[_month_budget_type(month, irows, settings)]
+
+    needs_spent = _sum_expenses(user_id, month, "Needs")
+    wants_spent = _sum_expenses(user_id, month, "Wants")
+    # Goals actual EXACTLY as get_dashboard_data computes it: legacy 'Goals'
+    # expenses + income-sourced savings deposits (source='income' only; transfers
+    # and rollover are excluded). For any month closeable today there are no new
+    # 'Goals' expenses, so this equals "goals income deposits" — matching both the
+    # spec's formula and the dashboard.
+    goals_exp = _sum_expenses(user_id, month, "Goals")
+    gdep = supabase.table("savings_transactions").select("amount") \
+        .eq("user_id", user_id).eq("month", month).eq("type", "deposit").eq("source", "income").execute()
+    goals_spent = goals_exp + sum(r["amount"] for r in gdep.data)
+
+    target = max(0.0, _r(budgetable - needs_spent - wants_spent - goals_spent))
+    breakdown = {
+        "needs": {"budget": _r(budgetable * bt["needs"]), "spent": _r(needs_spent), "left": _r(budgetable * bt["needs"] - needs_spent)},
+        "wants": {"budget": _r(budgetable * bt["wants"]), "spent": _r(wants_spent), "left": _r(budgetable * bt["wants"] - wants_spent)},
+        "goals": {"budget": _r(budgetable * bt["savings"]), "spent": _r(goals_spent), "left": _r(budgetable * bt["savings"] - goals_spent)},
+    }
+    return target, breakdown, _r(budgetable)
+
+def _gs_rollover_entry(user_id: str, month: str, general_id: int) -> Optional[dict]:
+    """The single GS rollover deposit for a month (updated in place), or None."""
+    res = supabase.table("savings_transactions").select("*") \
+        .eq("user_id", user_id).eq("month", month).eq("goal_id", general_id) \
+        .eq("source", ROLLOVER_SOURCE).eq("type", "deposit").execute()
+    return res.data[0] if res.data else None
+
+def _set_gs_rollover(user_id: str, month: str, general_id: int, entry: Optional[dict], new_amount: float, day: int):
+    """Upsert the month's one GS rollover entry. amount>0 is enforced by a CHECK,
+    so a zero target means we DELETE the entry rather than store 0."""
+    new_amount = _r(new_amount)
+    if new_amount <= 0.005:
+        if entry:
+            supabase.table("savings_transactions").delete().eq("id", entry["id"]).eq("user_id", user_id).execute()
+        return
+    if entry:
+        supabase.table("savings_transactions").update({"amount": new_amount}).eq("id", entry["id"]).eq("user_id", user_id).execute()
+    else:
+        supabase.table("savings_transactions").insert({
+            "user_id": user_id, "title": f"Rollover — {month}", "amount": new_amount,
+            "type": "deposit", "goal_id": general_id, "source": ROLLOVER_SOURCE,
+            "day": day, "month": month,
+        }).execute()
+
+def _recon_goal(user_id: str) -> Optional[dict]:
+    res = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("is_reconciliation", True).execute()
+    return res.data[0] if res.data else None
+
+def _ensure_reconciliation_goal(user_id: str) -> int:
+    """Ensure the auto-managed Reconciliation debt goal exists. One per user,
+    not user-creatable/deletable. Mirrors _ensure_general_savings."""
+    g = _recon_goal(user_id)
+    if g:
+        return g["id"]
+    ins = supabase.table("savings_goals").insert({
+        "user_id": user_id, "title": RECON_TITLE, "goal_type": "debt",
+        "is_reconciliation": True, "target_amount": 0.0, "completed": False,
+    }).execute()
+    return ins.data[0]["id"]
+
+def _recon_txns(user_id: str, recon_id: Optional[int]) -> list:
+    if recon_id is None:
+        return []
+    return supabase.table("savings_transactions").select("amount, type, source, month") \
+        .eq("user_id", user_id).eq("goal_id", recon_id).execute().data
+
+def _recon_month_booked(user_id: str, month: str, recon_id: Optional[int]) -> float:
+    """THIS month's net reconciliation debt booked via the rollover mechanism =
+    Σ(source='rollover' withdrawals) − Σ(source='rollover' deposits) for the month.
+
+    Pure per-month: user income repayments (source='income') are intentionally
+    EXCLUDED, so paying down the debt manually never makes a later reconcile think
+    leftover increased and claw money back. This is what keeps reconcile a pure
+    function of the month's own transactions."""
+    if recon_id is None:
+        return 0.0
+    rows = [t for t in _recon_txns(user_id, recon_id) if t.get("month") == month and t.get("source") == ROLLOVER_SOURCE]
+    withdr = sum(t["amount"] for t in rows if t["type"] == "withdrawal")
+    dep = sum(t["amount"] for t in rows if t["type"] == "deposit")
+    return _r(withdr - dep)
+
+def _recon_summary(user_id: str, recon_id: Optional[int] = None):
+    """Returns (owed, repaid, outstanding, recon_id) for the Reconciliation goal.
+    owed   = Σ rollover withdrawals (debt the reconcile booked)
+    repaid = Σ all deposits (reconcile auto-repay 'rollover' + user 'income' payments)
+    outstanding = max(0, owed − repaid)."""
+    if recon_id is None:
+        g = _recon_goal(user_id)
+        recon_id = g["id"] if g else None
+    rows = _recon_txns(user_id, recon_id)
+    owed = sum(t["amount"] for t in rows if t["type"] == "withdrawal" and t["source"] == ROLLOVER_SOURCE)
+    repaid = sum(t["amount"] for t in rows if t["type"] == "deposit")
+    return _r(owed), _r(repaid), _r(max(0.0, owed - repaid)), recon_id
+
+def reconcile_month(user_id: str, month: str) -> float:
+    """Single source of truth for a month's rollover. Idempotent and convergent:
+    re-running with no data change is a no-op. Drives
+        net = (GS rollover entry) − (this month's booked reconciliation debt)
+    to target_rollover. NEVER touches any user-created goal — shortfalls land only
+    on the Reconciliation debt goal.
+
+    NOTE: the spec's prose used delta = current_entry − target, but that is
+    inconsistent with its own Scenario 4 (where an outstanding debt must also be
+    repaid when leftover recovers). We drive the NET (entry − booked-debt) to
+    target instead, which produces the scenario's stated results and stays idempotent.
+    """
+    settings = _get_user_settings(user_id)
+    target, _, _ = _compute_target_rollover(user_id, month, settings)
+
+    general_id = _ensure_general_savings(user_id)
+    entry = _gs_rollover_entry(user_id, month, general_id)
+    R = _r(entry["amount"]) if entry else 0.0
+
+    recon = _recon_goal(user_id)
+    recon_id = recon["id"] if recon else None
+    B = _recon_month_booked(user_id, month, recon_id)
+
+    net_current = _r(R - B)
+    need = _r(target - net_current)
+    day = datetime.datetime.now().day if month == _current_month_name() else 28
+
+    if abs(need) < 0.005:
+        pass  # already converged
+    elif need > 0:
+        # Leftover recovered: repay THIS month's booked debt FIRST, then top up GS.
+        pay = min(need, B)
+        if pay > 0.005:
+            recon_id = recon_id or _ensure_reconciliation_goal(user_id)
+            supabase.table("savings_transactions").insert({
+                "user_id": user_id, "title": f"Rollover recovery — {month}", "amount": _r(pay),
+                "type": "deposit", "goal_id": recon_id, "source": ROLLOVER_SOURCE, "day": day, "month": month,
+            }).execute()
+        remainder = _r(need - pay)
+        if remainder > 0.005:
+            _set_gs_rollover(user_id, month, general_id, entry, _r(R + remainder), day)
+    else:
+        # Leftover shrank: claw back, but General Savings may never go negative.
+        A = _r(-need)
+        gs_balance = _goal_balance(user_id, general_id)
+        reducible = max(0.0, min(A, R, gs_balance))
+        if reducible > 0.005:
+            _set_gs_rollover(user_id, month, general_id, entry, _r(R - reducible), day)
+        shortfall = _r(A - reducible)
+        if shortfall > 0.005:
+            recon_id = recon_id or _ensure_reconciliation_goal(user_id)
+            supabase.table("savings_transactions").insert({
+                "user_id": user_id, "title": f"Spent after close — {month}", "amount": _r(shortfall),
+                "type": "withdrawal", "goal_id": recon_id, "source": ROLLOVER_SOURCE, "day": day, "month": month,
+            }).execute()
+
+    # Keep the Reconciliation goal's target_amount in sync with total owed so it
+    # renders sensibly anywhere a generic debt goal would (progress = repaid/owed).
+    if recon_id:
+        owed, _repaid, _out, _ = _recon_summary(user_id, recon_id)
+        supabase.table("savings_goals").update({"target_amount": owed}).eq("id", recon_id).eq("user_id", user_id).execute()
+
+    return target
+
+
+@app.get("/rollover/preview/")
+def rollover_preview(user_id: str, month: str):
+    """Target rollover + per-category breakdown (split used for display only) and
+    whether the month is closed. Does not mutate anything."""
+    target, breakdown, budgetable = _compute_target_rollover(user_id, month)
+    st = _month_status(user_id, month)
+    return {
+        "month": month,
+        "closed": bool(st and st.get("closed_at")),
+        "closed_at": st.get("closed_at") if st else None,
+        "target_rollover": target,
+        "budgetable": budgetable,
+        "breakdown": breakdown,
+    }
+
+class RolloverAction(BaseModel):
+    user_id: str
+    month: str
+
+@app.post("/rollover/close/")
+def rollover_close(action: RolloverAction):
+    """Reconcile the month (first close defines the rollover entry) then mark it
+    closed. Safe to call repeatedly — reconcile is idempotent."""
+    moved = reconcile_month(action.user_id, action.month)
+    supabase.table("month_status").upsert({
+        "user_id": action.user_id, "month": action.month,
+        "closed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }).execute()
+    return {"message": f"{action.month} closed.", "month": action.month, "rolled_over": moved}
+
+@app.post("/rollover/reopen/")
+def rollover_reopen(action: RolloverAction):
+    """Unlock a closed month for editing. Recompute happens on the next close
+    (or whenever reconcile_month runs), the single deterministic recompute point."""
+    supabase.table("month_status").upsert({
+        "user_id": action.user_id, "month": action.month, "closed_at": None,
+    }).execute()
+    return {"message": f"{action.month} reopened.", "month": action.month}
+
 
 class LessonRating(BaseModel):
     user_id: str

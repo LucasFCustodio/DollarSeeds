@@ -54,6 +54,10 @@ type Goal = {
     allocated_amount: number; created_at: string;
     is_general: boolean;
     goal_type: 'saving' | 'debt';
+    // Auto-managed Reconciliation debt goal (rollover feature). When present,
+    // `outstanding` = money you'd saved but later spent, still to be repaid.
+    is_reconciliation?: boolean;
+    outstanding?: number;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -85,6 +89,7 @@ export default function PiggyBankScreen() {
     const [history, setHistory]               = useState<Transaction[]>([]);
     const [goals, setGoals]                   = useState<Goal[]>([]);        // specific goals only
     const [generalGoal, setGeneralGoal]       = useState<Goal | null>(null); // pinned General Savings
+    const [reconGoal, setReconGoal]           = useState<Goal | null>(null); // auto-managed Reconciliation debt
     const [completedGoals, setCompletedGoals] = useState<Goal[]>([]);
 
     // ── UI state ──────────────────────────────────────────────────────────────
@@ -118,7 +123,10 @@ export default function PiggyBankScreen() {
             setHistory(histRes.data.data);
             const allGoals: Goal[] = goalRes.data.data ?? [];
             setGeneralGoal(allGoals.find(g => g.is_general) ?? null);
-            setGoals(allGoals.filter(g => !g.is_general));
+            setReconGoal(allGoals.find(g => g.is_reconciliation) ?? null);
+            // Specific goals exclude both the pinned General Savings and the
+            // auto-managed Reconciliation goal (each rendered in its own card).
+            setGoals(allGoals.filter(g => !g.is_general && !g.is_reconciliation));
             setCompletedGoals(completedRes.data.data);
         } catch (e) { console.error('Savings fetch error:', e); }
     };
@@ -143,9 +151,15 @@ export default function PiggyBankScreen() {
     // All goals shown as chips in the form (General Savings first, then specific goals).
     // Both savings and debt goals are valid deposit/transfer destinations, so this
     // intentionally includes every non-general goal regardless of goal_type.
+    // The Reconciliation goal only matters while there's a balance still owed.
+    const reconOutstanding = reconGoal?.outstanding ?? 0;
+    const reconActive = !!reconGoal && reconOutstanding > 0;
+
     const allGoalsForChips: Goal[] = [
         ...(generalGoal ? [generalGoal] : []),
         ...goals,
+        // Allow paying down the Reconciliation debt like any other goal.
+        ...(reconActive ? [reconGoal as Goal] : []),
     ];
 
     // Split specific goals by type for the two grouped sections in the Active view.
@@ -221,8 +235,9 @@ export default function PiggyBankScreen() {
                     goal_id: txGoalId ?? null,
                     source: 'income',
                 });
-                // Mark goal complete on withdrawal (not for General Savings)
-                if (activeForm === 'withdrawal' && selectedGoal && !selectedGoal.is_general) {
+                // Mark goal complete on withdrawal (not for General Savings or the
+                // auto-managed Reconciliation goal, which is never "completed" by hand)
+                if (activeForm === 'withdrawal' && selectedGoal && !selectedGoal.is_general && !selectedGoal.is_reconciliation) {
                     await axios.patch(`${BASE}/savings/goal/${selectedGoal.id}/complete?user_id=${user?.id}`);
                 }
             }
@@ -269,13 +284,19 @@ export default function PiggyBankScreen() {
         }
     };
 
-    const deleteTransaction = async (id: number) => {
+    // A 409 means the transaction's month is closed (rollover feature) — read-only
+    // until the user reopens it from the dashboard.
+    const deleteTransaction = async (tx: Transaction) => {
         try {
-            await axios.delete(`${BASE}/savings/transaction/${id}?user_id=${user?.id}`);
-            setHistory(prev => prev.filter(t => t.id !== id));
+            await axios.delete(`${BASE}/savings/transaction/${tx.id}?user_id=${user?.id}`);
+            setHistory(prev => prev.filter(t => t.id !== tx.id));
             const balRes = await axios.get(`${BASE}/savings/balance/?user_id=${user?.id}`);
             setBalance(balRes.data.balance);
-        } catch (e) { console.error('Delete transaction error:', e); }
+        } catch (e: any) {
+            if (e?.response?.status === 409) {
+                Alert.alert('Month closed', `Cannot delete from closed month. Reopen ${tx.month} to edit`);
+            } else { console.error('Delete transaction error:', e); }
+        }
     };
 
     const deleteGoal = async (id: number) => {
@@ -285,7 +306,11 @@ export default function PiggyBankScreen() {
             );
             // Full refresh so General Savings balance updates if funds were redistributed
             fetchData();
-        } catch (e) { console.error('Delete goal error:', e); }
+        } catch (e: any) {
+            if (e?.response?.status === 409) {
+                Alert.alert('Month closed', `Cannot delete from closed month. Reopen ${currentMonth} to edit`);
+            } else { console.error('Delete goal error:', e); }
+        }
     };
 
     // Renders one active goal card. Savings and debt goals use identical mechanics
@@ -672,7 +697,49 @@ export default function PiggyBankScreen() {
                             DEBT
                         </Text>
 
-                        {debtGoals.length === 0 ? (
+                        {/* Auto-managed Reconciliation goal — shown only while a balance
+                            is owed. Money you'd already saved but later spent. */}
+                        {reconActive && reconGoal && (() => {
+                            const owed = reconGoal.target_amount ?? 0;
+                            const repaid = reconGoal.allocated_amount ?? 0;
+                            const pct = owed > 0 ? Math.min(100, (repaid / owed) * 100) : 0;
+                            return (
+                                <Card theme={theme} depth={5} padding={16} style={[styles.reconCard, { borderColor: theme.harvest }]}>
+                                    <View style={styles.goalHeader}>
+                                        <View style={[styles.goalIconTile, { backgroundColor: theme.dangerSoft }]}>
+                                            <IconArrow size={20} color={theme.danger} dir="up" />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <View style={styles.reconTitleRow}>
+                                                <Text style={[styles.goalTitle, { color: theme.ink }]}>Reconciliation</Text>
+                                                <View style={[styles.autoBadge, { backgroundColor: theme.harvest }]}>
+                                                    <Text style={[styles.autoBadgeText, { color: theme.brand }]}>AUTO</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={[styles.reconExplain, { color: theme.ink2 }]}>
+                                                Money you'd already saved but later spent — repay to restore your savings.
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.goalAmtRow}>
+                                        <Text style={[styles.goalSaved, { color: theme.danger }]}>
+                                            ${fmtAmt(reconOutstanding)}
+                                        </Text>
+                                        <Text style={[styles.goalOf, { color: theme.ink3 }]}>
+                                            {' '}left to repay · ${fmtAmt(repaid)} of ${fmtAmt(owed)}
+                                        </Text>
+                                    </View>
+                                    <AnimatedProgressBar
+                                        value={pct}
+                                        color={theme.success}
+                                        bg={theme.borderSoft}
+                                        height={7}
+                                    />
+                                </Card>
+                            );
+                        })()}
+
+                        {debtGoals.length === 0 && !reconActive ? (
                             <Text style={[styles.emptyText, { color: theme.ink3 }]}>
                                 No debts tracked. Add one to start paying it down!
                             </Text>
@@ -882,7 +949,7 @@ export default function PiggyBankScreen() {
                             ]}>
                                 {tx.type === 'deposit' ? '+' : '−'}${tx.amount.toFixed(2)}
                             </Text>
-                            <Pressable onPress={() => deleteTransaction(tx.id)} hitSlop={10}>
+                            <Pressable onPress={() => deleteTransaction(tx)} hitSlop={10}>
                                 <IconTrash size={14} color={theme.ink3} />
                             </Pressable>
                         </View>
@@ -1090,6 +1157,16 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         borderWidth: 1.5,
     },
+
+    // Reconciliation (auto debt) card
+    reconCard: {
+        marginBottom: 12,
+        borderWidth: 1.5,
+    },
+    reconTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    autoBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    autoBadgeText: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: 8, letterSpacing: 1 },
+    reconExplain: { fontFamily: 'Geist-Regular', fontSize: 11, marginTop: 3, lineHeight: 16 },
 
     // Goal cards
     goalHeader: {
