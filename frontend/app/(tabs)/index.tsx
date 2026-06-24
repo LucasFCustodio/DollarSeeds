@@ -208,7 +208,10 @@ export default function DashboardScreen() {
                     month: i.month,
                 }));
                 const savItems: TxItem[] = (savRes.data.data ?? [])
-                    .filter((i: any) => i.type === 'deposit')
+                    // Only income-sourced deposits count toward the Goals budget;
+                    // transfers between goals are internal moves (matches the Goals
+                    // detail view in details.tsx).
+                    .filter((i: any) => i.type === 'deposit' && i.source === 'income')
                     .map((i: any) => ({
                         id: `sav-${i.id}`,
                         title: i.title,
