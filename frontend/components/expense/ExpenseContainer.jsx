@@ -25,7 +25,7 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import {
-    IconNeeds, IconWants, IconGoals,
+    IconNeeds, IconWants,
     IconChevronLeft, IconCheck,
 } from '../icons';
 
@@ -36,14 +36,16 @@ const MONTHS = [
 ];
 const MONTH_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+// Expense logging now offers only Needs and Wants. The former "Investments" (goals)
+// bucket moved to the Goals tab as Savings/Debt goals — no new 'Goals' expenses are
+// created here anymore (historical 'Goals' rows remain readable for past months).
 const SUBCATS = {
     needs: ['Rent', 'Groceries', 'Utilities', 'Transit', 'Insurance', 'Healthcare', 'Other'],
     wants: ['Dining', 'Coffee', 'Streaming', 'Shopping', 'Travel', 'Gifts', 'Other'],
-    goals: ['Debt Payoff', 'Student Loan', 'Stocks', 'Roth IRA', 'Index Fund', 'Crypto', 'Tithe', 'Other'],
 };
 
 // Maps UI keys → backend category strings (aligns with /expenses/details/ params)
-const CAT_API = { needs: 'Needs', wants: 'Wants', goals: 'Goals' };
+const CAT_API = { needs: 'Needs', wants: 'Wants' };
 
 // ─── Month picker ─────────────────────────────────────────────────────────────
 const ITEM_H = 46;
@@ -135,7 +137,6 @@ export default function ExpenseContainer({ embedded = false }) {
     const cats = [
         { key: 'needs', label: 'Needs', Icon: IconNeeds, color: theme.needs, soft: theme.needsSoft },
         { key: 'wants', label: 'Wants', Icon: IconWants, color: theme.wants, soft: theme.wantsSoft },
-        { key: 'goals', label: 'Investments', Icon: IconGoals, color: theme.goals, soft: theme.goalsSoft },
     ];
     const selected = cats.find(c => c.key === category);
 

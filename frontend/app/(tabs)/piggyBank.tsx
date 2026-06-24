@@ -53,6 +53,7 @@ type Goal = {
     target_year: number | null;
     allocated_amount: number; created_at: string;
     is_general: boolean;
+    goal_type: 'saving' | 'debt';
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -97,6 +98,7 @@ export default function PiggyBankScreen() {
     const [fundingSource, setFundingSource] = useState<'income' | 'general'>('income');
 
     // Goal creation form
+    const [goalType,   setGoalType]   = useState<'saving' | 'debt'>('saving');
     const [goalTitle,  setGoalTitle]  = useState('');
     const [goalAmount, setGoalAmount] = useState('');
     const [goalMonth,  setGoalMonth]  = useState(MONTHS[today.getMonth()]);
@@ -124,11 +126,17 @@ export default function PiggyBankScreen() {
     useFocusEffect(useCallback(() => { fetchData(); }, []));
 
     // ── Derived ───────────────────────────────────────────────────────────────
-    // All goals shown as chips in the form (General Savings first, then specific goals)
+    // All goals shown as chips in the form (General Savings first, then specific goals).
+    // Both savings and debt goals are valid deposit/transfer destinations, so this
+    // intentionally includes every non-general goal regardless of goal_type.
     const allGoalsForChips: Goal[] = [
         ...(generalGoal ? [generalGoal] : []),
         ...goals,
     ];
+
+    // Split specific goals by type for the two grouped sections in the Active view.
+    const savingsGoals = goals.filter(g => g.goal_type !== 'debt');
+    const debtGoals    = goals.filter(g => g.goal_type === 'debt');
 
     // Jar fill: use first specific goal's target; fallback $3,000
     const firstGoalWithTarget = goals.find(g => g.target_amount);
@@ -237,8 +245,9 @@ export default function PiggyBankScreen() {
             await axios.post(`${BASE}/savings/goal/`, {
                 user_id: user?.id, title: goalTitle.trim(),
                 target_amount: amount, target_month: goalMonth, target_year: goalYear,
+                goal_type: goalType,
             });
-            setShowGoalForm(false); setGoalTitle(''); setGoalAmount('');
+            setShowGoalForm(false); setGoalTitle(''); setGoalAmount(''); setGoalType('saving');
             fetchData();
         } catch (error: any) {
             if (error?.response?.status === 400) setGoalError('A goal with this name already exists.');
@@ -263,6 +272,68 @@ export default function PiggyBankScreen() {
             // Full refresh so General Savings balance updates if funds were redistributed
             fetchData();
         } catch (e) { console.error('Delete goal error:', e); }
+    };
+
+    // Renders one active goal card. Savings and debt goals use identical mechanics
+    // (progress = allocated / target, complete when fully funded); only the accent
+    // color and verb differ so debt reads as "paying down" rather than "saving up".
+    const renderGoalCard = (g: Goal) => {
+        const isDebt = g.goal_type === 'debt';
+        const accent     = isDebt ? theme.danger : theme.goals;
+        const accentSoft = isDebt ? theme.dangerSoft : theme.goalsSoft;
+        const target = g.target_amount ?? 0;
+        const pct = target > 0 ? Math.min(100, (g.allocated_amount / target) * 100) : 0;
+        const monthsLeft = g.target_month && g.target_year
+            ? getMonthsLeft(g.target_month, g.target_year)
+            : 0;
+        const weekly = g.target_month && g.target_year
+            ? getWeeklyRate(target, g.allocated_amount, g.target_month, g.target_year, g.created_at)
+            : 0;
+        const achieved = target > 0 && g.allocated_amount >= target;
+        const barColor = achieved ? theme.success : accent;
+
+        return (
+            <Card key={g.id} theme={theme} depth={5} padding={16} style={{ marginBottom: 12 }}>
+                {/* Header row */}
+                <View style={styles.goalHeader}>
+                    <View style={[styles.goalIconTile, { backgroundColor: accentSoft }]}>
+                        <IconTarget size={22} color={achieved ? theme.success : accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.goalTitle, { color: theme.ink }]}>{g.title}</Text>
+                        {achieved ? (
+                            <Text style={[styles.goalMeta, { color: theme.success }]}>
+                                {isDebt ? 'Debt cleared! 🎉' : 'Goal achieved! 🎉'}
+                            </Text>
+                        ) : (
+                            <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
+                                {isDebt ? 'Pay' : 'Save'} ${weekly.toFixed(0)}/week · {monthsLeft}mo left
+                            </Text>
+                        )}
+                    </View>
+                    <Pressable onPress={() => deleteGoal(g.id)} hitSlop={10}>
+                        <IconTrash size={14} color={theme.ink3} />
+                    </Pressable>
+                </View>
+
+                {/* Saved / target */}
+                <View style={styles.goalAmtRow}>
+                    <Text style={[styles.goalSaved, { color: theme.ink }]}>
+                        ${fmtAmt(g.allocated_amount)}
+                    </Text>
+                    <Text style={[styles.goalOf, { color: theme.ink3 }]}>
+                        {' '}of ${fmtAmt(target)}{isDebt ? ' paid' : ''}
+                    </Text>
+                </View>
+
+                <AnimatedProgressBar
+                    value={pct}
+                    color={barColor}
+                    bg={theme.borderSoft}
+                    height={7}
+                />
+            </Card>
+        );
     };
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -536,8 +607,9 @@ export default function PiggyBankScreen() {
 
                     /* ── Active goals ────────────────────────────── */
                     <>
+                        {/* ── Savings section ─────────────────────── */}
                         <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 18 }]}>
-                            GROWING NOW
+                            SAVINGS
                         </Text>
 
                         {/* ── General Savings pinned card ────────── */}
@@ -573,67 +645,24 @@ export default function PiggyBankScreen() {
                             </Card>
                         )}
 
-                        {goals.length === 0 && !showGoalForm && (
+                        {savingsGoals.length === 0 && !showGoalForm && (
                             <Text style={[styles.emptyText, { color: theme.ink3 }]}>
-                                No goals yet. Plant your first one!
+                                No savings goals yet. Plant your first one!
                             </Text>
                         )}
 
-                        {goals.map(g => {
-                            const target = g.target_amount ?? 0;
-                            const pct = target > 0 ? Math.min(100, (g.allocated_amount / target) * 100) : 0;
-                            const monthsLeft = g.target_month && g.target_year
-                                ? getMonthsLeft(g.target_month, g.target_year)
-                                : 0;
-                            const weekly = g.target_month && g.target_year
-                                ? getWeeklyRate(target, g.allocated_amount, g.target_month, g.target_year, g.created_at)
-                                : 0;
-                            const achieved = target > 0 && g.allocated_amount >= target;
-                            const barColor = achieved ? theme.success : theme.goals;
+                        {savingsGoals.map(renderGoalCard)}
 
-                            return (
-                                <Card key={g.id} theme={theme} depth={5} padding={16} style={{ marginBottom: 12 }}>
-                                    {/* Header row */}
-                                    <View style={styles.goalHeader}>
-                                        <View style={[styles.goalIconTile, { backgroundColor: theme.goalsSoft }]}>
-                                            <IconTarget size={22} color={achieved ? theme.success : theme.goals} />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={[styles.goalTitle, { color: theme.ink }]}>{g.title}</Text>
-                                            {achieved ? (
-                                                <Text style={[styles.goalMeta, { color: theme.success }]}>
-                                                    Goal achieved! 🎉
-                                                </Text>
-                                            ) : (
-                                                <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
-                                                    Save ${weekly.toFixed(0)}/week · {monthsLeft}mo left
-                                                </Text>
-                                            )}
-                                        </View>
-                                        <Pressable onPress={() => deleteGoal(g.id)} hitSlop={10}>
-                                            <IconTrash size={14} color={theme.ink3} />
-                                        </Pressable>
-                                    </View>
+                        {/* ── Debt section ────────────────────────── */}
+                        <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 24 }]}>
+                            DEBT
+                        </Text>
 
-                                    {/* Saved / target */}
-                                    <View style={styles.goalAmtRow}>
-                                        <Text style={[styles.goalSaved, { color: theme.ink }]}>
-                                            ${fmtAmt(g.allocated_amount)}
-                                        </Text>
-                                        <Text style={[styles.goalOf, { color: theme.ink3 }]}>
-                                            {' '}of ${fmtAmt(target)}
-                                        </Text>
-                                    </View>
-
-                                    <AnimatedProgressBar
-                                        value={pct}
-                                        color={barColor}
-                                        bg={theme.borderSoft}
-                                        height={7}
-                                    />
-                                </Card>
-                            );
-                        })}
+                        {debtGoals.length === 0 ? (
+                            <Text style={[styles.emptyText, { color: theme.ink3 }]}>
+                                No debts tracked. Add one to start paying it down!
+                            </Text>
+                        ) : debtGoals.map(renderGoalCard)}
 
                         {/* Plant new goal */}
                         <Pressable
@@ -652,16 +681,48 @@ export default function PiggyBankScreen() {
                         {/* Goal creation form */}
                         {showGoalForm && (
                             <Card theme={theme} depth={4} padding={18} style={{ marginBottom: 16 }}>
-                                <Text style={[styles.formTitle, { color: theme.ink }]}>New savings goal</Text>
+                                <Text style={[styles.formTitle, { color: theme.ink }]}>
+                                    {goalType === 'debt' ? 'New debt to pay off' : 'New savings goal'}
+                                </Text>
 
-                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>GOAL NAME</Text>
+                                {/* Goal type selector */}
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>GOAL TYPE</Text>
+                                <View style={[styles.chipWrap, { marginBottom: 16 }]}>
+                                    {([
+                                        { key: 'saving', label: 'Savings', accent: theme.goals },
+                                        { key: 'debt',   label: 'Debt',    accent: theme.danger },
+                                    ] as const).map(opt => {
+                                        const active = goalType === opt.key;
+                                        return (
+                                            <Pressable
+                                                key={opt.key}
+                                                onPress={() => setGoalType(opt.key)}
+                                                style={[
+                                                    styles.chip,
+                                                    {
+                                                        backgroundColor: active ? opt.accent : theme.surface,
+                                                        borderColor: active ? opt.accent : theme.border,
+                                                    },
+                                                ]}
+                                            >
+                                                <Text style={[styles.chipText, { color: active ? '#fff' : theme.ink2 }]}>
+                                                    {opt.label}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
+                                    {goalType === 'debt' ? 'DEBT NAME' : 'GOAL NAME'}
+                                </Text>
                                 <TextInput
                                     style={[styles.textInput, {
                                         backgroundColor: theme.surfaceSoft,
                                         borderColor: theme.border,
                                         color: theme.ink,
                                     }]}
-                                    placeholder="Emergency fund, New laptop…"
+                                    placeholder={goalType === 'debt' ? 'Credit card, Car loan…' : 'Emergency fund, New laptop…'}
                                     placeholderTextColor={theme.ink3}
                                     value={goalTitle}
                                     onChangeText={t => { setGoalTitle(t); setGoalError(''); }}
@@ -671,7 +732,9 @@ export default function PiggyBankScreen() {
                                     <Text style={[styles.errorText, { color: theme.danger }]}>{goalError}</Text>
                                 )}
 
-                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET AMOUNT</Text>
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
+                                    {goalType === 'debt' ? 'TOTAL TO PAY OFF' : 'TARGET AMOUNT'}
+                                </Text>
                                 <TextInput
                                     style={[styles.textInput, {
                                         backgroundColor: theme.surfaceSoft,
