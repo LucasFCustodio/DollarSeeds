@@ -93,6 +93,11 @@ BUDGET_TYPES = {
 }
 DEFAULT_BUDGET_TYPE = "balanced"
 
+MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
+
 
 # ─── Tithing helpers ──────────────────────────────────────────────────────────
 DEFAULT_TITHE_RATE = 0.10
@@ -443,6 +448,25 @@ def delete_income(id: int, user_id: str):
 def get_income_details(month: str, user_id: str):
     response = supabase.table("income").select("*").eq("month", month).eq("user_id", user_id).execute()
     return {"data": response.data}
+
+@app.get("/income/funding-months/")
+def get_funding_months(user_id: str, current_month: str):
+    """Months earlier in the calendar than current_month that are still OPEN (not
+    closed) and have > $0 of income. Each can fund a goal deposit from that month's
+    leftover income — the deposit is booked against that month's Goals budget."""
+    if current_month not in MONTHS:
+        return {"data": []}
+    cur_idx = MONTHS.index(current_month)
+    rows = supabase.table("income").select("amount, month").eq("user_id", user_id).execute().data
+    totals: dict[str, float] = {}
+    for r in rows:
+        totals[r["month"]] = totals.get(r["month"], 0.0) + (r["amount"] or 0.0)
+    result = [
+        {"month": m, "income": _r(totals[m])}
+        for m in MONTHS[:cur_idx]
+        if totals.get(m, 0.0) > 0 and not _is_month_closed(user_id, m)
+    ]
+    return {"data": result}
 
 @app.get("/savings/balance/")
 def get_savings_balance(user_id: str):

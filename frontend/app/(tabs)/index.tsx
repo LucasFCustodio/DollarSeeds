@@ -319,7 +319,7 @@ export default function DashboardScreen() {
         {
             key: 'needs' as const,
             label: 'Needs',
-            pct: '50%',
+            pct: `${Math.round(activeBudgetType.needs * 100)}%`,
             Icon: IconNeeds,
             color: theme.needs,
             soft: theme.needsSoft,
@@ -331,7 +331,7 @@ export default function DashboardScreen() {
         {
             key: 'wants' as const,
             label: 'Wants',
-            pct: '30%',
+            pct: `${Math.round(activeBudgetType.wants * 100)}%`,
             Icon: IconWants,
             color: theme.wants,
             soft: theme.wantsSoft,
@@ -343,7 +343,7 @@ export default function DashboardScreen() {
         {
             key: 'goals' as const,
             label: 'Goals',
-            pct: '20%',
+            pct: `${Math.round(activeBudgetType.savings * 100)}%`,
             Icon: IconGoals,
             color: theme.goals,
             soft: theme.goalsSoft,

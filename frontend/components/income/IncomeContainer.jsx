@@ -17,6 +17,7 @@ import {
     Pressable,
     StyleSheet,
     Platform,
+    Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -26,6 +27,7 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import { IconChevronLeft, IconCheck } from '../icons';
+import { resolveBudgetType } from '../../constants/budgetTypes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MONTHS = [
@@ -35,6 +37,8 @@ const MONTHS = [
 const MONTH_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const SOURCES = ['Paycheck', 'Side gig', 'Gift', 'Refund', 'Bonus', 'Other'];
+
+const BASE = 'https://dollarseeds-1.onrender.com';
 
 // ─── Month picker ─────────────────────────────────────────────────────────────
 const ITEM_H = 46;
@@ -117,11 +121,23 @@ export default function IncomeContainer({ embedded = false }) {
     const [month, setMonth]       = useState(MONTHS[today.getMonth()]);
     const [day, setDay]           = useState(String(today.getDate()));
     const [submitted, setSubmitted] = useState(false);
+    // The user's selected budget type drives the live split preview below.
+    const [budgetTypeKey, setBudgetTypeKey] = useState(null);
 
+    useEffect(() => {
+        if (!user?.id) return;
+        axios
+            .get(`${BASE}/settings/`, { params: { user_id: user.id } })
+            .then(res => setBudgetTypeKey(res.data?.data?.budget_type ?? null))
+            .catch(() => { /* fall back to the default split on failure */ });
+    }, [user?.id]);
+
+    const bt = resolveBudgetType(budgetTypeKey);
     const parsedAmt = parseFloat(amount) || 0;
-    const needsAmt  = parsedAmt * 0.5;
-    const wantsAmt  = parsedAmt * 0.3;
-    const goalsAmt  = parsedAmt * 0.2;
+    const needsAmt  = parsedAmt * bt.needs;
+    const wantsAmt  = parsedAmt * bt.wants;
+    const goalsAmt  = parsedAmt * bt.savings;
+    const pct = (n) => Math.round(n * 100);
 
     const fmt = (n) =>
         n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -150,7 +166,12 @@ export default function IncomeContainer({ embedded = false }) {
             setSubmitted(true);
             setTimeout(() => setSubmitted(false), 2000);
         } catch (err) {
-            console.error('Income submit error:', err?.message ?? err);
+            // A 409 means the target month is closed (rollover feature) and read-only.
+            if (err?.response?.status === 409) {
+                Alert.alert('Month closed', `Cannot add to closed month. Reopen ${month} to edit`);
+            } else {
+                console.error('Income submit error:', err?.message ?? err);
+            }
         }
     };
 
@@ -230,30 +251,30 @@ export default function IncomeContainer({ embedded = false }) {
                     </Text>
                     {/* Color bar */}
                     <View style={styles.splitBar}>
-                        <View style={[styles.splitBarSegment, { flex: 50, backgroundColor: theme.needs }]} />
-                        <View style={[styles.splitBarSegment, { flex: 30, backgroundColor: theme.wants }]} />
-                        <View style={[styles.splitBarSegment, { flex: 20, backgroundColor: theme.goals }]} />
+                        <View style={[styles.splitBarSegment, { flex: pct(bt.needs), backgroundColor: theme.needs }]} />
+                        <View style={[styles.splitBarSegment, { flex: pct(bt.wants), backgroundColor: theme.wants }]} />
+                        <View style={[styles.splitBarSegment, { flex: pct(bt.savings), backgroundColor: theme.goals }]} />
                     </View>
                     {/* Breakdown columns */}
                     <View style={styles.splitCols}>
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.needs }]} />
-                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>50% Needs</Text>
+                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{pct(bt.needs)}% Needs</Text>
                             </View>
                             <Text style={[styles.splitAmt, { color: theme.ink }]}>${fmt(needsAmt)}</Text>
                         </View>
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.wants }]} />
-                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>30% Wants</Text>
+                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{pct(bt.wants)}% Wants</Text>
                             </View>
                             <Text style={[styles.splitAmt, { color: theme.ink }]}>${fmt(wantsAmt)}</Text>
                         </View>
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.goals }]} />
-                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>20% Goals</Text>
+                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{pct(bt.savings)}% Goals</Text>
                             </View>
                             <Text style={[styles.splitAmt, { color: theme.ink }]}>${fmt(goalsAmt)}</Text>
                         </View>

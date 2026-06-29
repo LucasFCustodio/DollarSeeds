@@ -100,7 +100,12 @@ export default function PiggyBankScreen() {
     // Transaction form
     const [txAmount,      setTxAmount]      = useState('');
     const [txGoalId,      setTxGoalId]      = useState<number | null>(null);
-    const [fundingSource, setFundingSource] = useState<'income' | 'general'>('income');
+    // 'income' = this month's income · 'general' = transfer from General Savings ·
+    // a month name = fund from that earlier open month's leftover income.
+    const [fundingSource, setFundingSource] = useState<string>('income');
+    // Earlier OPEN months with > $0 income, eligible as funding sources (task: let a
+    // goal be funded from a prior month's leftover income, booked to that month).
+    const [fundingMonths, setFundingMonths] = useState<{ month: string; income: number }[]>([]);
 
     // Goal creation form
     const [goalType,   setGoalType]   = useState<'saving' | 'debt'>('saving');
@@ -129,6 +134,16 @@ export default function PiggyBankScreen() {
             setGoals(allGoals.filter(g => !g.is_general && !g.is_reconciliation));
             setCompletedGoals(completedRes.data.data);
         } catch (e) { console.error('Savings fetch error:', e); }
+
+        // Funding months is an optional enhancement (prior-month goal funding). Fetch
+        // it separately so a failure — e.g. an older backend without this endpoint —
+        // can never break the core Goals tab load. Degrades to "this month's income".
+        try {
+            const fundRes = await axios.get(
+                `${BASE}/income/funding-months/?user_id=${user?.id}&current_month=${currentMonth}`
+            );
+            setFundingMonths(fundRes.data.data ?? []);
+        } catch (e) { setFundingMonths([]); }
     };
 
     useFocusEffect(useCallback(() => { fetchData(); }, []));
@@ -175,13 +190,25 @@ export default function PiggyBankScreen() {
     // Is the currently-selected goal the General Savings pool?
     const isGeneralSelected = txGoalId !== null && txGoalId === generalGoal?.id;
 
-    // Show funding source only when depositing to a SPECIFIC (non-general) goal
-    // and General Savings has money to draw from
+    // Funding options when depositing to a SPECIFIC (non-general) goal:
+    //  • this month's income (always)
+    //  • each earlier OPEN month with leftover income (booked to that month)
+    //  • General Savings, when it holds money to draw from
+    const generalHasMoney = (generalGoal?.allocated_amount ?? 0) > 0;
+    const fundingOptions: { key: string; label: string }[] = [
+        { key: 'income', label: "This month's income" },
+        ...fundingMonths.map(m => ({ key: m.month, label: `${m.month} income ($${fmtAmt(m.income)})` })),
+        ...(generalHasMoney
+            ? [{ key: 'general', label: `From General Savings ($${fmtAmt(generalGoal?.allocated_amount ?? 0)})` }]
+            : []),
+    ];
+
+    // Show the picker only when there's a real choice beyond "this month's income".
     const showFundingSource =
         isDeposit &&
         txGoalId !== null &&
         !isGeneralSelected &&
-        (generalGoal?.allocated_amount ?? 0) > 0;
+        fundingOptions.length > 1;
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     const toggleForm = (type: 'deposit' | 'withdrawal') => {
@@ -225,13 +252,20 @@ export default function PiggyBankScreen() {
                 });
             } else {
                 // ── Normal deposit / withdrawal ────────────────────────────
+                // Funding a deposit from an earlier open month books it against that
+                // month's Goals budget (fundingSource holds the month name). Otherwise
+                // ('income') it lands in the current month, same as before.
+                const bookMonth =
+                    isDeposit && fundingSource !== 'income' && fundingSource !== 'general'
+                        ? fundingSource
+                        : currentMonth;
                 await axios.post(`${BASE}/savings/transaction/`, {
                     user_id: user?.id,
                     title: selectedGoal?.title ?? (isDeposit ? 'Deposit' : 'Withdrawal'),
                     amount: parsed,
                     type: activeForm,
                     day: today.getDate(),
-                    month: currentMonth,
+                    month: bookMonth,
                     goal_id: txGoalId ?? null,
                     source: 'income',
                 });
@@ -523,12 +557,12 @@ export default function PiggyBankScreen() {
                                     FUNDING SOURCE
                                 </Text>
                                 <View style={[styles.chipWrap, { marginBottom: 16 }]}>
-                                    {(['income', 'general'] as const).map(src => {
-                                        const active = fundingSource === src;
+                                    {fundingOptions.map(opt => {
+                                        const active = fundingSource === opt.key;
                                         return (
                                             <Pressable
-                                                key={src}
-                                                onPress={() => setFundingSource(src)}
+                                                key={opt.key}
+                                                onPress={() => setFundingSource(opt.key)}
                                                 style={({ pressed }) => [
                                                     styles.chip,
                                                     {
@@ -542,10 +576,7 @@ export default function PiggyBankScreen() {
                                                     styles.chipText,
                                                     { color: active ? '#fff' : theme.ink2 },
                                                 ]}>
-                                                    {src === 'income'
-                                                        ? "This month's income"
-                                                        : `From General Savings ($${fmtAmt(generalGoal?.allocated_amount ?? 0)})`
-                                                    }
+                                                    {opt.label}
                                                 </Text>
                                             </Pressable>
                                         );
