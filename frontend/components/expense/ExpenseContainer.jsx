@@ -16,6 +16,7 @@ import {
     Pressable,
     StyleSheet,
     Platform,
+    Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -165,7 +166,12 @@ export default function ExpenseContainer({ embedded = false }) {
             setSubmitted(true);
             setTimeout(() => setSubmitted(false), 2000);
         } catch (err) {
-            console.error('Expense submit error:', err?.message ?? err);
+            // A 409 means the target month is closed (rollover feature) and read-only.
+            if (err?.response?.status === 409) {
+                Alert.alert('Month closed', `Cannot add to closed month. Reopen ${month} to edit`);
+            } else {
+                console.error('Expense submit error:', err?.message ?? err);
+            }
         }
     };
 
