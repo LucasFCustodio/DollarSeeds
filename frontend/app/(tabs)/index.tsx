@@ -4,8 +4,7 @@
  * Behavior checklist (all preserved):
  * ✅ Month navigation fetches fresh data on change
  * ✅ allGreen scripture modal fires once per month
- * ✅ Dark-mode toggle via toggleTheme()
- * ✅ Logout via supabase.auth.signOut()
+ * ✅ Settings (gear) opens /settings — dark mode + logout live there now
  * ✅ Category cards navigate to /details with correct params
  * ✅ Spending Trends navigates to /trends
  * ✅ Piggy bank balance shown in Goals expanded state
@@ -29,7 +28,6 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, shadow } from '../../context/ThemeContext';
-import { supabase } from '../../lib/supabase';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
@@ -37,11 +35,11 @@ import AnimatedAmount from '../../components/ui/AnimatedAmount';
 import HeroBg from '../../components/ui/HeroBg';
 import { resolveBudgetType, splitLabel } from '../../constants/budgetTypes';
 import {
-    IconLeaf, IconSparkle, IconMoon, IconSun, IconBell,
+    IconLeaf, IconSparkle, IconGear,
     IconChevronLeft, IconChevronRight,
     IconNeeds, IconWants, IconGoals,
     IconExpense, IconIncome,
-    IconScripture, IconTrend, IconSavings, IconUser,
+    IconScripture, IconTrend, IconSavings,
 } from '../../components/icons';
 
 // Enable LayoutAnimation on Android
@@ -104,7 +102,7 @@ interface TxItem {
 export default function DashboardScreen() {
     const router = useRouter();
     const { user } = useAuth();
-    const { theme, isDark, toggleTheme } = useTheme();
+    const { theme } = useTheme();
 
     // Month state
     const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -155,11 +153,6 @@ export default function DashboardScreen() {
     const increaseMonth = () => {
         const i = monthIndex === 11 ? 0 : monthIndex + 1;
         setMonthIndex(i);
-    };
-
-    const handleLogout = async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) console.error('Error logging out:', error.message);
     };
 
     const fetchDashboardData = async () => {
@@ -411,31 +404,12 @@ export default function DashboardScreen() {
 
                         {/* Control buttons */}
                         <View style={styles.heroControls}>
-                            {/* Settings (tithing, preferences) */}
+                            {/* Settings (tithing, budget type, dark mode, log out) */}
                             <Pressable
                                 onPress={() => router.push('/settings' as any)}
                                 style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
                             >
-                                <IconUser size={18} color="#fff" />
-                            </Pressable>
-                            {/* Dark/light toggle */}
-                            <Pressable
-                                onPress={toggleTheme}
-                                style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
-                            >
-                                {isDark
-                                    ? <IconSun size={18} color="#fff" />
-                                    : <IconMoon size={18} color="#fff" />
-                                }
-                            </Pressable>
-                            {/* Logout (bell icon — hold to see logout; tap shows "Sign out" alert) */}
-                            <Pressable
-                                onPress={handleLogout}
-                                style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
-                            >
-                                <IconBell size={18} color="#fff" />
-                                {/* Yellow notification dot */}
-                                <View style={styles.bellDot} />
+                                <IconGear size={18} color="#fff" />
                             </Pressable>
                         </View>
                     </View>
@@ -871,11 +845,6 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.16)',
         borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
         alignItems: 'center', justifyContent: 'center',
-    },
-    bellDot: {
-        position: 'absolute', top: 7, right: 7,
-        width: 7, height: 7, borderRadius: 3.5,
-        backgroundColor: '#F4D35E',
     },
 
     // Month nav

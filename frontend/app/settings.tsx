@@ -21,6 +21,7 @@ import axios from 'axios';
 
 import { useAuth } from '../context/AuthContext';
 import { useTheme, shadow } from '../context/ThemeContext';
+import { supabase } from '../lib/supabase';
 import {
     IconChevronLeft, IconScripture, IconMoon, IconSun, IconTarget, IconSparkle,
 } from '../components/icons';
@@ -269,12 +270,30 @@ export default function SettingsScreen() {
                             />
                         </View>
                     </View>
+
+                    {/* ── Log out ─────────────────────────────────────────── */}
+                    <Pressable
+                        onPress={handleLogout}
+                        style={({ pressed }) => [
+                            styles.logoutBtn,
+                            { backgroundColor: theme.danger },
+                            pressed && { opacity: 0.85 },
+                        ]}
+                    >
+                        <Text style={styles.logoutText}>Log Out</Text>
+                    </Pressable>
                 </View>
             )}
         </ScrollView>
     );
 
     // ── Handlers that need component scope ──────────────────────────────────
+    async function handleLogout() {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.error('Error logging out:', error.message);
+        // AuthContext flips to the signed-out state and the router redirects to /auth.
+    }
+
     function handleToggleTithe(value: boolean) {
         if (!user?.id) return;
         const previous = titheEnabled;
@@ -349,4 +368,14 @@ const styles = StyleSheet.create({
     suggestText: { flex: 1, fontFamily: 'Geist-Regular', fontSize: 13, lineHeight: 18 },
     laterBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 4 },
     laterText: { fontFamily: 'Geist-SemiBold', fontSize: 13 },
+
+    // Log out
+    logoutBtn: {
+        marginTop: 32,
+        paddingVertical: 16,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    logoutText: { fontFamily: 'Geist-SemiBold', fontSize: 15, color: '#fff' },
 });

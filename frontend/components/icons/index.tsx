@@ -264,6 +264,18 @@ export const IconUser = ({ size = 20, color = '#0F2820' }: { size?: number; colo
     </Svg>
 );
 
+export const IconGear = ({ size = 20, color = '#0F2820' }: { size?: number; color?: string }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Circle cx={12} cy={12} r={3} stroke={color} strokeWidth={1.6} />
+        <Path
+            d="M12 2.5l1.4 2.2 2.6-.5.5 2.6 2.2 1.4-1 2.4 1 2.4-2.2 1.4-.5 2.6-2.6-.5L12 21.5l-1.4-2.2-2.6.5-.5-2.6-2.2-1.4 1-2.4-1-2.4 2.2-1.4.5-2.6 2.6.5L12 2.5z"
+            stroke={color}
+            strokeWidth={1.6}
+            strokeLinejoin="round"
+        />
+    </Svg>
+);
+
 export const IconCalendar = ({ size = 18, color = '#0F2820' }: { size?: number; color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <Rect x={4} y={6} width={16} height={14} rx={2} stroke={color} strokeWidth={1.6} />
