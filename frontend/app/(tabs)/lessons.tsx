@@ -1,22 +1,33 @@
 /**
  * LessonsScreen — visual revamp (DollarSeeds design system)
  *
- * Behaviour preserved:
- * ✅ Completed lesson IDs stored in AsyncStorage
+ * Page order (top → bottom):
+ *   1. Header ("Lessons from the field" + subtitle) — unchanged
+ *   2. Video SERIES list (NEW) — cloud-hosted video series from GET /lessons/series/
+ *   3. "lessons completed" progress strip — unchanged behavior, just repositioned below the series
+ *   4. Written-lesson cards — unchanged
+ *
+ * Behaviour preserved (written lessons):
+ * ✅ Completed lesson IDs stored in AsyncStorage ('completed_lessons')
  * ✅ Star ratings stored locally; user prompted to share with backend
  * ✅ Tap card → lessonDetail screen
- * ✅ Progress bar reflects completed / total
+ * ✅ Progress bar reflects completed / total  (tied to the WRITTEN LESSONS only)
+ *
+ * NOTE: the video series intentionally does NOT touch the progress strip. Persistent
+ * video watch-progress (resume position / marking a *video* lesson complete / wiring
+ * videos into this strip) is deferred — see the series-detail + player screens.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-    View, Text, ScrollView, Pressable, StyleSheet, Alert,
+    View, Text, ScrollView, Pressable, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, stickerShadow, AppTheme } from '../../context/ThemeContext';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
 import { IconCheck, IconScripture, IconStar } from '../../components/icons';
@@ -25,6 +36,15 @@ import { LESSONS } from '../../constants/lessons';
 const BASE = 'https://dollarseeds-1.onrender.com';
 const STORAGE_KEY = 'completed_lessons';
 
+type Series = {
+    id: string;
+    title: string;
+    description?: string | null;
+    creator?: string | null;
+    thumbnail_url?: string | null;
+    lesson_count: number;
+};
+
 export default function LessonsScreen() {
     const router = useRouter();
     const { user } = useAuth();
@@ -32,6 +52,25 @@ export default function LessonsScreen() {
 
     const [completedIds, setCompletedIds] = useState<number[]>([]);
     const [ratings, setRatings] = useState<Record<number, number>>({});
+
+    // ── Video series (new) ───────────────────────────────────────
+    const [series, setSeries] = useState<Series[]>([]);
+    const [seriesLoading, setSeriesLoading] = useState(true);
+    const [seriesError, setSeriesError] = useState(false);
+
+    const loadSeries = useCallback(() => {
+        setSeriesLoading(true);
+        setSeriesError(false);
+        axios.get(`${BASE}/lessons/series/`)
+            .then(res => setSeries(res.data?.data ?? []))
+            .catch(err => {
+                console.error('Series load error:', err);
+                setSeriesError(true);
+            })
+            .finally(() => setSeriesLoading(false));
+    }, []);
+
+    useEffect(() => { loadSeries(); }, [loadSeries]);
 
     useFocusEffect(
         useCallback(() => {
@@ -81,8 +120,54 @@ export default function LessonsScreen() {
                 <Text style={[styles.subtitle, { color: theme.ink2 }]}>
                     Scripture-rooted reflections on money, generosity, and stewardship.
                 </Text>
+            </View>
 
-                {/* Progress strip */}
+            {/* ── Video series (NEW) ──────────────────────────────── */}
+            <View style={styles.seriesSection}>
+                <Text style={[styles.sectionEyebrow, { color: theme.ink3 }]}>
+                    WATCH & LEARN
+                </Text>
+
+                {seriesLoading ? (
+                    <View style={styles.seriesStateBox}>
+                        <ActivityIndicator color={theme.brand} />
+                    </View>
+                ) : seriesError ? (
+                    <View style={styles.seriesStateBox}>
+                        <Text style={[styles.seriesStateText, { color: theme.ink3 }]}>
+                            Couldn&apos;t load video series.
+                        </Text>
+                        <Pressable onPress={loadSeries} hitSlop={8}>
+                            <Text style={[styles.retryText, { color: theme.brand }]}>Tap to retry</Text>
+                        </Pressable>
+                    </View>
+                ) : series.length === 0 ? (
+                    <View style={styles.seriesStateBox}>
+                        <Text style={[styles.seriesStateText, { color: theme.ink3 }]}>
+                            No video series yet — check back soon.
+                        </Text>
+                    </View>
+                ) : (
+                    <View style={styles.seriesList}>
+                        {series.map(s => (
+                            <SeriesCard
+                                key={s.id}
+                                theme={theme}
+                                series={s}
+                                onExplore={() =>
+                                    router.push({
+                                        pathname: '/lessonSeries/[id]',
+                                        params: { id: s.id },
+                                    } as any)
+                                }
+                            />
+                        ))}
+                    </View>
+                )}
+            </View>
+
+            {/* ── Progress strip (written lessons — unchanged behavior) ── */}
+            <View style={styles.progressSection}>
                 <View style={styles.progressRow}>
                     <View style={{ flex: 1 }}>
                         <AnimatedProgressBar
@@ -103,7 +188,7 @@ export default function LessonsScreen() {
                 </View>
             </View>
 
-            {/* ── Lesson cards ────────────────────────────────────── */}
+            {/* ── Written lesson cards (unchanged) ────────────────── */}
             <View style={styles.cardList}>
                 {LESSONS.map((lesson, index) => {
                     const done = completedIds.includes(lesson.id);
@@ -207,6 +292,74 @@ export default function LessonsScreen() {
     );
 }
 
+/**
+ * SeriesCard — video-series card matching the approved design + the dashboard card
+ * system (white surface, ink outline + sticker shadow). All colors from useTheme().
+ * - Left-aligned title
+ * - Full-width thumbnail with a "{n} lessons" badge bottom-right
+ * - Left-aligned description with a MIN-HEIGHT so short/long cards share a rhythm
+ * - "Explore ›" brand button, bottom-aligned, right edge = thumbnail's right edge
+ */
+function SeriesCard({
+    theme, series, onExplore,
+}: {
+    theme: AppTheme;
+    series: Series;
+    onExplore: () => void;
+}) {
+    const lessonWord = series.lesson_count === 1 ? 'lesson' : 'lessons';
+    return (
+        <Card theme={theme} depth={5} padding={16} style={styles.seriesCard}>
+            {/* Title */}
+            <Text style={[styles.seriesTitle, { color: theme.ink }]}>
+                {series.title}
+            </Text>
+
+            {/* Thumbnail + lesson-count badge */}
+            <View style={styles.thumbWrap}>
+                {series.thumbnail_url ? (
+                    <Image
+                        source={{ uri: series.thumbnail_url }}
+                        style={styles.thumb}
+                        contentFit="cover"
+                        transition={200}
+                    />
+                ) : (
+                    <View style={[styles.thumb, styles.thumbPlaceholder, { backgroundColor: theme.surfaceSoft }]}>
+                        <IconScripture size={26} color={theme.ink3} />
+                    </View>
+                )}
+                <View style={[styles.lessonBadge, { backgroundColor: theme.brand }]}>
+                    <Text style={[styles.lessonBadgeText, { color: theme.onBrand }]}>
+                        {series.lesson_count} {lessonWord}
+                    </Text>
+                </View>
+            </View>
+
+            {/* Description (min-height for uniform card rhythm) */}
+            {!!series.description && (
+                <Text style={[styles.seriesDesc, { color: theme.ink2 }]}>
+                    {series.description}
+                </Text>
+            )}
+
+            {/* Explore button — bottom, right-aligned to the thumbnail edge */}
+            <View style={styles.exploreRow}>
+                <Pressable
+                    onPress={onExplore}
+                    style={({ pressed }) => [
+                        styles.exploreBtn,
+                        { backgroundColor: theme.brand, ...(stickerShadow(theme.ink) as object) },
+                        pressed && { transform: [{ scale: 0.97 }] },
+                    ]}
+                >
+                    <Text style={[styles.exploreText, { color: theme.onBrand }]}>Explore ›</Text>
+                </Pressable>
+            </View>
+        </Card>
+    );
+}
+
 const styles = StyleSheet.create({
     content: {
         paddingBottom: 60,
@@ -230,10 +383,101 @@ const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 19,
         maxWidth: 280,
-        marginBottom: 18,
+        marginBottom: 4,
     },
 
-    // Progress
+    // Video series section
+    seriesSection: {
+        paddingHorizontal: 18,
+        paddingTop: 14,
+    },
+    sectionEyebrow: {
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 10,
+        letterSpacing: 1.6,
+        marginLeft: 4,
+        marginBottom: 12,
+    },
+    seriesStateBox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 28,
+    },
+    seriesStateText: {
+        fontFamily: 'Geist-Regular',
+        fontSize: 13,
+    },
+    retryText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 13,
+    },
+    seriesList: {
+        gap: 16,
+    },
+    seriesCard: {
+        // spacing between series cards handled by seriesList gap
+    },
+    seriesTitle: {
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: 24,
+        lineHeight: 28,
+        letterSpacing: -0.3,
+        marginBottom: 12,
+    },
+    thumbWrap: {
+        position: 'relative',
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
+    thumb: {
+        width: '100%',
+        aspectRatio: 16 / 10,
+        borderRadius: 12,
+    },
+    thumbPlaceholder: {
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    lessonBadge: {
+        position: 'absolute',
+        right: 8,
+        bottom: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    lessonBadgeText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 11,
+    },
+    seriesDesc: {
+        fontFamily: 'Geist-Regular',
+        fontSize: 13,
+        lineHeight: 19,
+        marginTop: 12,
+        minHeight: 57, // ~3 lines — keeps short/long cards on the same rhythm
+    },
+    exploreRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        marginTop: 12,
+    },
+    exploreBtn: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 12,
+    },
+    exploreText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 14,
+    },
+
+    // Progress strip (moved below the series; behavior unchanged)
+    progressSection: {
+        paddingHorizontal: 22,
+        paddingTop: 24,
+    },
     progressRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -255,7 +499,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
     },
 
-    // Card list
+    // Written lesson card list
     cardList: {
         paddingHorizontal: 18,
         paddingTop: 20,
