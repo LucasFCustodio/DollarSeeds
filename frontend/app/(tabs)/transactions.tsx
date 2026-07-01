@@ -6,9 +6,9 @@
  * An optional `type` route param preselects the form (used by the dashboard
  * quick actions).
  */
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import ExpenseContainer from '../../components/expense/ExpenseContainer';
 import IncomeContainer from '../../components/income/IncomeContainer';
@@ -19,6 +19,15 @@ export default function TransactionsScreen() {
     const { theme } = useTheme();
     const { type } = useLocalSearchParams<{ type?: string }>();
     const [active, setActive] = useState<TxType>(type === 'income' ? 'income' : 'expense');
+
+    // This tab stays mounted, so the useState initializer only runs once. When the
+    // dashboard quick actions re-navigate here with a `type` param (e.g. Log Income),
+    // sync the active form to it on focus so it doesn't get stuck on the prior choice.
+    useFocusEffect(
+        useCallback(() => {
+            if (type === 'income' || type === 'expense') setActive(type);
+        }, [type])
+    );
 
     return (
         <View style={{ flex: 1, backgroundColor: theme.bg }}>

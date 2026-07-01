@@ -10,6 +10,31 @@ import Svg, {
     Rect as SvgRect,
 } from 'react-native-svg';
 
+// Hand-drawn mascot tab icons (theme-adaptive duotone)
+export {
+    IconHomeMascot,
+    IconGoalsMascot,
+    IconTransactionsMascot,
+    IconLessonsMascot,
+} from './mascotIcons';
+export type { MascotIconProps } from './mascotIcons';
+
+// Hand-drawn category mascot icons (theme-adaptive duotone)
+export {
+    IconNeedsMascot,
+    IconWantsMascot,
+    IconSavingsGoalMascot,
+    IconDebtMascot,
+} from './categoryIcons';
+export type { CategoryIconProps } from './categoryIcons';
+
+// Hand-drawn hero icons (dashboard logo + gear)
+export {
+    IconLogoMascot,
+    IconGearMascot,
+} from './heroIcons';
+export type { HeroIconProps } from './heroIcons';
+
 // ─── Shared icon wrapper ──────────────────────────────────────────────────────
 interface IconProps {
     size?: number;

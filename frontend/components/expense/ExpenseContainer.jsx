@@ -24,9 +24,10 @@ import Svg, { Path } from 'react-native-svg';
 import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
-import { useTheme, shadow } from '../../context/ThemeContext';
+import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
 import {
     IconNeeds, IconWants,
+    IconNeedsMascot, IconWantsMascot,
     IconChevronLeft, IconCheck,
 } from '../icons';
 
@@ -136,8 +137,8 @@ export default function ExpenseContainer({ embedded = false }) {
     const dateStr = `${MONTH_ABBRS[MONTHS.indexOf(month)] ?? MONTH_ABBRS[today.getMonth()]} ${day || today.getDate()}, ${today.getFullYear()}`;
 
     const cats = [
-        { key: 'needs', label: 'Needs', Icon: IconNeeds, color: theme.needs, soft: theme.needsSoft },
-        { key: 'wants', label: 'Wants', Icon: IconWants, color: theme.wants, soft: theme.wantsSoft },
+        { key: 'needs', label: 'Needs', Icon: IconNeedsMascot, color: theme.needs, soft: theme.needsSoft },
+        { key: 'wants', label: 'Wants', Icon: IconWantsMascot, color: theme.wants, soft: theme.wantsSoft },
     ];
     const selected = cats.find(c => c.key === category);
 
@@ -206,11 +207,12 @@ export default function ExpenseContainer({ embedded = false }) {
             <View style={{ paddingHorizontal: 20 }}>
 
                 {/* ── Amount card ─────────────────────────────────────── */}
+                <View style={{ borderRadius: 18, borderWidth: 1.5, borderColor: theme.ink, backgroundColor: theme.brand, marginBottom: 22, ...stickerShadow('#0F3D2E') }}>
                 <LinearGradient
                     colors={[theme.brand, theme.brand2]}
                     start={{ x: 0.1, y: 0 }}
                     end={{ x: 1.1, y: 1 }}
-                    style={[styles.amountCard, shadow(5)]}
+                    style={[styles.amountCard, { marginBottom: 0 }]}
                 >
                     {/* Leaf flourish */}
                     <View
@@ -243,6 +245,7 @@ export default function ExpenseContainer({ embedded = false }) {
                         <Text style={styles.amountDate}>{dateStr}</Text>
                     </View>
                 </LinearGradient>
+                </View>
 
                 {/* ── Category ────────────────────────────────────────── */}
                 <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>CATEGORY</Text>
@@ -260,8 +263,8 @@ export default function ExpenseContainer({ embedded = false }) {
                                     styles.catCard,
                                     {
                                         backgroundColor: active ? c.soft : theme.surface,
-                                        borderColor: active ? c.color : theme.border,
-                                        ...(active ? shadow(4) : {}),
+                                        borderColor: active ? c.color : theme.ink,
+                                        ...stickerShadow('#8A8F86'),
                                     },
                                     active && styles.catCardActive,
                                     pressed && { opacity: 0.85 },
@@ -271,7 +274,7 @@ export default function ExpenseContainer({ embedded = false }) {
                                     styles.catIconTile,
                                     { backgroundColor: active ? c.soft : theme.surfaceSoft },
                                 ]}>
-                                    <c.Icon size={26} accent={c.color} />
+                                    <c.Icon size={26} accent={c.color} paper={active ? c.soft : theme.surfaceSoft} />
                                 </View>
                                 <Text style={[
                                     styles.catLabel,

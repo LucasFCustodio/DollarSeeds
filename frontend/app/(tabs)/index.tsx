@@ -6,7 +6,6 @@
  * ✅ allGreen scripture modal fires once per month
  * ✅ Settings (gear) opens /settings — dark mode + logout live there now
  * ✅ Category cards navigate to /details with correct params
- * ✅ Spending Trends navigates to /trends
  * ✅ Piggy bank balance shown in Goals expanded state
  * ✅ Category card expand/collapse (inline accordion)
  */
@@ -27,7 +26,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
-import { useTheme, shadow } from '../../context/ThemeContext';
+import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
@@ -35,11 +34,13 @@ import AnimatedAmount from '../../components/ui/AnimatedAmount';
 import HeroBg from '../../components/ui/HeroBg';
 import { resolveBudgetType, splitLabel } from '../../constants/budgetTypes';
 import {
-    IconLeaf, IconSparkle, IconGear,
+    IconLeaf, IconGear,
+    IconLogoMascot, IconGearMascot,
     IconChevronLeft, IconChevronRight,
     IconNeeds, IconWants, IconGoals,
+    IconNeedsMascot, IconWantsMascot, IconSavingsGoalMascot,
     IconExpense, IconIncome,
-    IconScripture, IconTrend, IconSavings,
+    IconScripture, IconSavings,
 } from '../../components/icons';
 
 // Enable LayoutAnimation on Android
@@ -62,16 +63,32 @@ interface DashboardData {
 
 // ─── Scripture verse pool ─────────────────────────────────────────────────────
 const VERSES = [
-    { text: "The wise store up choice food and olive oil, but fools gulp theirs down.", ref: "Proverbs 21:20" },
+    { text: "The wise have wealth and luxury, but fools spend whatever they get.", ref: "Proverbs 21:20" },
     { text: "Whoever can be trusted with very little can also be trusted with much.", ref: "Luke 16:10" },
     { text: "Dishonest money dwindles away, but whoever gathers money little by little makes it grow.", ref: "Proverbs 13:11" },
-    { text: "Honor the Lord with your wealth, with the firstfruits of all your crops.", ref: "Proverbs 3:9-10" },
+    { text: "Honor the Lord with your wealth, with the firstfruits of all your crops; then your barns will be filled to overflowing, and your vats will brim over with new wine.", ref: "Proverbs 3:9-10" },
     { text: "Remember the Lord your God, for it is he who gives you the ability to produce wealth.", ref: "Deuteronomy 8:18" },
     { text: "Seek first the kingdom of God and his righteousness, and all these things will be given to you.", ref: "Matthew 6:33" },
     { text: "And my God will meet all your needs according to the riches of his glory in Christ Jesus.", ref: "Philippians 4:19" },
     { text: "The rich rule over the poor, and the borrower is slave to the lender.", ref: "Proverbs 22:7" },
-    { text: "Little by little, it grows.", ref: "Proverbs 13:11" },
+    { text: "A tithe of everything from the land, whether grain from the soil or fruit from the trees, belongs to the Lord; it is holy to the Lord.", ref: "Leviticus 27:30" },
+    { text: "Each of you must bring a gift in proportion to the way the Lord your God has blessed you.", ref: "Deuteronomy 16:17" },
+    { text: "One person gives freely, yet gains even more; another withholds unduly, but comes to poverty. A generous person will prosper; whoever refreshes others will be refreshed.", ref: "Proverbs 11:24-25" },
+    { text: "And do not forget to do good and to share with others, for with such sacrifices God is pleased.", ref: "Hebrews 13:16" },
+    { text: "For if the willingness is there, the gift is acceptable according to what one has, not according to what one does not have.", ref: "2 Corinthians 8:12" },
+    { text: "But when you give to the needy, do not let your left hand know what your right hand is doing, so that your giving may be in secret.", ref: "Matthew 6:3-4" },
+    { text: "Give, and it will be given to you. A good measure, pressed down, shaken together and running over, will be poured into your lap.", ref: "Luke 6:38" },
 ];
+
+// Verse of the day — deterministic from the calendar date, so it rotates daily and
+// every user sees the same verse on a given day. Pure local computation: no backend,
+// no storage, and stable across re-renders within the same day.
+const getDailyVerse = () => {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 0).getTime();
+    const dayOfYear = Math.floor((now.getTime() - startOfYear) / 86_400_000);
+    return VERSES[dayOfYear % VERSES.length];
+};
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 function fmt$(n: number, decimals = 0): string {
@@ -276,9 +293,10 @@ export default function DashboardScreen() {
     };
 
     // ── Derived values ─────────────────────────────────────────────────────────
-    const { total_income, budgets, expenses, compliance_score, tithe } = dashboardData;
+    const { total_income, budgets, expenses, tithe } = dashboardData;
     const titheActive = !!tithe?.enabled && (tithe?.amount ?? 0) > 0;
     const activeBudgetType = resolveBudgetType(dashboardData.budget_type?.key);
+    const dailyVerse = getDailyVerse();
 
     // ── Rollover close-out visibility ──────────────────────────────────────────
     // A month is "closeable" once it's over. We never prompt for the in-progress
@@ -297,15 +315,6 @@ export default function DashboardScreen() {
         !(monthIndex === prevMonthIdx && new Date().getDate() < 4); // give the new month a few days
     const totalSpent = expenses.needs + expenses.wants + expenses.goals;
     const totalLeft = Math.max(0, total_income - totalSpent);
-    const score = compliance_score?.overall ?? null;
-
-    const getScoreLabel = (s: number | null) => {
-        if (s === null) return 'Log income to see your score';
-        if (s >= 9.0) return 'Excellent stewardship!';
-        if (s >= 7.0) return 'Good discipline — keep it up';
-        if (s >= 5.0) return 'Some areas need attention';
-        return 'Budget needs adjustment';
-    };
 
     // ── Category definitions ───────────────────────────────────────────────────
     const categories = [
@@ -313,7 +322,7 @@ export default function DashboardScreen() {
             key: 'needs' as const,
             label: 'Needs',
             pct: `${Math.round(activeBudgetType.needs * 100)}%`,
-            Icon: IconNeeds,
+            Icon: IconNeedsMascot,
             color: theme.needs,
             soft: theme.needsSoft,
             spent: expenses.needs,
@@ -325,7 +334,7 @@ export default function DashboardScreen() {
             key: 'wants' as const,
             label: 'Wants',
             pct: `${Math.round(activeBudgetType.wants * 100)}%`,
-            Icon: IconWants,
+            Icon: IconWantsMascot,
             color: theme.wants,
             soft: theme.wantsSoft,
             spent: expenses.wants,
@@ -337,7 +346,7 @@ export default function DashboardScreen() {
             key: 'goals' as const,
             label: 'Goals',
             pct: `${Math.round(activeBudgetType.savings * 100)}%`,
-            Icon: IconGoals,
+            Icon: IconSavingsGoalMascot,
             color: theme.goals,
             soft: theme.goalsSoft,
             spent: expenses.goals,
@@ -392,7 +401,7 @@ export default function DashboardScreen() {
                         {/* Logo tile + wordmark */}
                         <View style={styles.logoGroup}>
                             <View style={[styles.logoTile, { backgroundColor: 'rgba(255,255,255,0.16)' }]}>
-                                <IconLeaf size={22} color="#fff" />
+                                <IconLogoMascot size={24} />
                             </View>
                             <View>
                                 <Text style={styles.wordmark}>DollarSeeds</Text>
@@ -409,7 +418,7 @@ export default function DashboardScreen() {
                                 onPress={() => router.push('/settings' as any)}
                                 style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
                             >
-                                <IconGear size={18} color="#fff" />
+                                <IconGearMascot size={18} color="#fff" />
                             </Pressable>
                         </View>
                     </View>
@@ -461,29 +470,6 @@ export default function DashboardScreen() {
                         </View>
                     </View>
 
-                    {/* Budget health pill */}
-                    <View style={styles.healthPill}>
-                        <IconSparkle size={14} color={theme.harvest} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.healthTitle}>
-                                Budget Health · {score !== null ? `${score}/10` : '—/10'}
-                            </Text>
-                            <Text style={styles.healthHint}>
-                                {getScoreLabel(score)}
-                            </Text>
-                        </View>
-                        <View style={styles.healthBarTrack}>
-                            <View
-                                style={[
-                                    styles.healthBarFill,
-                                    {
-                                        width: `${score !== null ? (score / 10) * 100 : 0}%`,
-                                        backgroundColor: theme.harvest,
-                                    },
-                                ]}
-                            />
-                        </View>
-                    </View>
                 </View>
             </HeroBg>
 
@@ -492,7 +478,7 @@ export default function DashboardScreen() {
 
                 {/* Close-out prompt — nudge to roll last month's leftover into savings */}
                 {showClosePrompt && (
-                    <View style={[styles.rolloverCard, { backgroundColor: theme.surface, borderColor: theme.brand2, ...shadow(7) }]}>
+                    <View style={[styles.rolloverCard, { backgroundColor: theme.surface, borderColor: theme.brand2, ...stickerShadow('#8A8F86') }]}>
                         <View style={styles.rolloverHeaderRow}>
                             <View style={[styles.rolloverIconTile, { backgroundColor: theme.brandSoft }]}>
                                 <IconSavings size={22} color={theme.brand} accent={theme.brand2} />
@@ -564,10 +550,10 @@ export default function DashboardScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.scriptureVerse, { color: theme.ink }]}>
-                                "Little by little, it grows."
+                                "{dailyVerse.text}"
                             </Text>
                             <Text style={[styles.scriptureRef, { color: theme.ink3 }]}>
-                                Proverbs 13:11
+                                {dailyVerse.ref}
                             </Text>
                         </View>
                     </View>
@@ -587,19 +573,12 @@ export default function DashboardScreen() {
                             </Text>
                         </View>
                     </View>
-                    <Pressable
-                        onPress={() => router.push('/trends' as any)}
-                        style={({ pressed }) => [styles.trendsBtn, pressed && { opacity: 0.7 }]}
-                    >
-                        <IconTrend size={14} color={theme.brand} />
-                        <Text style={[styles.trendsBtnText, { color: theme.brand }]}>Trends</Text>
-                    </Pressable>
                 </View>
 
                 {/* Tithe envelope — carved out FIRST, shown above the 50/30/20 split.
                     Only rendered when tithing is enabled; hidden entirely otherwise. */}
                 {titheActive && (
-                    <View style={[styles.titheCard, { backgroundColor: theme.surface, borderColor: theme.harvest, ...shadow(7) }]}>
+                    <View style={[styles.titheCard, { backgroundColor: theme.surface, borderColor: theme.harvest, ...stickerShadow('#8A8F86') }]}>
                         <View style={[styles.titheIconTile, { backgroundColor: theme.harvest }]}>
                             <IconScripture size={26} color={theme.brand} />
                         </View>
@@ -690,7 +669,7 @@ interface CategoryCardProps {
         key: 'needs' | 'wants' | 'goals';
         label: string;
         pct: string;
-        Icon: React.ComponentType<{ size?: number; accent?: string }>;
+        Icon: React.ComponentType<{ size?: number; accent?: string; paper?: string }>;
         color: string;
         soft: string;
         spent: number;
@@ -713,14 +692,14 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
     const { Icon } = cat;
 
     return (
-        <View style={[styles.catCard, { backgroundColor: theme.surface, ...shadow(7) }]}>
+        <View style={[styles.catCard, { backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.ink, ...stickerShadow('#8A8F86') }]}>
             {/* Card header — tap to expand/collapse */}
             <Pressable
                 onPress={onToggle}
                 style={({ pressed }) => [styles.catCardHeader, pressed && { opacity: 0.85 }]}
             >
                 <View style={[styles.catIconTile, { backgroundColor: cat.soft }]}>
-                    <Icon size={28} accent={cat.color} />
+                    <Icon size={28} accent={cat.color} paper={cat.soft} />
                 </View>
 
                 <View style={{ flex: 1 }}>
@@ -781,7 +760,7 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
                             ]}
                         >
                             <View style={[styles.txIconTile, { backgroundColor: cat.soft }]}>
-                                <cat.Icon size={16} accent={cat.color} />
+                                <cat.Icon size={16} accent={cat.color} paper={cat.soft} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.txName, { color: theme.ink }]} numberOfLines={1}>
@@ -892,29 +871,6 @@ const styles = StyleSheet.create({
         letterSpacing: 0.6,
     },
 
-    // Health pill
-    healthPill: {
-        marginTop: 18,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        backgroundColor: 'rgba(255,255,255,0.12)',
-        padding: 12,
-        borderRadius: 14,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.18)',
-    },
-    healthTitle: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: 12 },
-    healthHint: { color: 'rgba(255,255,255,0.7)', fontFamily: 'InstrumentSerif-Italic', fontSize: 11, marginTop: 1 },
-    healthBarTrack: {
-        width: 60,
-        height: 5,
-        backgroundColor: 'rgba(255,255,255,0.15)',
-        borderRadius: 999,
-        overflow: 'hidden',
-    },
-    healthBarFill: { height: '100%', borderRadius: 999 },
-
     // Content area
     contentArea: { paddingHorizontal: 18 },
 
@@ -972,8 +928,6 @@ const styles = StyleSheet.create({
     budgetTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
     budgetTypeDot: { width: 6, height: 6, borderRadius: 3 },
     budgetTypeText: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11, letterSpacing: 0.2 },
-    trendsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    trendsBtnText: { fontFamily: 'Geist-SemiBold', fontSize: 12 },
 
     // Tithe envelope (above the 50/30/20 split)
     titheCard: {
@@ -996,7 +950,6 @@ const styles = StyleSheet.create({
     // Category card
     catCard: {
         borderRadius: 18,
-        overflow: 'hidden',
         marginBottom: 12,
     },
     catCardHeader: { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -1012,7 +965,7 @@ const styles = StyleSheet.create({
     catMetaText: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11 },
 
     // Expanded transaction rows
-    catExpanded: { borderTopWidth: 1 },
+    catExpanded: { borderTopWidth: 1, borderBottomLeftRadius: 18, borderBottomRightRadius: 18 },
     txRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1052,7 +1005,7 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         paddingHorizontal: 18,
         borderRadius: 14,
-        ...shadow(5),
+        ...shadow(5, '#0F3D2E'),
     },
     quickActionPrimaryText: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: 14 },
     quickActionSecondary: {

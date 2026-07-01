@@ -2,15 +2,26 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 // ─── Shadow helper ────────────────────────────────────────────────────────────
-export function shadow(depth: number) {
+export function shadow(depth: number, color: string = '#8A8F86') {
     const d = Math.max(0, Math.min(10, depth));
     if (d === 0) return {};
     return {
-        shadowColor: '#0F2820',
+        shadowColor: color,
         shadowOffset: { width: 0, height: 4 + d * 0.8 },
         shadowOpacity: 0.04 + d * 0.008,
         shadowRadius: 12 + d * 2.2,
         elevation: Math.round(2 + d * 0.8),
+    };
+}
+
+// Hard offset "sticker" shadow for the retro card look (visible, low blur).
+export function stickerShadow(color: string = '#8A8F86') {
+    return {
+        shadowColor: color,
+        shadowOffset: { width: 2, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 1.5,
+        elevation: 6,
     };
 }
 
