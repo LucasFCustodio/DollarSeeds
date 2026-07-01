@@ -28,7 +28,7 @@ import AnimatedAmount from '../../components/ui/AnimatedAmount';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
 import {
-    SavingsJar, IconPlus, IconArrow, IconTarget,
+    SavingsJar, IconPlus, IconArrow, IconSavingsGoalMascot, IconDebtMascot,
     IconTrash, IconCheck, IconSavings,
 } from '../../components/icons';
 
@@ -370,7 +370,11 @@ export default function PiggyBankScreen() {
                 {/* Header row */}
                 <View style={styles.goalHeader}>
                     <View style={[styles.goalIconTile, { backgroundColor: accentSoft }]}>
-                        <IconTarget size={22} color={achieved ? theme.success : accent} />
+                        {isDebt ? (
+                            <IconDebtMascot size={22} accent={achieved ? theme.success : accent} paper={accentSoft} />
+                        ) : (
+                            <IconSavingsGoalMascot size={22} accent={achieved ? theme.success : accent} paper={accentSoft} />
+                        )}
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.goalTitle, { color: theme.ink }]}>{g.title}</Text>

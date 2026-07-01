@@ -25,7 +25,7 @@ import Svg, { Path } from 'react-native-svg';
 import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
-import { useTheme, shadow } from '../../context/ThemeContext';
+import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
 import { IconChevronLeft, IconCheck } from '../icons';
 import { resolveBudgetType } from '../../constants/budgetTypes';
 
@@ -206,11 +206,12 @@ export default function IncomeContainer({ embedded = false }) {
             <View style={{ paddingHorizontal: 20 }}>
 
                 {/* ── Amount card ─────────────────────────────────────── */}
+                <View style={{ borderRadius: 18, borderWidth: 1.5, borderColor: theme.ink, backgroundColor: theme.brand, marginBottom: 18, ...stickerShadow('#0F3D2E') }}>
                 <LinearGradient
                     colors={[theme.brand, theme.brand2]}
                     start={{ x: 0.1, y: 0 }}
                     end={{ x: 1.1, y: 1 }}
-                    style={[styles.amountCard, shadow(5)]}
+                    style={[styles.amountCard, { marginBottom: 0 }]}
                 >
                     {/* Leaf flourish */}
                     <View pointerEvents="none" style={styles.leafFlourishWrap}>
@@ -243,6 +244,7 @@ export default function IncomeContainer({ embedded = false }) {
                         <Text style={styles.amountVerse}>— James 1:17</Text>
                     </View>
                 </LinearGradient>
+                </View>
 
                 {/* ── 50/30/20 split preview ───────────────────────────── */}
                 <View style={[styles.splitCard, { backgroundColor: theme.surface, ...shadow(3) }]}>

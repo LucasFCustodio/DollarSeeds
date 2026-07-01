@@ -10,6 +10,31 @@ import Svg, {
     Rect as SvgRect,
 } from 'react-native-svg';
 
+// Hand-drawn mascot tab icons (theme-adaptive duotone)
+export {
+    IconHomeMascot,
+    IconGoalsMascot,
+    IconTransactionsMascot,
+    IconLessonsMascot,
+} from './mascotIcons';
+export type { MascotIconProps } from './mascotIcons';
+
+// Hand-drawn category mascot icons (theme-adaptive duotone)
+export {
+    IconNeedsMascot,
+    IconWantsMascot,
+    IconSavingsGoalMascot,
+    IconDebtMascot,
+} from './categoryIcons';
+export type { CategoryIconProps } from './categoryIcons';
+
+// Hand-drawn hero icons (dashboard logo + gear)
+export {
+    IconLogoMascot,
+    IconGearMascot,
+} from './heroIcons';
+export type { HeroIconProps } from './heroIcons';
+
 // ─── Shared icon wrapper ──────────────────────────────────────────────────────
 interface IconProps {
     size?: number;
@@ -261,6 +286,18 @@ export const IconUser = ({ size = 20, color = '#0F2820' }: { size?: number; colo
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <Circle cx={12} cy={9} r={3.5} stroke={color} strokeWidth={1.6} />
         <Path d="M5 20c1-3.5 4-5 7-5s6 1.5 7 5" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
+    </Svg>
+);
+
+export const IconGear = ({ size = 20, color = '#0F2820' }: { size?: number; color?: string }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Circle cx={12} cy={12} r={3} stroke={color} strokeWidth={1.6} />
+        <Path
+            d="M12 2.5l1.4 2.2 2.6-.5.5 2.6 2.2 1.4-1 2.4 1 2.4-2.2 1.4-.5 2.6-2.6-.5L12 21.5l-1.4-2.2-2.6.5-.5-2.6-2.2-1.4 1-2.4-1-2.4 2.2-1.4.5-2.6 2.6.5L12 2.5z"
+            stroke={color}
+            strokeWidth={1.6}
+            strokeLinejoin="round"
+        />
     </Svg>
 );
 

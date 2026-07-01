@@ -16,18 +16,28 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import {
-    IconHome,
-    IconTransactions,
-    IconSavings,
-    IconLessons,
+    IconHomeMascot,
+    IconTransactionsMascot,
+    IconGoalsMascot,
+    IconLessonsMascot,
 } from '../icons';
 
-// Map route name → icon component
-const TAB_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string; accent?: string; filled?: boolean }>> = {
-    index: IconHome,
-    transactions: IconTransactions,
-    piggyBank: IconSavings,
-    lessons: IconLessons,
+// Icons accept `paper` (the container background) so their light fills read as
+// negative space, while the linework tints via `color` across light/dark + states.
+type TabIconComponent = React.ComponentType<{
+    size?: number;
+    color?: string;
+    paper?: string;
+    accent?: string;
+    filled?: boolean;
+}>;
+
+// Map route name -> icon component
+const TAB_ICONS: Record<string, TabIconComponent> = {
+    index: IconHomeMascot,
+    transactions: IconTransactionsMascot,
+    piggyBank: IconGoalsMascot,
+    lessons: IconLessonsMascot,
 };
 
 const TAB_LABELS: Record<string, string> = {
@@ -54,7 +64,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
         >
             {state.routes.map((route, index) => {
                 const isFocused = state.index === index;
-                const IconComp = TAB_ICONS[route.name] ?? IconHome;
+                const IconComp = TAB_ICONS[route.name] ?? IconHomeMascot;
                 const label = TAB_LABELS[route.name] ?? route.name;
 
                 const onPress = () => {
@@ -75,6 +85,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                         brandSoft={theme.brandSoft}
                         inkColor={theme.ink3}
                         accent={theme.brand2}
+                        surface={theme.surface}
                     />
                 );
             })}
@@ -82,19 +93,20 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
     );
 }
 
-// ── Individual tab item with spring animation ─────────────────────────────────
+// -- Individual tab item with spring animation --------------------------------
 interface TabItemProps {
     isFocused: boolean;
     onPress: () => void;
-    IconComp: React.ComponentType<{ size?: number; color?: string; accent?: string; filled?: boolean }>;
+    IconComp: TabIconComponent;
     label: string;
     brandColor: string;
     brandSoft: string;
     inkColor: string;
     accent: string;
+    surface: string;
 }
 
-function TabItem({ isFocused, onPress, IconComp, label, brandColor, brandSoft, inkColor, accent }: TabItemProps) {
+function TabItem({ isFocused, onPress, IconComp, label, brandColor, brandSoft, inkColor, accent, surface }: TabItemProps) {
     const progress = useSharedValue(isFocused ? 1 : 0);
 
     React.useEffect(() => {
@@ -110,6 +122,9 @@ function TabItem({ isFocused, onPress, IconComp, label, brandColor, brandSoft, i
 
     const iconColor = isFocused ? brandColor : inkColor;
     const labelColor = isFocused ? brandColor : inkColor;
+    // Light/paper fills resolve to whatever sits behind the icon, so the mascot
+    // reads as clean linework: the active pill (brandSoft) or the bar (surface).
+    const paperColor = isFocused ? brandSoft : surface;
 
     return (
         <Pressable onPress={onPress} style={styles.tabItem}>
@@ -117,6 +132,7 @@ function TabItem({ isFocused, onPress, IconComp, label, brandColor, brandSoft, i
                 <IconComp
                     size={22}
                     color={iconColor}
+                    paper={paperColor}
                     accent={isFocused ? accent : inkColor}
                     filled={isFocused}
                 />

@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { Pressable, View, ViewStyle, StyleSheet, StyleProp } from 'react-native';
-import { AppTheme, shadow } from '../../context/ThemeContext';
+import { AppTheme, shadow, stickerShadow } from '../../context/ThemeContext';
 
 interface CardProps {
     theme: AppTheme;
@@ -20,9 +20,9 @@ export default function Card({ theme, depth = 6, padding = 18, style, onPress, c
         backgroundColor: theme.surface,
         borderRadius: 18,
         padding,
-        borderWidth: depth <= 2 ? 1 : 0,
-        borderColor: depth <= 2 ? theme.border : 'transparent',
-        ...(shadow(depth) as ViewStyle),
+        borderWidth: 1.5,
+        borderColor: theme.ink,
+        ...(stickerShadow('#8A8F86') as ViewStyle),
     };
 
     if (onPress) {
