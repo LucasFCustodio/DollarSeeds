@@ -2,9 +2,13 @@
 // Regenerate after schema changes. The supabase-js client in `lib/supabase.ts`
 // is currently untyped (used only for auth); this file is the canonical schema
 // reference and is kept in sync with the remote DB. Latest change: added the
-// `month_status` table (per-month open/closed state), `savings_goals.is_reconciliation`
-// (auto-managed Reconciliation debt goal flag), and `savings_transactions.source`
-// now allows 'rollover' (end-of-month rollover feature).
+// `lesson_series` + `lessons` tables (cloud-hosted video series for the Lessons page).
+// NOTE: these two were added by hand to mirror backend/migrations/0001_lesson_series.sql
+// because the Supabase MCP was not authenticated when the feature was built — re-run
+// `generate_typescript_types` after applying that migration to confirm parity.
+// Prior change: added the `month_status` table (per-month open/closed state),
+// `savings_goals.is_reconciliation` (auto-managed Reconciliation debt goal flag), and
+// `savings_transactions.source` now allows 'rollover' (end-of-month rollover feature).
 export type Json =
   | string
   | number
@@ -125,6 +129,89 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      lesson_series: {
+        Row: {
+          created_at: string
+          creator: string | null
+          description: string | null
+          id: string
+          is_premium: boolean
+          is_published: boolean
+          sort_order: number
+          thumbnail_url: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          creator?: string | null
+          description?: string | null
+          id?: string
+          is_premium?: boolean
+          is_published?: boolean
+          sort_order?: number
+          thumbnail_url?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          creator?: string | null
+          description?: string | null
+          id?: string
+          is_premium?: boolean
+          is_published?: boolean
+          sort_order?: number
+          thumbnail_url?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
+      lessons: {
+        Row: {
+          created_at: string
+          description: string | null
+          duration_seconds: number | null
+          id: string
+          series_id: string
+          sort_order: number
+          thumbnail_url: string | null
+          title: string
+          video_id: string
+          video_provider: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number | null
+          id?: string
+          series_id: string
+          sort_order?: number
+          thumbnail_url?: string | null
+          title: string
+          video_id: string
+          video_provider?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          duration_seconds?: number | null
+          id?: string
+          series_id?: string
+          sort_order?: number
+          thumbnail_url?: string | null
+          title?: string
+          video_id?: string
+          video_provider?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_series"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       month_status: {
         Row: {

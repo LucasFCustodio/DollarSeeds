@@ -72,6 +72,8 @@ function RootLayoutNav() {
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
                 <Stack.Screen name="auth" options={{ headerShown: false }} />
                 <Stack.Screen name="lessonDetail" options={{ headerShown: false }} />
+                <Stack.Screen name="lessonSeries/[id]" options={{ headerShown: false }} />
+                <Stack.Screen name="lessonPlayer" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
             </Stack>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />

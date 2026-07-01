@@ -920,3 +920,134 @@ class LessonRating(BaseModel):
 def create_lesson_rating(entry: LessonRating):
     response = supabase.table("lesson_ratings").insert(entry.model_dump()).execute()
     return {"message": "Rating recorded.", "data": response.data}
+
+
+# ─── Video lesson series ──────────────────────────────────────────────────────
+# Cloud-hosted VIDEO series (distinct from the written lessons, which live entirely
+# in the frontend constant `constants/lessons.ts` + local AsyncStorage). Data model:
+#   lesson_series 1───∞ lessons
+# Videos live in the PRIVATE `lesson-videos` bucket; lessons.video_id is the object
+# PATH inside it. The app never receives a permanent video URL — the list/detail
+# routes below deliberately omit video paths, and /playback/ mints a short-lived
+# signed URL per play. Series/lesson images live in the PUBLIC `lesson-thumbnails`
+# bucket (thumbnail_url is a plain public URL).
+#
+# CONTENT WORKFLOW: there is no admin UI. Video/image files are uploaded, and the
+# lesson_series / lessons rows inserted, MANUALLY via the Supabase dashboard.
+
+SIGNED_URL_TTL_SECONDS = 3600  # 1 hour; the client re-fetches per playback
+
+class SeriesSummary(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    creator: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    lesson_count: int
+
+class SeriesLesson(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    thumbnail_url: Optional[str] = None
+    sort_order: int
+
+class SeriesDetail(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    creator: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    lessons: list[SeriesLesson]
+
+class PlaybackResponse(BaseModel):
+    url: str
+    expires_in: int
+
+
+@app.get("/lessons/series/")
+def list_lesson_series():
+    """Published video series for the Lessons page, ordered by sort_order. Each carries
+    a DERIVED lesson_count (never stored, so it can't drift). No video paths are exposed."""
+    series = supabase.table("lesson_series") \
+        .select("id, title, description, creator, thumbnail_url") \
+        .eq("is_published", True).order("sort_order").execute().data
+
+    # Derive lesson_count with a single COUNT-style query over the published series' ids.
+    counts: dict[str, int] = {}
+    ids = [s["id"] for s in series]
+    if ids:
+        rows = supabase.table("lessons").select("series_id").in_("series_id", ids).execute().data
+        for r in rows:
+            counts[r["series_id"]] = counts.get(r["series_id"], 0) + 1
+
+    data = [
+        {
+            "id": s["id"],
+            "title": s["title"],
+            "description": s.get("description"),
+            "creator": s.get("creator"),
+            "thumbnail_url": s.get("thumbnail_url"),
+            "lesson_count": counts.get(s["id"], 0),
+        }
+        for s in series
+    ]
+    return {"data": data}
+
+
+@app.get("/lessons/series/{series_id}/")
+def get_lesson_series(series_id: str):
+    """A single published series plus its lessons ordered by sort_order. Returns only the
+    metadata the playlist screen needs — NEVER raw video paths/URLs (see /playback/)."""
+    s = supabase.table("lesson_series") \
+        .select("id, title, description, creator, thumbnail_url, is_published") \
+        .eq("id", series_id).execute().data
+    if not s or not s[0].get("is_published"):
+        raise HTTPException(status_code=404, detail="Series not found.")
+    series = s[0]
+
+    lessons = supabase.table("lessons") \
+        .select("id, title, description, duration_seconds, thumbnail_url, sort_order") \
+        .eq("series_id", series_id).order("sort_order").execute().data
+
+    return {
+        "data": {
+            "id": series["id"],
+            "title": series["title"],
+            "description": series.get("description"),
+            "creator": series.get("creator"),
+            "thumbnail_url": series.get("thumbnail_url"),
+            "lessons": lessons,
+        }
+    }
+
+
+@app.get("/lessons/{lesson_id}/playback/")
+def get_lesson_playback(lesson_id: str):
+    """Mint a SHORT-LIVED signed URL to stream one lesson's video. The private
+    `lesson-videos` bucket is never public, so this is the only way the app gets a
+    (temporary, expiring) URL. Returns { url, expires_in }."""
+    row = supabase.table("lessons") \
+        .select("id, video_provider, video_id").eq("id", lesson_id).execute().data
+    if not row:
+        raise HTTPException(status_code=404, detail="Lesson not found.")
+    lesson = row[0]
+
+    # ── FUTURE: subscription / is_premium gate ──────────────────────────────────
+    # When the paid tier ships, look up the lesson's series.is_premium here and, if
+    # premium, verify the requesting user's subscription before minting a URL
+    # (raise 402/403 otherwise). Intentionally NOT gated yet — all content is open.
+
+    provider = lesson.get("video_provider") or "supabase"
+    if provider != "supabase":
+        # Externally-hosted video: video_id is already a playable URL. (No provider
+        # besides 'supabase' is used today; this keeps the door open without gating.)
+        return {"url": lesson["video_id"], "expires_in": 0}
+
+    signed = supabase.storage.from_("lesson-videos") \
+        .create_signed_url(lesson["video_id"], SIGNED_URL_TTL_SECONDS)
+    url = signed.get("signedURL") or signed.get("signedUrl")
+    if not url:
+        raise HTTPException(status_code=500, detail="Could not sign video URL.")
+    return {"url": url, "expires_in": SIGNED_URL_TTL_SECONDS}
