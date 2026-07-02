@@ -23,6 +23,7 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, shadow } from '../../context/ThemeContext';
+import { useAnalytics } from '../../lib/analytics';
 import HeroBg from '../../components/ui/HeroBg';
 import AnimatedAmount from '../../components/ui/AnimatedAmount';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
@@ -84,6 +85,7 @@ const fmtAmt = (n: number) =>
 export default function PiggyBankScreen() {
     const { user } = useAuth();
     const { theme } = useTheme();
+    const analytics = useAnalytics();
     const today = new Date();
     const currentMonth = MONTHS[today.getMonth()];
 
@@ -253,6 +255,12 @@ export default function PiggyBankScreen() {
                     month: currentMonth,
                     to_goal_title: selectedGoal?.title ?? 'Savings goal',
                 });
+                // Funding a specific goal via transfer (goal_id only, never the amount).
+                if (selectedGoal?.goal_type === 'debt') {
+                    analytics.debtGoalFunded({ goal_id: txGoalId });
+                } else {
+                    analytics.savingsGoalFunded({ goal_id: txGoalId });
+                }
             } else {
                 // ── Normal deposit / withdrawal ────────────────────────────
                 // Funding a deposit from an earlier open month books it against that
@@ -272,10 +280,20 @@ export default function PiggyBankScreen() {
                     goal_id: txGoalId ?? null,
                     source: 'income',
                 });
+                // A deposit into a specific (non-general, non-reconciliation) goal counts
+                // as funding it — same event family as the transfer branch above.
+                if (isDeposit && selectedGoal && !selectedGoal.is_general && !selectedGoal.is_reconciliation) {
+                    if (selectedGoal.goal_type === 'debt') {
+                        analytics.debtGoalFunded({ goal_id: selectedGoal.id });
+                    } else {
+                        analytics.savingsGoalFunded({ goal_id: selectedGoal.id });
+                    }
+                }
                 // Mark goal complete on withdrawal (not for General Savings or the
                 // auto-managed Reconciliation goal, which is never "completed" by hand)
                 if (activeForm === 'withdrawal' && selectedGoal && !selectedGoal.is_general && !selectedGoal.is_reconciliation) {
                     await axios.patch(`${BASE}/savings/goal/${selectedGoal.id}/complete?user_id=${user?.id}`);
+                    analytics.goalCompleted({ goal_id: selectedGoal.id, goal_type: selectedGoal.goal_type });
                 }
             }
             setTxAmount(''); setTxGoalId(null); setActiveForm(null); setFundingSource('income');
@@ -313,6 +331,9 @@ export default function PiggyBankScreen() {
                 target_amount: amount, target_month: goalMonth, target_year: goalYear,
                 goal_type: goalType,
             });
+            // Fire BEFORE the goalType reset below. No amounts — just which kind of goal.
+            if (goalType === 'debt') analytics.debtGoalCreated();
+            else analytics.savingsGoalCreated();
             setShowGoalForm(false); setGoalTitle(''); setGoalAmount(''); setGoalType('saving');
             fetchData();
         } catch (error: any) {

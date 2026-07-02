@@ -25,6 +25,7 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
+import { useAnalytics } from '../../lib/analytics';
 import {
     IconNeeds, IconWants,
     IconNeedsMascot, IconWantsMascot,
@@ -121,6 +122,7 @@ export default function ExpenseContainer({ embedded = false }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
+    const analytics = useAnalytics();
 
     const today = new Date();
 
@@ -159,6 +161,8 @@ export default function ExpenseContainer({ embedded = false }) {
                 month,
                 user_id: user?.id,
             });
+            // Behavioral only — the category, never the amount.
+            analytics.expenseLogged({ category });
             setAmount('');
             setTitle('');
             setMonth(MONTHS[today.getMonth()]);

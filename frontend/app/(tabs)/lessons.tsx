@@ -28,6 +28,7 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, stickerShadow, AppTheme } from '../../context/ThemeContext';
+import { useAnalytics } from '../../lib/analytics';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
 import { IconCheck, IconScripture, IconStar } from '../../components/icons';
@@ -49,6 +50,7 @@ export default function LessonsScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
+    const analytics = useAnalytics();
 
     const [completedIds, setCompletedIds] = useState<number[]>([]);
     const [ratings, setRatings] = useState<Record<number, number>>({});
@@ -154,12 +156,13 @@ export default function LessonsScreen() {
                                 key={s.id}
                                 theme={theme}
                                 series={s}
-                                onExplore={() =>
+                                onExplore={() => {
+                                    analytics.seriesExploreClicked({ series_id: s.id, title: s.title });
                                     router.push({
                                         pathname: '/lessonSeries/[id]',
                                         params: { id: s.id },
-                                    } as any)
-                                }
+                                    } as any);
+                                }}
                             />
                         ))}
                     </View>
@@ -201,12 +204,13 @@ export default function LessonsScreen() {
                             depth={5}
                             padding={18}
                             style={styles.lessonCard}
-                            onPress={() =>
+                            onPress={() => {
+                                analytics.writtenLessonOpened({ lesson_id: lesson.id, title: lesson.title });
                                 router.push({
                                     pathname: '/lessonDetail',
                                     params: { id: lesson.id },
-                                } as any)
-                            }
+                                } as any);
+                            }}
                         >
                             <View style={styles.cardRow}>
                                 {/* Icon tile — done vs not done */}

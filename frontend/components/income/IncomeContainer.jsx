@@ -26,6 +26,7 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
+import { useAnalytics } from '../../lib/analytics';
 import { IconChevronLeft, IconCheck } from '../icons';
 import { resolveBudgetType } from '../../constants/budgetTypes';
 
@@ -111,6 +112,7 @@ export default function IncomeContainer({ embedded = false }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
+    const analytics = useAnalytics();
 
     const today = new Date();
 
@@ -158,6 +160,8 @@ export default function IncomeContainer({ embedded = false }) {
                 month,
                 user_id: user?.id,
             });
+            // Behavioral only — no amount is sent.
+            analytics.incomeLogged();
             setAmount('');
             setSource('Paycheck');
             setTitle('');

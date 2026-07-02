@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 
 import { useTheme } from '../../context/ThemeContext';
+import { useAnalytics } from '../../lib/analytics';
 import { IconChevronLeft, IconChevronRight, IconScripture } from '../../components/icons';
 
 const BASE = 'https://dollarseeds-1.onrender.com';
@@ -48,6 +49,7 @@ export default function LessonSeriesScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const { theme } = useTheme();
+    const analytics = useAnalytics();
 
     const [detail, setDetail] = useState<SeriesDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -136,12 +138,17 @@ export default function LessonSeriesScreen() {
                             return (
                                 <Pressable
                                     key={lesson.id}
-                                    onPress={() =>
+                                    onPress={() => {
+                                        analytics.lessonVideoClicked({
+                                            series_id: detail.id,
+                                            lesson_id: lesson.id,
+                                            title: lesson.title,
+                                        });
                                         router.push({
                                             pathname: '/lessonPlayer',
                                             params: { seriesId: detail.id, lessonId: lesson.id },
-                                        } as any)
-                                    }
+                                        } as any);
+                                    }}
                                     style={({ pressed }) => [
                                         styles.lessonRow,
                                         { backgroundColor: theme.surface, borderColor: theme.ink },

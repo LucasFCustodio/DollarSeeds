@@ -19,6 +19,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import axios from 'axios';
 
 import { useTheme } from '../context/ThemeContext';
+import { useAnalytics } from '../lib/analytics';
 import { IconChevronLeft, IconChevronRight } from '../components/icons';
 
 const BASE = 'https://dollarseeds-1.onrender.com';
@@ -33,6 +34,7 @@ type SeriesLesson = {
 export default function LessonPlayerScreen() {
     const router = useRouter();
     const { theme } = useTheme();
+    const analytics = useAnalytics();
     const params = useLocalSearchParams<{ seriesId: string; lessonId: string }>();
     const seriesId = params.seriesId;
 
@@ -80,6 +82,39 @@ export default function LessonPlayerScreen() {
 
         return () => { cancelled = true; };
     }, [currentId, player]);
+
+    // ── Progress heartbeat (analytics only — NO persistent watch-progress store) ──
+    // Every 15s, but ONLY while the video is actively playing, emit lesson_progress
+    // with the current position. Also emit lesson_video_completed at end-of-playback
+    // so completion rate / drop-off are computable. The interval + end listener are
+    // (re)created per active lesson and torn down on unmount AND on lesson change
+    // (this effect depends on currentId, so its cleanup runs when the lesson swaps).
+    useEffect(() => {
+        if (!currentId || !seriesId) return;
+
+        const interval = setInterval(() => {
+            // Skip paused / buffering / not-ready — those must not count as watch time.
+            if (!player.playing || player.status !== 'readyToPlay') return;
+            analytics.lessonProgress({
+                series_id: seriesId,
+                lesson_id: currentId,
+                position_seconds: player.currentTime,
+                duration_seconds: player.duration,
+            });
+        }, 15000);
+
+        const endSub = player.addListener('playToEnd', () => {
+            analytics.lessonVideoCompleted({ series_id: seriesId, lesson_id: currentId });
+        });
+
+        return () => {
+            clearInterval(interval);
+            endSub.remove();
+        };
+        // `analytics` intentionally excluded: it wraps a stable PostHog client, and
+        // including it would rebuild the interval on every render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [player, currentId, seriesId]);
 
     const index = lessons.findIndex(l => l.id === currentId);
     const hasPrev = index > 0;
