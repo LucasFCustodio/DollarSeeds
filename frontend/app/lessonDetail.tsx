@@ -12,6 +12,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useTheme, shadow } from '../context/ThemeContext';
+import { useAnalytics } from '../lib/analytics';
 import { IconChevronLeft, IconCheck, IconScripture } from '../components/icons';
 import Card from '../components/ui/Card';
 import { LESSONS } from '../constants/lessons';
@@ -22,6 +23,7 @@ export default function LessonDetailScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const { theme } = useTheme();
+    const analytics = useAnalytics();
 
     const lesson = LESSONS.find(l => l.id === Number(id));
 
@@ -33,6 +35,7 @@ export default function LessonDetailScreen() {
             if (!ids.includes(lesson.id)) {
                 await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...ids, lesson.id]));
             }
+            analytics.writtenLessonCompleted({ lesson_id: lesson.id, title: lesson.title });
         } catch (e) {
             console.error('Error saving completion:', e);
         }

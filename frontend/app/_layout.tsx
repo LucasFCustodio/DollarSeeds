@@ -10,6 +10,22 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../hooks/useNotifications';
+import * as Sentry from '@sentry/react-native';
+import { PostHogProvider } from 'posthog-react-native';
+
+Sentry.init({
+  dsn: 'https://27c7ac22c963cf139a283799121c2b77@o4511666459377664.ingest.us.sentry.io/4511666477989888',
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Enable Logs
+  enableLogs: false,
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
 
 export const unstable_settings = {
     anchor: '(tabs)',
@@ -81,12 +97,24 @@ function RootLayoutNav() {
     );
 }
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
     return (
-        <AuthProvider>
-            <AppThemeProvider>
-                <RootLayoutNav />
-            </AppThemeProvider>
-        </AuthProvider>
+        <PostHogProvider
+            apiKey={process.env.EXPO_PUBLIC_POSTHOG_KEY}
+            options={{
+                host: process.env.EXPO_PUBLIC_POSTHOG_HOST,
+                // Session replay OFF — we never record screens.
+                enableSessionReplay: false,
+            }}
+            // Deliberate event set only — no auto-captured taps/screens. Every event is
+            // fired explicitly via lib/analytics.ts.
+            autocapture={false}
+        >
+            <AuthProvider>
+                <AppThemeProvider>
+                    <RootLayoutNav />
+                </AppThemeProvider>
+            </AuthProvider>
+        </PostHogProvider>
     );
-}
+});
