@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 import os
 import datetime
+import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -80,6 +81,10 @@ class UserSettings(BaseModel):
     tithe_rate: Optional[float] = None
     budget_type: Optional[str] = None
     firm_foundation_goals_prompted: Optional[bool] = None
+
+class AccountDeletion(BaseModel):
+    user_id: str
+    confirmation: str  # must equal exactly "DELETE" for the request to proceed
 
 
 # ─── Budget types ─────────────────────────────────────────────────────────────
@@ -444,6 +449,39 @@ def delete_income(id: int, user_id: str):
     response = supabase.table("income").delete().eq("id", id).eq("user_id", user_id).execute()
     return response.data
 
+
+# Every table that stores per-user rows (keyed by user_id). Shared content tables
+# (lesson_series, lessons) are intentionally excluded.
+USER_DATA_TABLES = [
+    "expenses", "income", "savings_transactions", "savings_goals",
+    "month_status", "lesson_ratings", "user_settings",
+]
+
+@app.post("/account/delete/")
+def delete_account(req: AccountDeletion):
+    # Authoritative guard: only proceed when the user typed exactly "DELETE".
+    # Anything else is a silent no-op (200, no error) per product spec.
+    if req.confirmation != "DELETE":
+        return {"deleted": False}
+
+    user_id = req.user_id
+
+    # Wipe all user-owned data first, then remove the auth identity itself.
+    for table in USER_DATA_TABLES:
+        try:
+            supabase.table(table).delete().eq("user_id", user_id).execute()
+        except Exception as e:
+            print(f"Account deletion: failed clearing {table} for {user_id}: {e}")
+
+    # Delete the Supabase Auth user. Requires the service_role key (the anon key
+    # cannot touch the admin API).
+    try:
+        supabase.auth.admin.delete_user(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete auth user: {e}")
+
+    return {"deleted": True}
+
 @app.get("/income/details/")
 def get_income_details(month: str, user_id: str):
     response = supabase.table("income").select("*").eq("month", month).eq("user_id", user_id).execute()
@@ -486,16 +524,22 @@ def create_savings_transaction(entry: SavingsEntry):
 @app.post("/savings/transfer/")
 def transfer_from_general(transfer: SavingsTransfer):
     """Move money from General Savings into a specific goal.
-    Creates two transactions with source='transfer' so neither affects the Goals budget."""
+    Creates two transactions with source='transfer' so neither affects the Goals budget.
+    Both legs share a `transfer_group` uuid so Recent Activity can collapse them into a
+    single entry and deleting that entry removes both legs together (see
+    get_savings_history / delete_savings_transaction)."""
     _assert_month_open(transfer.user_id, transfer.month)
-    # Withdrawal from General Savings
+    group = str(uuid.uuid4())
+    # Withdrawal from General Savings. Its title is the human-readable label shown for
+    # the collapsed transfer entry in Recent Activity.
     supabase.table("savings_transactions").insert({
         "user_id": transfer.user_id,
-        "title": f"Transferred to {transfer.to_goal_title}",
+        "title": f"Transfer from General Savings to {transfer.to_goal_title}",
         "amount": transfer.amount,
         "type": "withdrawal",
         "goal_id": transfer.general_goal_id,
         "source": "transfer",
+        "transfer_group": group,
         "day": transfer.day,
         "month": transfer.month,
     }).execute()
@@ -507,6 +551,7 @@ def transfer_from_general(transfer: SavingsTransfer):
         "type": "deposit",
         "goal_id": transfer.to_goal_id,
         "source": "transfer",
+        "transfer_group": group,
         "day": transfer.day,
         "month": transfer.month,
     }).execute()
@@ -518,13 +563,47 @@ def get_savings_history(user_id: str, month: str = None):
     if month:
         query = query.eq("month", month)
     response = query.order("created_at", desc=True).execute()
-    return {"data": response.data}
+    return {"data": _collapse_transfers(response.data)}
+
+def _collapse_transfers(rows: list) -> list:
+    """Fold each General-Savings→goal transfer (two rows sharing a transfer_group)
+    into a SINGLE Recent Activity entry. We surface the withdrawal-from-General leg —
+    it carries the "Transfer from General Savings to X" label — flagged is_transfer so
+    the client renders it neutrally. Order is preserved by first-seen position; the
+    entry keeps the withdrawal leg's id, so deleting it cascades to both legs. Rows
+    without a transfer_group (deposits, withdrawals, rollover) pass through untouched."""
+    by_group: dict[str, list] = {}
+    for r in rows:
+        g = r.get("transfer_group")
+        if g:
+            by_group.setdefault(g, []).append(r)
+    collapsed, seen = [], set()
+    for r in rows:
+        g = r.get("transfer_group")
+        if not g:
+            collapsed.append(r)
+            continue
+        if g in seen:
+            continue
+        seen.add(g)
+        pair = by_group[g]
+        primary = next((x for x in pair if x["type"] == "withdrawal"), pair[0])
+        collapsed.append({**primary, "is_transfer": True})
+    return collapsed
 
 @app.delete("/savings/transaction/{id}")
 def delete_savings_transaction(id: int, user_id: str):
-    row = supabase.table("savings_transactions").select("month").eq("id", id).eq("user_id", user_id).execute()
+    row = supabase.table("savings_transactions").select("month, transfer_group").eq("id", id).eq("user_id", user_id).execute()
     if row.data:
         _assert_month_open(user_id, row.data[0].get("month"))
+        group = row.data[0].get("transfer_group")
+        if group:
+            # This row is one leg of a General Savings transfer. Delete BOTH legs so the
+            # money returns to General Savings and leaves the goal atomically — net zero
+            # to the overall balance, since a transfer never changed total seeds saved.
+            response = supabase.table("savings_transactions").delete() \
+                .eq("transfer_group", group).eq("user_id", user_id).execute()
+            return response.data
     response = supabase.table("savings_transactions").delete().eq("id", id).eq("user_id", user_id).execute()
     return response.data
 
