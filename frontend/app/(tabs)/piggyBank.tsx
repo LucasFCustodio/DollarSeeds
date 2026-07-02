@@ -45,6 +45,9 @@ type Transaction = {
     id: number; title: string; amount: number;
     type: 'deposit' | 'withdrawal'; day: number; month: string;
     source?: string;
+    // Set by the backend when this entry is a collapsed General Savings → goal
+    // transfer (both legs share a transfer_group). Deleting it removes both legs.
+    is_transfer?: boolean;
 };
 type Goal = {
     id: number; title: string;
@@ -323,6 +326,9 @@ export default function PiggyBankScreen() {
     const deleteTransaction = async (tx: Transaction) => {
         try {
             await axios.delete(`${BASE}/savings/transaction/${tx.id}?user_id=${user?.id}`);
+            // A transfer touches two goals' funded amounts (General Savings + the
+            // destination), so refetch everything to keep the goal cards in sync.
+            if (tx.is_transfer) { fetchData(); return; }
             setHistory(prev => prev.filter(t => t.id !== tx.id));
             const balRes = await axios.get(`${BASE}/savings/balance/?user_id=${user?.id}`);
             setBalance(balRes.data.balance);
@@ -958,18 +964,25 @@ export default function PiggyBankScreen() {
                 {history.map(tx => (
                     <Card key={tx.id} theme={theme} depth={2} padding={14} style={{ marginBottom: 8 }}>
                         <View style={styles.txRow}>
+                            {/* A transfer is net-zero to the balance, so it renders in a
+                                neutral brand color with no +/− sign — unlike deposits
+                                (green, down) and withdrawals (red, up). */}
                             <View style={[
                                 styles.txIconTile,
                                 {
-                                    backgroundColor: tx.type === 'deposit'
-                                        ? theme.goalsSoft
-                                        : theme.dangerSoft,
+                                    backgroundColor: tx.is_transfer
+                                        ? theme.brandSoft
+                                        : tx.type === 'deposit'
+                                            ? theme.goalsSoft
+                                            : theme.dangerSoft,
                                 },
                             ]}>
                                 <IconArrow
                                     size={16}
-                                    color={tx.type === 'deposit' ? theme.goals : theme.danger}
-                                    dir={tx.type === 'deposit' ? 'down' : 'up'}
+                                    color={tx.is_transfer
+                                        ? theme.brand2
+                                        : tx.type === 'deposit' ? theme.goals : theme.danger}
+                                    dir={tx.is_transfer ? 'right' : tx.type === 'deposit' ? 'down' : 'up'}
                                 />
                             </View>
                             <View style={{ flex: 1 }}>
@@ -980,9 +993,13 @@ export default function PiggyBankScreen() {
                             </View>
                             <Text style={[
                                 styles.txAmt,
-                                { color: tx.type === 'deposit' ? theme.success : theme.danger },
+                                {
+                                    color: tx.is_transfer
+                                        ? theme.brand2
+                                        : tx.type === 'deposit' ? theme.success : theme.danger,
+                                },
                             ]}>
-                                {tx.type === 'deposit' ? '+' : '−'}${tx.amount.toFixed(2)}
+                                {tx.is_transfer ? '' : tx.type === 'deposit' ? '+' : '−'}${tx.amount.toFixed(2)}
                             </Text>
                             <Pressable onPress={() => deleteTransaction(tx)} hitSlop={10}>
                                 <IconTrash size={14} color={theme.ink3} />

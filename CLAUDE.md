@@ -69,3 +69,4 @@ All colors and theme tokens come from `useTheme()` — **never hardcode colors**
 | [.claude/docs/architectural_patterns.md](.claude/docs/architectural_patterns.md) | Before adding features — auth flow, API conventions, navigation, form patterns |
 | [.claude/docs/data_model.md](.claude/docs/data_model.md) | When touching DB queries, Supabase tables, or budget calculation logic |
 | [.claude/docs/design_system.md](.claude/docs/design_system.md) | When building UI — color tokens, Button variants, dark mode, SVG setup |
+| [.claude/docs/lessons_page.md](.claude/docs/lessons_page.md) | When touching the Lessons tab — written vs video content, series/lessons schema, storage buckets, backend routes |

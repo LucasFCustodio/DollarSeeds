@@ -13,6 +13,7 @@ import {
     Pressable,
     Switch,
     Modal,
+    TextInput,
     StyleSheet,
     ActivityIndicator,
 } from 'react-native';
@@ -48,6 +49,12 @@ export default function SettingsScreen() {
     // Firm Foundation one-time goal suggestion
     const [showFirmPrompt, setShowFirmPrompt] = useState(false);
     const [suggestedEmergency, setSuggestedEmergency] = useState<number | null>(null);
+
+    // Account deletion
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState('');
+    const [deleteError, setDeleteError] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     useFocusEffect(
         useCallback(() => {
@@ -282,8 +289,83 @@ export default function SettingsScreen() {
                     >
                         <Text style={styles.logoutText}>Log Out</Text>
                     </Pressable>
+
+                    {/* ── Danger zone: delete account (very bottom) ────────── */}
+                    <View style={[styles.dangerZone, { backgroundColor: theme.dangerSoft, borderColor: theme.danger }]}>
+                        <Text style={[styles.dangerLabel, { color: theme.danger }]}>DANGER ZONE</Text>
+                        <Text style={[styles.dangerHint, { color: theme.ink2 }]}>
+                            Permanently delete your account and every record tied to it.
+                        </Text>
+                        <Pressable
+                            onPress={() => { setDeleteConfirm(''); setDeleteError(false); setShowDeleteModal(true); }}
+                            style={({ pressed }) => [
+                                styles.deleteBtn,
+                                { backgroundColor: theme.danger },
+                                pressed && { opacity: 0.85 },
+                            ]}
+                        >
+                            <Text style={styles.deleteText}>Delete Account</Text>
+                        </Pressable>
+                    </View>
                 </View>
             )}
+
+            {/* ── Delete account confirmation ──────────────────────────────── */}
+            <Modal visible={showDeleteModal} transparent animationType="fade">
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalCard, { backgroundColor: theme.surface, ...shadow(9) }]}>
+                        <Text style={[styles.modalTitle, { color: theme.danger }]}>Delete account</Text>
+                        <Text style={[styles.modalBody, { color: theme.ink2 }]}>
+                            Deleting the account is irreversible. You'll lose all the information you've
+                            tracked. If you want to delete your account, type "DELETE" in the text box
+                            below, then click Delete.
+                        </Text>
+
+                        {deleteError && (
+                            <Text style={[styles.deleteErrorText, { color: theme.danger }]}>
+                                That's not right — type "DELETE" exactly to confirm.
+                            </Text>
+                        )}
+
+                        <TextInput
+                            value={deleteConfirm}
+                            onChangeText={(t) => { setDeleteConfirm(t); if (deleteError) setDeleteError(false); }}
+                            placeholder="DELETE"
+                            placeholderTextColor={theme.ink3}
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            editable={!deleting}
+                            style={[styles.deleteInput, {
+                                backgroundColor: theme.surfaceSoft,
+                                borderColor: theme.border,
+                                color: theme.ink,
+                            }]}
+                        />
+
+                        <View style={{ height: 8 }} />
+                        <Pressable
+                            onPress={handleDeleteAccount}
+                            disabled={deleting}
+                            style={({ pressed }) => [
+                                styles.deleteBtn,
+                                { backgroundColor: theme.danger },
+                                (pressed || deleting) && { opacity: 0.85 },
+                            ]}
+                        >
+                            {deleting
+                                ? <ActivityIndicator color="#fff" />
+                                : <Text style={styles.deleteText}>Delete</Text>}
+                        </Pressable>
+                        <Pressable
+                            onPress={() => setShowDeleteModal(false)}
+                            disabled={deleting}
+                            style={styles.laterBtn}
+                        >
+                            <Text style={[styles.laterText, { color: theme.ink3 }]}>Cancel</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </Modal>
         </ScrollView>
     );
 
@@ -292,6 +374,32 @@ export default function SettingsScreen() {
         const { error } = await supabase.auth.signOut();
         if (error) console.error('Error logging out:', error.message);
         // AuthContext flips to the signed-out state and the router redirects to /auth.
+    }
+
+    // Sends the typed confirmation to the backend, which is the authoritative
+    // check: only exactly "DELETE" deletes the account. Anything else no-ops
+    // silently (no alert). On success, sign out → AuthContext routes to /auth.
+    async function handleDeleteAccount() {
+        if (!user?.id || deleting) return;
+        setDeleting(true);
+        try {
+            const res = await axios.post(`${BASE}/account/delete/`, {
+                user_id: user.id,
+                confirmation: deleteConfirm,
+            });
+            if (res.data?.deleted) {
+                await supabase.auth.signOut();
+                // AuthContext flips to signed-out and the router redirects to /auth.
+            } else {
+                // Wrong/empty confirmation — backend refused. Nudge the user.
+                setDeleteError(true);
+            }
+        } catch (err) {
+            console.error('Account deletion error:', err);
+            setDeleteError(true);
+        } finally {
+            setDeleting(false);
+        }
     }
 
     function handleToggleTithe(value: boolean) {
@@ -378,4 +486,41 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     logoutText: { fontFamily: 'Geist-SemiBold', fontSize: 15, color: '#fff' },
+
+    // Danger zone — distinct tinted band so the destructive action stands out
+    dangerZone: {
+        marginTop: 28,
+        borderRadius: 18,
+        borderWidth: 1,
+        padding: 16,
+    },
+    dangerLabel: {
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: 11,
+        letterSpacing: 1.4,
+        marginBottom: 6,
+    },
+    dangerHint: { fontFamily: 'Geist-Regular', fontSize: 12, lineHeight: 17, marginBottom: 14 },
+    deleteBtn: {
+        paddingVertical: 16,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    deleteText: { fontFamily: 'Geist-SemiBold', fontSize: 15, color: '#fff' },
+    deleteErrorText: {
+        fontFamily: 'Geist-Medium',
+        fontSize: 12,
+        lineHeight: 16,
+        marginTop: 4,
+    },
+    deleteInput: {
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        fontFamily: 'Geist-Medium',
+        fontSize: 15,
+        marginTop: 14,
+    },
 });
