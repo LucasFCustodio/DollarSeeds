@@ -26,6 +26,7 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
+import { ft } from '../../constants/responsive';
 import { useAnalytics } from '../../lib/analytics';
 import { IconChevronLeft, IconCheck } from '../icons';
 import { resolveBudgetType } from '../../constants/budgetTypes';
@@ -94,8 +95,8 @@ function MonthPicker({ value, onChange, theme }) {
                             <Text style={[
                                 styles.pickerItemText,
                                 active
-                                    ? { color: theme.brand, fontFamily: 'Geist-SemiBold', fontSize: 15 }
-                                    : { color: theme.ink3, fontFamily: 'Geist-Regular', fontSize: 13 },
+                                    ? { color: theme.brand, fontFamily: 'Geist-SemiBold', fontSize: ft(15, 1.2) }
+                                    : { color: theme.ink3, fontFamily: 'Geist-Regular', fontSize: ft(13, 1.2) },
                             ]}>
                                 {item}
                             </Text>
@@ -407,13 +408,13 @@ const styles = StyleSheet.create({
     },
     screenTitle: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 26,
+        fontSize: ft(26, 1.3),
         letterSpacing: -0.5,
-        lineHeight: 30,
+        lineHeight: ft(30, 1.3),
     },
     screenSubtitle: {
         fontFamily: 'InstrumentSerif-Italic',
-        fontSize: 12,
+        fontSize: ft(12, 1.18),
         marginTop: 2,
     },
 
@@ -441,7 +442,7 @@ const styles = StyleSheet.create({
     amountEyebrow: {
         color: 'rgba(255,255,255,0.75)',
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 11,
+        fontSize: ft(11, 1.25),
         letterSpacing: 1.8,
         marginBottom: 6,
     },
@@ -453,14 +454,14 @@ const styles = StyleSheet.create({
     },
     amountDollar: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 28,
+        fontSize: ft(28, 1.3),
         color: 'rgba(255,255,255,0.8)',
         marginTop: 12,
     },
     amountInput: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 72,
-        lineHeight: 90,
+        fontSize: ft(72, 1.3),
+        lineHeight: ft(90, 1.3),
         color: '#fff',
         letterSpacing: -1,
         minWidth: 80,
@@ -474,16 +475,16 @@ const styles = StyleSheet.create({
     },
     amountScripture: {
         fontFamily: 'InstrumentSerif-Italic',
-        fontSize: 13,
+        fontSize: ft(13, 1.18),
         color: 'rgba(255,255,255,0.85)',
         textAlign: 'center',
         marginTop: 14,
         paddingHorizontal: 8,
-        lineHeight: 19,
+        lineHeight: ft(19, 1.18),
     },
     amountVerse: {
         fontFamily: 'JetBrainsMono-Regular',
-        fontSize: 10,
+        fontSize: ft(10, 1.18),
         color: 'rgba(255,255,255,0.65)',
         marginTop: 4,
         letterSpacing: 0.3,
@@ -492,7 +493,7 @@ const styles = StyleSheet.create({
     // Section label
     sectionLabel: {
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 10,
+        fontSize: ft(10, 1.25),
         letterSpacing: 1.6,
         marginBottom: 10,
         marginTop: 4,
@@ -535,12 +536,12 @@ const styles = StyleSheet.create({
     },
     splitPctLabel: {
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 9,
+        fontSize: ft(9, 1.18),
         letterSpacing: 0.3,
     },
     splitAmt: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 20,
+        fontSize: ft(20, 1.3),
         letterSpacing: -0.5,
     },
 
@@ -559,7 +560,7 @@ const styles = StyleSheet.create({
     },
     chipText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 12,
+        fontSize: ft(12, 1.18),
     },
 
     // Shared text input (title, day)
@@ -568,7 +569,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         paddingHorizontal: 16,
         paddingVertical: 14,
-        fontSize: 14,
+        fontSize: ft(14, 1.18),
         fontFamily: 'Geist-Regular',
         marginBottom: 22,
     },
@@ -581,7 +582,7 @@ const styles = StyleSheet.create({
     },
     dateFieldLabel: {
         fontFamily: 'JetBrainsMono-Regular',
-        fontSize: 11,
+        fontSize: ft(11, 1.18),
         letterSpacing: 0.4,
         marginBottom: 6,
     },
@@ -616,6 +617,6 @@ const styles = StyleSheet.create({
     submitText: {
         color: '#fff',
         fontFamily: 'Geist-SemiBold',
-        fontSize: 15,
+        fontSize: ft(15, 1.2),
     },
 });

@@ -10,6 +10,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useTheme, shadow } from '../../context/ThemeContext';
+import { ft } from '../../constants/responsive';
 import ExpenseContainer from '../../components/expense/ExpenseContainer';
 import IncomeContainer from '../../components/income/IncomeContainer';
 
@@ -71,13 +72,13 @@ const styles = StyleSheet.create({
     },
     title: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 26,
+        fontSize: ft(26, 1.3),
         letterSpacing: -0.5,
-        lineHeight: 30,
+        lineHeight: ft(30, 1.3),
     },
     subtitle: {
         fontFamily: 'InstrumentSerif-Italic',
-        fontSize: 12,
+        fontSize: ft(12, 1.18),
         marginTop: 2,
         marginBottom: 16,
     },
@@ -96,7 +97,7 @@ const styles = StyleSheet.create({
     tabItemActive: {},
     tabText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 13,
+        fontSize: ft(13, 1.2),
         textTransform: 'capitalize',
     },
 });

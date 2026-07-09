@@ -28,6 +28,7 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, stickerShadow, AppTheme } from '../../context/ThemeContext';
+import { ft, tv } from '../../constants/responsive';
 import { useAnalytics } from '../../lib/analytics';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
@@ -377,16 +378,16 @@ const styles = StyleSheet.create({
     },
     title: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 36,
+        fontSize: ft(36, 1.3),
         letterSpacing: -0.5,
-        lineHeight: 38,
+        lineHeight: ft(38, 1.3),
         marginBottom: 10,
     },
     subtitle: {
         fontFamily: 'Geist-Regular',
-        fontSize: 13,
-        lineHeight: 19,
-        maxWidth: 280,
+        fontSize: ft(13, 1.18),
+        lineHeight: ft(19, 1.18),
+        maxWidth: tv(280, 440),
         marginBottom: 4,
     },
 
@@ -397,7 +398,7 @@ const styles = StyleSheet.create({
     },
     sectionEyebrow: {
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 10,
+        fontSize: ft(10, 1.25),
         letterSpacing: 1.6,
         marginLeft: 4,
         marginBottom: 12,
@@ -410,11 +411,11 @@ const styles = StyleSheet.create({
     },
     seriesStateText: {
         fontFamily: 'Geist-Regular',
-        fontSize: 13,
+        fontSize: ft(13, 1.18),
     },
     retryText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 13,
+        fontSize: ft(13, 1.2),
     },
     seriesList: {
         gap: 16,
@@ -424,8 +425,8 @@ const styles = StyleSheet.create({
     },
     seriesTitle: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 24,
-        lineHeight: 28,
+        fontSize: ft(24, 1.3),
+        lineHeight: ft(28, 1.3),
         letterSpacing: -0.3,
         marginBottom: 12,
     },
@@ -453,12 +454,12 @@ const styles = StyleSheet.create({
     },
     lessonBadgeText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 11,
+        fontSize: ft(11, 1.18),
     },
     seriesDesc: {
         fontFamily: 'Geist-Regular',
-        fontSize: 13,
-        lineHeight: 19,
+        fontSize: ft(13, 1.18),
+        lineHeight: ft(19, 1.18),
         marginTop: 12,
         minHeight: 57, // ~3 lines — keeps short/long cards on the same rhythm
     },
@@ -474,7 +475,7 @@ const styles = StyleSheet.create({
     },
     exploreText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 14,
+        fontSize: ft(14, 1.2),
     },
 
     // Progress strip (moved below the series; behavior unchanged)
@@ -490,7 +491,7 @@ const styles = StyleSheet.create({
     },
     progressLabel: {
         fontFamily: 'JetBrainsMono-Regular',
-        fontSize: 11,
+        fontSize: ft(11, 1.18),
         marginTop: 6,
     },
     progressBadge: {
@@ -500,7 +501,7 @@ const styles = StyleSheet.create({
     },
     progressBadgeText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 12,
+        fontSize: ft(12, 1.2),
     },
 
     // Written lesson card list
@@ -529,8 +530,8 @@ const styles = StyleSheet.create({
     },
     lessonNumber: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 18,
-        lineHeight: 22,
+        fontSize: ft(18, 1.2),
+        lineHeight: ft(22, 1.2),
     },
     titleRow: {
         flexDirection: 'row',
@@ -541,20 +542,20 @@ const styles = StyleSheet.create({
     },
     lessonTitle: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 15,
+        fontSize: ft(15, 1.28),
         letterSpacing: -0.1,
         flex: 1,
     },
     minutesLabel: {
         fontFamily: 'JetBrainsMono-Regular',
-        fontSize: 11,
+        fontSize: ft(11, 1.18),
         flexShrink: 0,
         marginTop: 1,
     },
     lessonDesc: {
         fontFamily: 'Geist-Regular',
-        fontSize: 13,
-        lineHeight: 19,
+        fontSize: ft(13, 1.18),
+        lineHeight: ft(19, 1.18),
         marginBottom: 10,
     },
 
@@ -575,7 +576,7 @@ const styles = StyleSheet.create({
     },
     verseText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 11,
+        fontSize: ft(11, 1.18),
     },
     starsRow: {
         flexDirection: 'row',
