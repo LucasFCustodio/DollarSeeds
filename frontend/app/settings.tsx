@@ -22,6 +22,8 @@ import axios from 'axios';
 
 import { useAuth } from '../context/AuthContext';
 import { useTheme, shadow } from '../context/ThemeContext';
+import { useOnboarding } from '../context/OnboardingContext';
+import { DEV_ACCOUNT_EMAIL } from '../constants/onboarding';
 import { supabase } from '../lib/supabase';
 import {
     IconChevronLeft, IconScripture, IconMoon, IconSun, IconTarget, IconSparkle,
@@ -38,6 +40,8 @@ export default function SettingsScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { theme, isDark, toggleTheme } = useTheme();
+    const { replay: replayOnboarding } = useOnboarding();
+    const isDevAccount = user?.email === DEV_ACCOUNT_EMAIL;
 
     const [budgetType, setBudgetType] = useState<BudgetTypeKey>(DEFAULT_BUDGET_TYPE);
     const [ffPrompted, setFfPrompted] = useState(false);
@@ -278,6 +282,36 @@ export default function SettingsScreen() {
                         </View>
                     </View>
 
+                    {/* ── Dev tools (dev account only) ─────────────────────── */}
+                    {isDevAccount && (
+                        <>
+                            <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>DEV</Text>
+                            <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
+                                <View style={styles.rowTop}>
+                                    <View style={[styles.iconTile, { backgroundColor: theme.brandSoft }]}>
+                                        <IconSparkle size={22} color={theme.brand} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[styles.rowTitle, { color: theme.ink }]}>Onboarding tour</Text>
+                                        <Text style={[styles.rowSub, { color: theme.ink2 }]}>
+                                            Replay the first-run guided tour
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                                    <Button
+                                        label="Replay Onboarding Tour"
+                                        variant="secondary"
+                                        size="lg"
+                                        fullWidth
+                                        color={theme.brand}
+                                        onPress={handleReplayOnboarding}
+                                    />
+                                </View>
+                            </View>
+                        </>
+                    )}
+
                     {/* ── Log out ─────────────────────────────────────────── */}
                     <Pressable
                         onPress={handleLogout}
@@ -374,6 +408,12 @@ export default function SettingsScreen() {
         const { error } = await supabase.auth.signOut();
         if (error) console.error('Error logging out:', error.message);
         // AuthContext flips to the signed-out state and the router redirects to /auth.
+    }
+
+    // Dev-only: clear the completed flag and restart the tour from the Dashboard.
+    function handleReplayOnboarding() {
+        replayOnboarding();
+        router.replace('/(tabs)' as any);
     }
 
     // Sends the typed confirmation to the backend, which is the authoritative

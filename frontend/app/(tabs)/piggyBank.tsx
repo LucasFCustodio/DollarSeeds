@@ -23,6 +23,7 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, shadow } from '../../context/ThemeContext';
+import { ft, tv } from '../../constants/responsive';
 import { useAnalytics } from '../../lib/analytics';
 import HeroBg from '../../components/ui/HeroBg';
 import AnimatedAmount from '../../components/ui/AnimatedAmount';
@@ -471,7 +472,7 @@ export default function PiggyBankScreen() {
                         <SavingsJar fill={jarFill} size={92} />
                         <View style={{ flex: 1 }}>
                             <Text style={styles.heroBalanceLabel}>SEEDS PLANTED</Text>
-                            <AnimatedAmount value={balance} size={48} color="#fff" decimals={2} />
+                            <AnimatedAmount value={balance} size={tv(48, 68)} color="#fff" decimals={2} />
                             <Text style={styles.heroTagline}>Little by little, it grows</Text>
                         </View>
                     </View>
@@ -1050,7 +1051,7 @@ const styles = StyleSheet.create({
     heroEyebrow: {
         color: 'rgba(255,255,255,0.7)',
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 11,
+        fontSize: ft(11, 1.25),
         letterSpacing: 1.6,
     },
     circleBtn: {
@@ -1072,14 +1073,14 @@ const styles = StyleSheet.create({
     heroBalanceLabel: {
         color: 'rgba(255,255,255,0.7)',
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 11,
+        fontSize: ft(11, 1.25),
         letterSpacing: 1.6,
         marginBottom: 2,
     },
     heroTagline: {
         color: 'rgba(255,255,255,0.7)',
         fontFamily: 'InstrumentSerif-Italic',
-        fontSize: 12,
+        fontSize: ft(12, 1.18),
         marginTop: 4,
     },
     actionRow: {
@@ -1100,7 +1101,7 @@ const styles = StyleSheet.create({
     actionBtnText: {
         color: '#fff',
         fontFamily: 'Geist-SemiBold',
-        fontSize: 13,
+        fontSize: ft(13, 1.2),
     },
 
     // Content wrapper
@@ -1115,13 +1116,13 @@ const styles = StyleSheet.create({
     },
     formTitle: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 20,
+        fontSize: ft(20, 1.3),
         letterSpacing: -0.3,
         marginBottom: 16,
     },
     fieldLabel: {
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 10,
+        fontSize: ft(10, 1.25),
         letterSpacing: 1.6,
         marginBottom: 8,
         marginTop: 2,
@@ -1136,14 +1137,14 @@ const styles = StyleSheet.create({
     },
     dollarSign: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 22,
+        fontSize: ft(22, 1.3),
         marginRight: 4,
     },
     amountField: {
         flex: 1,
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 32,
-        lineHeight: 44,
+        fontSize: ft(32, 1.3),
+        lineHeight: ft(44, 1.3),
         paddingVertical: 10,
         letterSpacing: -0.5,
     },
@@ -1164,7 +1165,7 @@ const styles = StyleSheet.create({
     },
     chipText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 12,
+        fontSize: ft(12, 1.18),
     },
     formBtnRow: {
         flexDirection: 'row',
@@ -1182,7 +1183,7 @@ const styles = StyleSheet.create({
     submitBtnText: {
         color: '#fff',
         fontFamily: 'Geist-SemiBold',
-        fontSize: 14,
+        fontSize: ft(14, 1.2),
     },
     cancelBtn: {
         flex: 1,
@@ -1194,7 +1195,7 @@ const styles = StyleSheet.create({
     },
     cancelBtnText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 14,
+        fontSize: ft(14, 1.2),
     },
 
     // Tabs
@@ -1213,14 +1214,14 @@ const styles = StyleSheet.create({
     tabItemActive: {},
     tabText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 13,
+        fontSize: ft(13, 1.2),
         textTransform: 'capitalize',
     },
 
     // Section label
     sectionLabel: {
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 10,
+        fontSize: ft(10, 1.25),
         letterSpacing: 1.6,
         marginBottom: 10,
     },
@@ -1238,8 +1239,8 @@ const styles = StyleSheet.create({
     },
     reconTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     autoBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-    autoBadgeText: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: 8, letterSpacing: 1 },
-    reconExplain: { fontFamily: 'Geist-Regular', fontSize: 11, marginTop: 3, lineHeight: 16 },
+    autoBadgeText: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: ft(8, 1.2), letterSpacing: 1 },
+    reconExplain: { fontFamily: 'Geist-Regular', fontSize: ft(11, 1.18), marginTop: 3, lineHeight: ft(16, 1.18) },
 
     // Goal cards
     goalHeader: {
@@ -1257,12 +1258,12 @@ const styles = StyleSheet.create({
     },
     goalTitle: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 14,
+        fontSize: ft(14, 1.28),
         letterSpacing: -0.1,
     },
     goalMeta: {
         fontFamily: 'JetBrainsMono-Regular',
-        fontSize: 11,
+        fontSize: ft(11, 1.18),
         marginTop: 2,
     },
     goalAmtRow: {
@@ -1272,12 +1273,12 @@ const styles = StyleSheet.create({
     },
     goalSaved: {
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 26,
+        fontSize: ft(26, 1.3),
         letterSpacing: -0.5,
     },
     goalOf: {
         fontFamily: 'Geist-Regular',
-        fontSize: 13,
+        fontSize: ft(13, 1.18),
     },
 
     // Plant new goal button
@@ -1294,7 +1295,7 @@ const styles = StyleSheet.create({
     },
     plantBtnText: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 13,
+        fontSize: ft(13, 1.2),
     },
 
     // Goal creation form inputs
@@ -1303,13 +1304,13 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         paddingHorizontal: 14,
         paddingVertical: 12,
-        fontSize: 15,
+        fontSize: ft(15, 1.18),
         fontFamily: 'Geist-Regular',
         marginBottom: 14,
     },
     errorText: {
         fontFamily: 'Geist-Regular',
-        fontSize: 12,
+        fontSize: ft(12, 1.18),
         marginTop: -10,
         marginBottom: 10,
         fontStyle: 'italic',
@@ -1330,22 +1331,22 @@ const styles = StyleSheet.create({
     },
     txTitle: {
         fontFamily: 'Geist-SemiBold',
-        fontSize: 13,
+        fontSize: ft(13, 1.18),
     },
     txDate: {
         fontFamily: 'JetBrainsMono-Regular',
-        fontSize: 11,
+        fontSize: ft(11, 1.18),
         marginTop: 2,
     },
     txAmt: {
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 14,
+        fontSize: ft(14, 1.18),
     },
 
     // Empty state
     emptyText: {
         fontFamily: 'InstrumentSerif-Italic',
-        fontSize: 14,
+        fontSize: ft(14, 1.18),
         textAlign: 'center',
         marginTop: 12,
         marginBottom: 16,

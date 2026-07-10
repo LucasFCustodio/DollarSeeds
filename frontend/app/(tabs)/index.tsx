@@ -33,6 +33,7 @@ import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import AnimatedAmount from '../../components/ui/AnimatedAmount';
 import HeroBg from '../../components/ui/HeroBg';
 import { resolveBudgetType, splitLabel } from '../../constants/budgetTypes';
+import { ft, tv, isTablet } from '../../constants/responsive';
 import {
     IconLeaf, IconGear,
     IconLogoMascot, IconGearMascot,
@@ -444,16 +445,16 @@ export default function DashboardScreen() {
                     </View>
 
                     {/* Big amount */}
-                    <View style={{ marginTop: 10 }}>
+                    <View style={{ marginTop: tv(10, 20) }}>
                         <Text style={styles.incomeEyebrow}>
                             ${fmt$(total_income)} · TOTAL INCOME
                         </Text>
                         <AnimatedAmount
                             value={totalLeft}
-                            size={64}
+                            size={tv(64, 92)}
                             color="#fff"
                         />
-                        <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ marginTop: tv(6, 12), flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <View style={styles.leftChip}>
                                 <Text style={styles.leftChipText}>left this month</Text>
                             </View>
@@ -704,7 +705,12 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
 
                 <View style={{ flex: 1 }}>
                     <View style={styles.catTitleRow}>
-                        <Text style={[styles.catTitle, { color: theme.ink }]}>{cat.label}</Text>
+                        <Text
+                            style={[styles.catTitle, { color: theme.ink }, isTablet && styles.catTitleTablet]}
+                            numberOfLines={1}
+                        >
+                            {cat.label}
+                        </Text>
                         <Text style={[styles.catPct, { color: theme.ink3 }]}>{cat.pct}</Text>
                     </View>
                     <Text style={[styles.catSub, { color: theme.ink2 }]}>{cat.sub}</Text>
@@ -816,8 +822,8 @@ const styles = StyleSheet.create({
     heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 },
     logoGroup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     logoTile: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    wordmark: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: 15, letterSpacing: -0.2 },
-    subline: { color: 'rgba(255,255,255,0.65)', fontFamily: 'JetBrainsMono-Regular', fontSize: 11 },
+    wordmark: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: ft(15, 1.2), letterSpacing: -0.2 },
+    subline: { color: 'rgba(255,255,255,0.65)', fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.2) },
     heroControls: { flexDirection: 'row', gap: 8 },
     glassBtn: {
         width: 38, height: 38, borderRadius: 999,
@@ -838,13 +844,13 @@ const styles = StyleSheet.create({
     monthEyebrow: {
         color: 'rgba(255,255,255,0.65)',
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 10,
+        fontSize: ft(10, 1.25),
         letterSpacing: 1.8,
     },
     monthLabel: {
         color: '#fff',
         fontFamily: 'InstrumentSerif-Regular',
-        fontSize: 18,
+        fontSize: ft(18, 1.3),
         marginTop: 2,
         letterSpacing: 0.2,
     },
@@ -853,9 +859,9 @@ const styles = StyleSheet.create({
     incomeEyebrow: {
         color: 'rgba(255,255,255,0.7)',
         fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: 12,
+        fontSize: ft(12, 1.25),
         letterSpacing: 1.2,
-        marginBottom: 4,
+        marginBottom: ft(4, 1.5),
     },
     leftChip: {
         backgroundColor: 'rgba(255,255,255,0.18)',
@@ -867,7 +873,7 @@ const styles = StyleSheet.create({
     leftChipText: {
         color: '#fff',
         fontFamily: 'Geist-SemiBold',
-        fontSize: 11,
+        fontSize: ft(11, 1.2),
         letterSpacing: 0.6,
     },
 
@@ -884,9 +890,9 @@ const styles = StyleSheet.create({
     },
     rolloverHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
     rolloverIconTile: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-    rolloverTitle: { fontFamily: 'Geist-SemiBold', fontSize: 15, letterSpacing: -0.2 },
-    rolloverSub: { fontFamily: 'Geist-Regular', fontSize: 12, marginTop: 3, lineHeight: 17 },
-    rolloverDismiss: { fontFamily: 'Geist-SemiBold', fontSize: 14, paddingHorizontal: 2 },
+    rolloverTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(15, 1.28), letterSpacing: -0.2 },
+    rolloverSub: { fontFamily: 'Geist-Regular', fontSize: ft(12, 1.18), marginTop: 3, lineHeight: ft(17, 1.18) },
+    rolloverDismiss: { fontFamily: 'Geist-SemiBold', fontSize: ft(14, 1.2), paddingHorizontal: 2 },
     rolloverClosedCard: {
         borderRadius: 16,
         padding: 14,
@@ -896,9 +902,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 12,
     },
-    rolloverClosedTitle: { fontFamily: 'Geist-SemiBold', fontSize: 14, letterSpacing: -0.2 },
+    rolloverClosedTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(14, 1.28), letterSpacing: -0.2 },
     reopenBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
-    reopenBtnText: { fontFamily: 'Geist-SemiBold', fontSize: 12 },
+    reopenBtnText: { fontFamily: 'Geist-SemiBold', fontSize: ft(12, 1.2) },
 
     // Scripture banner
     scriptureBanner: { marginBottom: 18 },
@@ -906,12 +912,12 @@ const styles = StyleSheet.create({
     scriptureIconTile: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     scriptureVerse: {
         fontFamily: 'InstrumentSerif-Italic',
-        fontSize: 15,
-        lineHeight: 20,
+        fontSize: ft(15, 1.2),
+        lineHeight: ft(20, 1.2),
     },
     scriptureRef: {
         fontFamily: 'JetBrainsMono-Regular',
-        fontSize: 11,
+        fontSize: ft(11, 1.18),
         letterSpacing: 0.4,
         marginTop: 6,
     },
@@ -924,10 +930,10 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         paddingHorizontal: 4,
     },
-    sectionTitle: { fontFamily: 'Geist-SemiBold', fontSize: 15, letterSpacing: -0.2 },
+    sectionTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(15, 1.28), letterSpacing: -0.2 },
     budgetTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
     budgetTypeDot: { width: 6, height: 6, borderRadius: 3 },
-    budgetTypeText: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11, letterSpacing: 0.2 },
+    budgetTypeText: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.2), letterSpacing: 0.2 },
 
     // Tithe envelope (above the 50/30/20 split)
     titheCard: {
@@ -941,11 +947,11 @@ const styles = StyleSheet.create({
     },
     titheIconTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     titheTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-    titheTitle: { fontFamily: 'Geist-SemiBold', fontSize: 16, letterSpacing: -0.2 },
-    tithePct: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11 },
-    titheSub: { fontFamily: 'Geist-Regular', fontSize: 12, marginTop: 2 },
-    titheAmount: { fontFamily: 'InstrumentSerif-Regular', fontSize: 22 },
-    titheAmountLabel: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: 10, letterSpacing: 1 },
+    titheTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(16, 1.28), letterSpacing: -0.2 },
+    tithePct: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.25) },
+    titheSub: { fontFamily: 'Geist-Regular', fontSize: ft(12, 1.18), marginTop: 2 },
+    titheAmount: { fontFamily: 'InstrumentSerif-Regular', fontSize: ft(22, 1.3) },
+    titheAmountLabel: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: ft(10, 1.25), letterSpacing: 1 },
 
     // Category card
     catCard: {
@@ -955,14 +961,17 @@ const styles = StyleSheet.create({
     catCardHeader: { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
     catIconTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     catTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-    catTitle: { fontFamily: 'Geist-SemiBold', fontSize: 16, letterSpacing: -0.2 },
-    catPct: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11 },
-    catSub: { fontFamily: 'Geist-Regular', fontSize: 12, marginTop: 2 },
-    catLeft: { fontFamily: 'InstrumentSerif-Regular', fontSize: 22 },
-    catLeftLabel: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: 10, letterSpacing: 1 },
+    catTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(16, 1.3), letterSpacing: -0.2 },
+    // Tablet-only: give the heading room so the trailing "s" (Needs/Wants/Goals)
+    // is never clipped, and let it shrink instead of truncating against the %.
+    catTitleTablet: { flexShrink: 1, paddingRight: 3 },
+    catPct: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.25) },
+    catSub: { fontFamily: 'Geist-Regular', fontSize: ft(12, 1.18), marginTop: 2 },
+    catLeft: { fontFamily: 'InstrumentSerif-Regular', fontSize: ft(22, 1.3) },
+    catLeftLabel: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: ft(10, 1.25), letterSpacing: 1 },
     catProgress: { paddingHorizontal: 16, paddingBottom: 14 },
     catMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-    catMetaText: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11 },
+    catMetaText: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.2) },
 
     // Expanded transaction rows
     catExpanded: { borderTopWidth: 1, borderBottomLeftRadius: 18, borderBottomRightRadius: 18 },
@@ -974,9 +983,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
     },
     txIconTile: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    txName: { fontFamily: 'Geist-Medium', fontSize: 13 },
-    txDate: { fontFamily: 'JetBrainsMono-Regular', fontSize: 11, marginTop: 2 },
-    txAmount: { fontFamily: 'Geist-Medium', fontSize: 13 },
+    txName: { fontFamily: 'Geist-Medium', fontSize: ft(13, 1.18) },
+    txDate: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.18), marginTop: 2 },
+    txAmount: { fontFamily: 'Geist-Medium', fontSize: ft(13, 1.18) },
 
     // Piggy row (inside Goals expanded)
     piggyRow: {
@@ -987,12 +996,12 @@ const styles = StyleSheet.create({
         padding: 12,
         borderRadius: 12,
     },
-    piggyLabel: { flex: 1, fontFamily: 'Geist-SemiBold', fontSize: 12 },
-    piggyAmount: { fontFamily: 'InstrumentSerif-Regular', fontSize: 18 },
+    piggyLabel: { flex: 1, fontFamily: 'Geist-SemiBold', fontSize: ft(12, 1.18) },
+    piggyAmount: { fontFamily: 'InstrumentSerif-Regular', fontSize: ft(18, 1.3) },
 
     // "View all" link at bottom of expanded card
     viewAllBtn: { paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, alignItems: 'center' },
-    viewAllText: { fontFamily: 'Geist-SemiBold', fontSize: 13 },
+    viewAllText: { fontFamily: 'Geist-SemiBold', fontSize: ft(13, 1.2) },
 
     // Quick actions
     quickActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
@@ -1007,7 +1016,7 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         ...shadow(5, '#0F3D2E'),
     },
-    quickActionPrimaryText: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: 14 },
+    quickActionPrimaryText: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: ft(14, 1.2) },
     quickActionSecondary: {
         flex: 1,
         flexDirection: 'row',
@@ -1019,7 +1028,7 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         borderWidth: 1,
     },
-    quickActionSecondaryText: { fontFamily: 'Geist-SemiBold', fontSize: 14 },
+    quickActionSecondaryText: { fontFamily: 'Geist-SemiBold', fontSize: ft(14, 1.2) },
 
     // View all Income button (hero) — matches leftChip pill style
     viewIncomeBtn: {
@@ -1034,7 +1043,7 @@ const styles = StyleSheet.create({
     viewIncomeBtnText: {
         color: '#fff',
         fontFamily: 'Geist-SemiBold',
-        fontSize: 11,
+        fontSize: ft(11, 1.2),
         letterSpacing: 0.6,
     },
 
@@ -1052,16 +1061,16 @@ const styles = StyleSheet.create({
         alignItems: 'center', justifyContent: 'center',
         marginBottom: 4,
     },
-    modalTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 22, textAlign: 'center' },
+    modalTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: ft(22, 1.3), textAlign: 'center' },
     modalVerse: {
         fontFamily: 'InstrumentSerif-Italic',
-        fontSize: 15,
+        fontSize: ft(15, 1.2),
         textAlign: 'center',
-        lineHeight: 22,
+        lineHeight: ft(22, 1.2),
     },
     modalRef: {
         fontFamily: 'JetBrainsMono-Regular',
-        fontSize: 12,
+        fontSize: ft(12, 1.18),
         letterSpacing: 0.4,
         marginBottom: 8,
     },

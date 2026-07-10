@@ -9,6 +9,8 @@ import { useFonts } from 'expo-font';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
+import { OnboardingProvider } from '../context/OnboardingContext';
+import OnboardingTour from '../components/onboarding/OnboardingTour';
 import { useNotifications } from '../hooks/useNotifications';
 import * as Sentry from '@sentry/react-native';
 import { PostHogProvider } from 'posthog-react-native';
@@ -92,6 +94,7 @@ function RootLayoutNav() {
                 <Stack.Screen name="lessonPlayer" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
             </Stack>
+            <OnboardingTour />
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         </ThemeProvider>
     );
@@ -112,7 +115,9 @@ export default Sentry.wrap(function RootLayout() {
         >
             <AuthProvider>
                 <AppThemeProvider>
-                    <RootLayoutNav />
+                    <OnboardingProvider>
+                        <RootLayoutNav />
+                    </OnboardingProvider>
                 </AppThemeProvider>
             </AuthProvider>
         </PostHogProvider>
