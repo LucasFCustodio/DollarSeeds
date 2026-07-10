@@ -1,0 +1,69 @@
+/**
+ * Onboarding — first-run guided tour configuration.
+ *
+ * Single source of truth for the tour: storage keys, the dev account that can
+ * replay it, the release cutoff, and the ordered step copy. Everything else
+ * (context + overlay) reads from here so there are no magic strings elsewhere.
+ */
+
+// Per-user AsyncStorage key. The user id is appended so the "completed" flag is
+// scoped to the account, not the device — matching how the app already keys
+// per-user data.
+export const ONBOARDING_STORAGE_PREFIX = 'onboarding_completed_';
+
+export const onboardingKey = (userId: string) => `${ONBOARDING_STORAGE_PREFIX}${userId}`;
+
+// Only this account sees the dev-only "Replay Onboarding Tour" button in Settings.
+export const DEV_ACCOUNT_EMAIL = 'appletester@gmail.com';
+
+// Accounts created before this date never auto-start the tour. This keeps the
+// tour from surfacing for existing beta testers (who have no completed-flag yet)
+// when they receive the build that adds onboarding — only genuinely new accounts
+// created on/after this date see it. Bump this if you ever want to re-target.
+export const ONBOARDING_RELEASE_DATE = '2026-07-09T00:00:00Z';
+
+// A tab route the tour navigates to for a given step.
+export type OnboardingRoute =
+    | '/(tabs)'
+    | '/(tabs)/transactions'
+    | '/(tabs)/piggyBank'
+    | '/(tabs)/lessons';
+
+export type OnboardingStep = {
+    route: OnboardingRoute;
+    eyebrow: string;
+    title: string;
+    body: string;
+    subnote?: string;
+};
+
+// Ordered, linear tour. Derived from the user's handwritten draft, condensed for
+// mobile: one short sentence per step with an optional secondary line.
+export const ONBOARDING_STEPS: OnboardingStep[] = [
+    {
+        route: '/(tabs)',
+        eyebrow: 'DASHBOARD',
+        title: 'Welcome to DollarSeeds',
+        body: "Go here to see your current income, what's left to spend, and how much money you have for each spending category",
+    },
+    {
+        route: '/(tabs)/transactions',
+        eyebrow: 'TRANSACTIONS',
+        title: 'Add Your Income and Expenses',
+        body: 'Enter an amount, pick a category, name it, choose a date, and save. New income is automatically split across all categories',
+    },
+    {
+        route: '/(tabs)/piggyBank',
+        eyebrow: 'GOALS',
+        title: 'Track Your Goals',
+        body: "Create a personal or debt goal. Add money to it from this month's income, or from your General Savings (GS). ",
+        subnote: 'Add to GS whenever you have no specific saving goal. Money not spent will roll over into your GS at the end of the month',
+    },
+    {
+        route: '/(tabs)/lessons',
+        eyebrow: 'LESSONS',
+        title: 'Grow in wisdom',
+        body: 'Scripture-rooted video series on money, generosity, and stewardship, given by successful professionals.',
+        subnote: "More series will be added as the app and its reach grows",
+    },
+];
