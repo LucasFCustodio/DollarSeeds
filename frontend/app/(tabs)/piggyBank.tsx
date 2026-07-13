@@ -93,6 +93,87 @@ const getWeeklyRate = (target: number, allocated: number, m: string, y: number, 
 const fmtAmt = (n: number) =>
     n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
+// ─── Year picker ──────────────────────────────────────────────────────────────
+// Horizontal twin of the month wheel in IncomeContainer/ExpenseContainer: a free
+// continuous swipe that snaps to the nearest item, rather than a stepped one-at-a-time
+// control. Runs from this year out 70 years, so long-horizon goals (a mortgage, a
+// retirement fund) are reachable by swiping instead of being capped at +2.
+const YEAR_SPAN = 70;
+const YEAR_ITEM_W = 84;   // must match styles.yearItem width + marginRight
+
+function YearPicker({
+    selected, onSelect, theme,
+}: {
+    selected: number;
+    onSelect: (y: number) => void;
+    theme: any;
+}) {
+    const scrollRef = useRef<ScrollView>(null);
+    const didInit = useRef(false);
+    const startYear = new Date().getFullYear();
+
+    // An existing goal can hold a year before this one (an old deadline), so anchor the
+    // list at whichever is earlier and let the selection always be reachable.
+    const firstYear = Math.min(startYear, selected);
+    const years = Array.from(
+        { length: startYear + YEAR_SPAN - firstYear + 1 },
+        (_, i) => firstYear + i,
+    );
+
+    const scrollToYear = (y: number, animated: boolean) => {
+        scrollRef.current?.scrollTo({ x: years.indexOf(y) * YEAR_ITEM_W, animated });
+    };
+
+    // Center the current selection on first layout. onContentSizeChange (not a mount
+    // effect) because inside the edit Modal the ScrollView has no layout until it opens,
+    // and a scrollTo before that is a no-op.
+    const onContentSizeChange = () => {
+        if (didInit.current) return;
+        didInit.current = true;
+        scrollToYear(selected, false);
+    };
+
+    const onScrollEnd = (e: any) => {
+        const idx = Math.round(e.nativeEvent.contentOffset.x / YEAR_ITEM_W);
+        const clamped = Math.max(0, Math.min(years.length - 1, idx));
+        onSelect(years[clamped]);
+    };
+
+    return (
+        <ScrollView
+            ref={scrollRef}
+            horizontal
+            snapToInterval={YEAR_ITEM_W}
+            decelerationRate="fast"
+            showsHorizontalScrollIndicator={false}
+            onContentSizeChange={onContentSizeChange}
+            onMomentumScrollEnd={onScrollEnd}
+            style={{ marginBottom: 20 }}
+        >
+            {years.map(y => {
+                const active = selected === y;
+                return (
+                    <Pressable
+                        key={y}
+                        onPress={() => { onSelect(y); scrollToYear(y, true); }}
+                        style={[
+                            styles.yearItem,
+                            {
+                                backgroundColor: active ? theme.brand : theme.surface,
+                                borderColor: active ? theme.brand : theme.border,
+                            },
+                        ]}
+                    >
+                        <Text style={[styles.chipText, { color: active ? '#fff' : theme.ink2 }]}>
+                            {y}
+                        </Text>
+                    </Pressable>
+                );
+            })}
+        </ScrollView>
+    );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function PiggyBankScreen() {
     const { user } = useAuth();
@@ -501,36 +582,9 @@ export default function PiggyBankScreen() {
         </ScrollView>
     );
 
-    const renderYearChips = (selected: number, onSelect: (y: number) => void) => {
-        // Default range is this year + 2, but an existing goal may hold a year outside it
-        // (an old deadline, or one set before the year rolled over) — keep it selectable.
-        const base = [today.getFullYear(), today.getFullYear() + 1, today.getFullYear() + 2];
-        const years = Array.from(new Set([...base, selected])).sort((a, b) => a - b);
-        return (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-                {years.map(y => {
-                    const active = selected === y;
-                    return (
-                        <Pressable
-                            key={y}
-                            onPress={() => onSelect(y)}
-                            style={[
-                                styles.chip,
-                                {
-                                    backgroundColor: active ? theme.brand : theme.surface,
-                                    borderColor: active ? theme.brand : theme.border,
-                                },
-                            ]}
-                        >
-                            <Text style={[styles.chipText, { color: active ? '#fff' : theme.ink2 }]}>
-                                {y}
-                            </Text>
-                        </Pressable>
-                    );
-                })}
-            </View>
-        );
-    };
+    const renderYearChips = (selected: number, onSelect: (y: number) => void) => (
+        <YearPicker selected={selected} onSelect={onSelect} theme={theme} />
+    );
 
     // Renders one active goal card. Savings and debt goals use identical mechanics
     // (progress = allocated / target, complete when fully funded); only the accent
@@ -1354,6 +1408,16 @@ const styles = StyleSheet.create({
     },
     chipGeneral: {
         borderWidth: 1.5,
+    },
+    // Fixed width so the snap interval is exact: 76 + 8 margin = YEAR_ITEM_W (84).
+    yearItem: {
+        width: 76,
+        marginRight: 8,
+        paddingVertical: 9,
+        borderRadius: 999,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     chipText: {
         fontFamily: 'Geist-SemiBold',
