@@ -20,10 +20,13 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
 
+import * as WebBrowser from 'expo-web-browser';
+
 import { useAuth } from '../context/AuthContext';
-import { useTheme, shadow } from '../context/ThemeContext';
+import { useTheme, shadow, Fonts } from '../context/ThemeContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { DEV_ACCOUNT_EMAIL } from '../constants/onboarding';
+import { DISCLAIMER_FULL, TERMS_URL, PRIVACY_URL } from '../constants/legal';
 import { supabase } from '../lib/supabase';
 import {
     IconChevronLeft, IconScripture, IconMoon, IconSun, IconTarget, IconSparkle,
@@ -312,6 +315,43 @@ export default function SettingsScreen() {
                         </>
                     )}
 
+                    {/* ── About & legal ───────────────────────────────────── */}
+                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>ABOUT</Text>
+
+                    <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
+                        <View style={styles.legalBody}>
+                            <Text style={[styles.legalText, { color: theme.ink3 }]}>
+                                {DISCLAIMER_FULL}
+                            </Text>
+                        </View>
+
+                        <Pressable
+                            onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}
+                            style={({ pressed }) => [
+                                styles.legalLinkRow,
+                                { borderTopColor: theme.borderSoft },
+                                pressed && { opacity: 0.6 },
+                            ]}
+                        >
+                            <Text style={[styles.legalLinkText, { color: theme.brand }]}>
+                                Terms of Service
+                            </Text>
+                        </Pressable>
+
+                        <Pressable
+                            onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)}
+                            style={({ pressed }) => [
+                                styles.legalLinkRow,
+                                { borderTopColor: theme.borderSoft },
+                                pressed && { opacity: 0.6 },
+                            ]}
+                        >
+                            <Text style={[styles.legalLinkText, { color: theme.brand }]}>
+                                Privacy Policy
+                            </Text>
+                        </Pressable>
+                    </View>
+
                     {/* ── Log out ─────────────────────────────────────────── */}
                     <Pressable
                         onPress={handleLogout}
@@ -492,6 +532,12 @@ const styles = StyleSheet.create({
 
     explainBox: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12 },
     explainText: { fontFamily: 'Geist-Regular', fontSize: 12, lineHeight: 18 },
+
+    // About & legal
+    legalBody: { paddingHorizontal: 16, paddingVertical: 14 },
+    legalText: { fontFamily: Fonts.sans, fontSize: 12, lineHeight: 18 },
+    legalLinkRow: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 14 },
+    legalLinkText: { fontFamily: Fonts.sansSemiBold, fontSize: 14 },
 
     // Firm Foundation modal
     modalOverlay: {

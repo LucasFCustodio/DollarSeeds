@@ -6,6 +6,8 @@
  * (context + overlay) reads from here so there are no magic strings elsewhere.
  */
 
+import { DISCLAIMER_SHORT } from './legal';
+
 // Per-user AsyncStorage key. The user id is appended so the "completed" flag is
 // scoped to the account, not the device — matching how the app already keys
 // per-user data.
@@ -50,6 +52,9 @@ export type OnboardingStep = {
     title: string;
     body: string;
     subnote?: string;
+    // Quiet muted line under the card — used for the legal disclaimer on the last
+    // step. Kept separate from `subnote`, which renders as a highlighted callout.
+    footnote?: string;
 };
 
 // Ordered, linear tour. Derived from the user's handwritten draft, condensed for
@@ -80,5 +85,6 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         title: 'Grow in wisdom',
         body: 'Scripture-rooted video series on money, generosity, and stewardship, given by successful professionals.',
         subnote: "More series will be added as the app and its reach grows",
+        footnote: DISCLAIMER_SHORT,
     },
 ];

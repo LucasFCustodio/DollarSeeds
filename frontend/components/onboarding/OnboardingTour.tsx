@@ -84,6 +84,10 @@ export default function OnboardingTour() {
                     </View>
                 ) : null}
 
+                {current.footnote ? (
+                    <Text style={[styles.footnote, { color: theme.ink3 }]}>{current.footnote}</Text>
+                ) : null}
+
                 <View style={styles.footer}>
                     <Pressable onPress={skip} hitSlop={8} style={styles.skipBtn}>
                         <Text style={[styles.skipText, { color: theme.ink3 }]}>Skip</Text>
@@ -133,6 +137,7 @@ const styles = StyleSheet.create({
     body: { fontFamily: Fonts.sans, fontSize: 14, lineHeight: 21 },
     subnoteBox: { marginTop: 14, padding: 12, borderRadius: 12 },
     subnote: { fontFamily: Fonts.sansMedium, fontSize: 13, lineHeight: 19 },
+    footnote: { fontFamily: Fonts.sans, fontSize: 11, lineHeight: 16, marginTop: 12 },
     footer: {
         flexDirection: 'row',
         alignItems: 'center',

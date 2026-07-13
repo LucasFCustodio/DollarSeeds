@@ -27,8 +27,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
-import { useTheme, stickerShadow, AppTheme } from '../../context/ThemeContext';
+import { useTheme, stickerShadow, Fonts, AppTheme } from '../../context/ThemeContext';
 import { ft, tv } from '../../constants/responsive';
+import { DISCLAIMER_FULL } from '../../constants/legal';
 import { useAnalytics } from '../../lib/analytics';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
@@ -293,6 +294,13 @@ export default function LessonsScreen() {
                     );
                 })}
             </View>
+
+            {/* ── Disclaimer (page footer) ────────────────────────── */}
+            <View style={[styles.disclaimer, { borderTopColor: theme.borderSoft }]}>
+                <Text style={[styles.disclaimerText, { color: theme.ink3 }]}>
+                    {DISCLAIMER_FULL}
+                </Text>
+            </View>
         </ScrollView>
     );
 }
@@ -367,7 +375,7 @@ function SeriesCard({
 
 const styles = StyleSheet.create({
     content: {
-        paddingBottom: 60,
+        paddingBottom: 120, // clears the floating CustomTabBar — matches Dashboard/Goals
     },
 
     // Header
@@ -512,6 +520,20 @@ const styles = StyleSheet.create({
     },
     lessonCard: {
         // gap between cards handled by cardList gap
+    },
+
+    // Disclaimer footer — hairline above, quiet muted text
+    disclaimer: {
+        marginTop: 28,
+        marginHorizontal: 22,
+        paddingTop: 18,
+        borderTopWidth: 1,
+    },
+    disclaimerText: {
+        fontFamily: Fonts.sans,
+        fontSize: ft(11, 1.18),
+        lineHeight: ft(17, 1.18),
+        textAlign: 'center',
     },
 
     // Card internals
