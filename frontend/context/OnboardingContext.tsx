@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 import {
     ONBOARDING_STEPS,
-    ONBOARDING_RELEASE_DATE,
+    isNewAccount,
     onboardingKey,
 } from '../constants/onboarding';
 
@@ -111,10 +111,7 @@ export const OnboardingProvider = ({ children }: { children: React.ReactNode }) 
 
                 // Only genuinely new accounts (created on/after the release cutoff)
                 // auto-start — existing beta accounts are skipped.
-                const createdAt = user.created_at ? new Date(user.created_at) : null;
-                const isNewAccount =
-                    !!createdAt && createdAt.getTime() >= new Date(ONBOARDING_RELEASE_DATE).getTime();
-                if (isNewAccount) start();
+                if (isNewAccount(user.created_at)) start();
             } catch (err) {
                 console.error('Onboarding auto-start check error:', err);
             }

@@ -10,10 +10,20 @@
     },
     "preview": {
       "distribution": "store",
-      "ios": { "simulator": false }
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_DawwrZodRpBUtCd5zF7iQwpXqh96KcsRcEMiksXFTaBS",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_DawwrZodRpBUtCd5zF7iQwpXqh96KcsRcEMiksXFTaBS",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+      }
     }
   },
   "submit": {

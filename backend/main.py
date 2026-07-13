@@ -53,6 +53,12 @@ class SavingsEntry(BaseModel):
     goal_id: Optional[int] = None
     source: str = "income"  # "income" | "transfer"
 
+class StartingBalance(BaseModel):
+    user_id: str
+    amount: float
+    day: int
+    month: str
+
 class SavingsGoal(BaseModel):
     user_id: str
     title: str
@@ -520,6 +526,40 @@ def create_savings_transaction(entry: SavingsEntry):
     _assert_month_open(entry.user_id, entry.month)
     response = supabase.table("savings_transactions").insert(entry.model_dump()).execute()
     return {"message": "Savings transaction recorded.", "data": response.data}
+
+# Pre-app savings the user already had when they signed up. Excluded from budget math.
+OPENING_SOURCE = "opening"
+
+@app.post("/savings/starting-balance/")
+def set_starting_balance(entry: StartingBalance):
+    """One-time capture of the savings the user already had BEFORE they started using
+    the app. Booked into General Savings with source='opening' — like 'rollover', that
+    source is excluded from the budget math (which allowlists source='income'), so
+    money brought in from before never consumes the Goals budget of the month it lands
+    in. Idempotent: a user can only ever have one opening row."""
+    existing = supabase.table("savings_transactions").select("id") \
+        .eq("user_id", entry.user_id).eq("source", OPENING_SOURCE).limit(1).execute()
+    if existing.data:
+        return {"message": "Starting balance already set.", "already_set": True}
+
+    # A user starting from nothing may legitimately enter 0. The table's amount > 0
+    # CHECK forbids a zero row, so record nothing and let them through.
+    if entry.amount <= 0:
+        return {"message": "No starting balance to record.", "already_set": False}
+
+    _assert_month_open(entry.user_id, entry.month)
+    general_id = _ensure_general_savings(entry.user_id)
+    supabase.table("savings_transactions").insert({
+        "user_id": entry.user_id,
+        "title": "Starting balance",
+        "amount": entry.amount,
+        "type": "deposit",
+        "goal_id": general_id,
+        "source": OPENING_SOURCE,
+        "day": entry.day,
+        "month": entry.month,
+    }).execute()
+    return {"message": "Starting balance recorded.", "already_set": False}
 
 @app.post("/savings/transfer/")
 def transfer_from_general(transfer: SavingsTransfer):

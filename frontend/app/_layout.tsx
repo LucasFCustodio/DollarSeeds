@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { OnboardingProvider } from '../context/OnboardingContext';
 import OnboardingTour from '../components/onboarding/OnboardingTour';
+import StartingBalanceGate from '../components/onboarding/StartingBalanceGate';
 import { useNotifications } from '../hooks/useNotifications';
 import * as Sentry from '@sentry/react-native';
 import { PostHogProvider } from 'posthog-react-native';
@@ -95,6 +96,7 @@ function RootLayoutNav() {
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
             </Stack>
             <OnboardingTour />
+            <StartingBalanceGate />
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         </ThemeProvider>
     );

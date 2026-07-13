@@ -22,6 +22,21 @@ export const DEV_ACCOUNT_EMAIL = 'appletester@gmail.com';
 // created on/after this date see it. Bump this if you ever want to re-target.
 export const ONBOARDING_RELEASE_DATE = '2026-07-09T00:00:00Z';
 
+// Per-user AsyncStorage key for the mandatory starting-balance capture that runs
+// once the tour is finished or skipped. Same per-account scoping as the tour flag.
+export const STARTING_BALANCE_STORAGE_PREFIX = 'starting_balance_set_';
+
+export const startingBalanceKey = (userId: string) =>
+    `${STARTING_BALANCE_STORAGE_PREFIX}${userId}`;
+
+// Shared eligibility check for both first-run flows: only accounts created on/after
+// the cutoff are "new". Beta accounts predate it and are never prompted.
+export const isNewAccount = (createdAt?: string | null) => {
+    if (!createdAt) return false;
+    const created = new Date(createdAt).getTime();
+    return !isNaN(created) && created >= new Date(ONBOARDING_RELEASE_DATE).getTime();
+};
+
 // A tab route the tour navigates to for a given step.
 export type OnboardingRoute =
     | '/(tabs)'
