@@ -70,6 +70,23 @@ class SavingsGoal(BaseModel):
     # the only difference is grouping/labeling in the Goals tab UI.
     goal_type: str = "saving"
 
+class SavingsGoalUpdate(BaseModel):
+    """Partial edit of a user-created goal. Every field is optional; only the ones
+    the client sends are written. General Savings and Reconciliation are auto-managed
+    and reject edits."""
+    user_id: str
+    title: Optional[str] = None
+    target_amount: Optional[float] = None
+    target_month: Optional[str] = None
+    target_year: Optional[int] = None
+
+class SavingsGoalFinish(BaseModel):
+    """Completing a goal in one tap: the server withdraws whatever the goal holds
+    (no user-typed amount) and marks it done. day/month book the withdrawal row."""
+    user_id: str
+    day: int
+    month: str
+
 class SavingsTransfer(BaseModel):
     user_id: str
     amount: float
@@ -721,6 +738,78 @@ def create_savings_goal(goal: SavingsGoal):
         raise HTTPException(status_code=400, detail="A goal with this name already exists.")
     response = supabase.table("savings_goals").insert(goal.model_dump()).execute()
     return {"message": "Goal created.", "data": response.data}
+
+def _editable_goal(id: int, user_id: str) -> dict:
+    """Load a user-created goal, rejecting the two auto-managed ones."""
+    res = supabase.table("savings_goals").select("*").eq("id", id).eq("user_id", user_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    goal = res.data[0]
+    if goal.get("is_general"):
+        raise HTTPException(status_code=400, detail="General Savings cannot be edited.")
+    if goal.get("is_reconciliation"):
+        raise HTTPException(status_code=400, detail="The Reconciliation goal is managed automatically.")
+    return goal
+
+@app.patch("/savings/goal/{id}")
+def update_savings_goal(id: int, update: SavingsGoalUpdate):
+    goal = _editable_goal(id, update.user_id)
+
+    fields = update.model_dump(exclude={"user_id"}, exclude_none=True)
+    if not fields:
+        return {"message": "Nothing to update.", "data": [goal]}
+
+    if "target_amount" in fields and fields["target_amount"] <= 0:
+        raise HTTPException(status_code=400, detail="Target amount must be greater than zero.")
+
+    new_title = fields.get("title")
+    if new_title and new_title != goal["title"]:
+        clash = supabase.table("savings_goals").select("id") \
+            .eq("user_id", update.user_id).eq("title", new_title).neq("id", id).execute()
+        if clash.data:
+            raise HTTPException(status_code=400, detail="A goal with this name already exists.")
+
+    response = supabase.table("savings_goals").update(fields).eq("id", id).eq("user_id", update.user_id).execute()
+
+    # Transaction titles are denormalized copies of the goal title, so a rename would
+    # leave stale labels in Recent Activity. Only rows still carrying the OLD title are
+    # renamed — rows like "Returned from deleted goal" keep their own wording.
+    if new_title and new_title != goal["title"]:
+        supabase.table("savings_transactions").update({"title": new_title}) \
+            .eq("goal_id", id).eq("user_id", update.user_id).eq("title", goal["title"]).execute()
+
+    return {"message": "Goal updated.", "data": response.data}
+
+@app.post("/savings/goal/{id}/finish")
+def finish_savings_goal(id: int, body: SavingsGoalFinish):
+    """One-tap completion. Withdraws exactly what the goal holds — no hand-typed
+    amount — and snapshots it, since allocated_amount (deposits − withdrawals) drops
+    to 0 the moment the withdrawal lands."""
+    goal = _editable_goal(id, body.user_id)
+    if goal.get("completed"):
+        raise HTTPException(status_code=400, detail="Goal is already completed.")
+    _assert_month_open(body.user_id, body.month)
+
+    allocated = max(0.0, _goal_balance(body.user_id, id))
+    if allocated > 0:
+        supabase.table("savings_transactions").insert({
+            "user_id": body.user_id,
+            "title": goal["title"],
+            "amount": allocated,
+            "type": "withdrawal",
+            "goal_id": id,
+            "source": "income",
+            "day": body.day,
+            "month": body.month,
+        }).execute()
+
+    supabase.table("savings_goals").update({
+        "completed": True,
+        "completed_amount": allocated,
+        "completed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }).eq("id", id).eq("user_id", body.user_id).execute()
+
+    return {"message": "Goal completed.", "allocated": allocated}
 
 @app.delete("/savings/goal/{id}")
 def delete_savings_goal(id: int, user_id: str, current_month: str):

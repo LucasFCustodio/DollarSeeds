@@ -54,11 +54,17 @@ A goal deposit is normally booked to the current `month`, but the Goals funding-
 | `target_month` | text | Deadline month name |
 | `target_year` | int4 | Deadline year |
 | `completed` | bool | Default false |
+| `completed_amount` | numeric | Nullable. What the goal held the moment it was completed — see below |
+| `completed_at` | timestamptz | Nullable. When it was completed |
 | `is_general` | bool | Default false; exactly one General Savings pool per user |
 | `goal_type` | text | `"saving"` (default) or `"debt"`. Debt goals behave identically to savings goals — same allocation math (`allocated_amount / target_amount`), same transactions, same transfer support. Only the Goals-tab grouping/labels differ. |
 | `created_at` | timestamp | |
 
 A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdrawals)` over `savings_transactions` with that `goal_id` (`_with_allocated` in `main.py`). Debt payments are just deposits with `source='income'`, so they count toward the Goals 20% budget exactly like savings deposits.
+
+**Completing a goal** (`POST /savings/goal/{id}/finish`) withdraws the goal's entire funded amount in one server-side transaction, which drives that computed value to $0 — hence the `completed_amount` snapshot, which is what the Completed tab actually renders (falling back to the computed value for goals completed before the column existed). The legacy `PATCH /savings/goal/{id}/complete` only flips the flag and writes no withdrawal; it exists solely for app builds already shipped, which write their own withdrawal first.
+
+**Editing a goal** (`PATCH /savings/goal/{id}`) can change `title`, `target_amount`, `target_month`, `target_year`. Since `savings_transactions.title` is a denormalized copy of the goal title, a rename also rewrites the titles of that goal's transactions so Recent Activity doesn't show the old name. General Savings and the Reconciliation goal are auto-managed and reject both routes.
 
 ## Budget Calculation
 
