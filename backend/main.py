@@ -784,13 +784,39 @@ def update_savings_goal(id: int, update: SavingsGoalUpdate):
 def finish_savings_goal(id: int, body: SavingsGoalFinish):
     """One-tap completion. Withdraws exactly what the goal holds — no hand-typed
     amount — and snapshots it, since allocated_amount (deposits − withdrawals) drops
-    to 0 the moment the withdrawal lands."""
+    to 0 the moment the withdrawal lands.
+
+    ORDER MATTERS: the goal is marked complete FIRST. There are two writes here and no
+    transaction across them, so if one has to fail it must be the second. Marking first
+    means a failure leaves the goal active with its money intact (retry is safe);
+    withdrawing first would take the money and leave the goal active at $0."""
     goal = _editable_goal(id, body.user_id)
     if goal.get("completed"):
         raise HTTPException(status_code=400, detail="Goal is already completed.")
     _assert_month_open(body.user_id, body.month)
 
     allocated = max(0.0, _goal_balance(body.user_id, id))
+    # Self-heal: a goal whose balance is already 0 but which has deposits on record was
+    # withdrawn by an earlier half-failed finish. Snapshot what it HELD so the Completed
+    # card isn't blank, and skip the withdrawal below (the money is already gone).
+    if allocated == 0:
+        deps = supabase.table("savings_transactions").select("amount") \
+            .eq("user_id", body.user_id).eq("goal_id", id).eq("type", "deposit").execute()
+        snapshot = _r(sum(d["amount"] for d in deps.data))
+    else:
+        snapshot = allocated
+
+    try:
+        supabase.table("savings_goals").update({
+            "completed": True,
+            "completed_amount": snapshot,
+            "completed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }).eq("id", id).eq("user_id", body.user_id).execute()
+    except Exception as e:
+        # Surfaced to the client instead of 500-ing anonymously: the likeliest cause is a
+        # stale PostgREST schema cache after the 0004 migration (PGRST204).
+        raise HTTPException(status_code=500, detail=f"Could not mark the goal complete: {e}")
+
     if allocated > 0:
         supabase.table("savings_transactions").insert({
             "user_id": body.user_id,
@@ -803,13 +829,7 @@ def finish_savings_goal(id: int, body: SavingsGoalFinish):
             "month": body.month,
         }).execute()
 
-    supabase.table("savings_goals").update({
-        "completed": True,
-        "completed_amount": allocated,
-        "completed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    }).eq("id", id).eq("user_id", body.user_id).execute()
-
-    return {"message": "Goal completed.", "allocated": allocated}
+    return {"message": "Goal completed.", "allocated": allocated, "completed_amount": snapshot}
 
 @app.delete("/savings/goal/{id}")
 def delete_savings_goal(id: int, user_id: str, current_month: str):
