@@ -36,7 +36,7 @@ import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
 import {
     SavingsJar, IconPlus, IconArrow, IconSavingsGoalMascot, IconDebtMascot,
-    IconTrash, IconCheck, IconSavings, IconGear,
+    IconTrash, IconCheck, IconSavings, IconGearMascot,
 } from '../../components/icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -402,7 +402,15 @@ export default function PiggyBankScreen() {
         } catch (e: any) {
             if (e?.response?.status === 409) {
                 Alert.alert('Month closed', `Cannot complete a goal in a closed month. Reopen ${currentMonth} to edit`);
-            } else { console.error('Complete goal error:', e); }
+            } else {
+                // Don't fail silently — a swallowed error here looks like the button did
+                // nothing, or worse, like it half-worked.
+                console.error('Complete goal error:', e);
+                Alert.alert(
+                    "Couldn't complete goal",
+                    e?.response?.data?.detail ?? 'Something went wrong. Please try again.',
+                );
+            }
         }
     };
 
@@ -455,7 +463,10 @@ export default function PiggyBankScreen() {
         } catch (e: any) {
             if (e?.response?.status === 400) {
                 setEditError(e.response.data?.detail ?? 'A goal with this name already exists.');
-            } else { console.error('Edit goal error:', e); }
+            } else {
+                console.error('Edit goal error:', e);
+                setEditError(e?.response?.data?.detail ?? 'Something went wrong. Please try again.');
+            }
         }
     };
 
@@ -564,7 +575,7 @@ export default function PiggyBankScreen() {
                     </View>
                     <View style={styles.goalActions}>
                         <Pressable onPress={() => openEditGoal(g)} hitSlop={10}>
-                            <IconGear size={14} color={theme.ink3} />
+                            <IconGearMascot size={14} color={theme.ink3} />
                         </Pressable>
                         <Pressable onPress={() => deleteGoal(g)} hitSlop={10}>
                             <IconTrash size={14} color={theme.ink3} />
