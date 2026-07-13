@@ -234,6 +234,8 @@ export type Database = {
       savings_goals: {
         Row: {
           completed: boolean | null
+          completed_amount: number | null
+          completed_at: string | null
           created_at: string | null
           goal_type: string
           id: number
@@ -247,6 +249,8 @@ export type Database = {
         }
         Insert: {
           completed?: boolean | null
+          completed_amount?: number | null
+          completed_at?: string | null
           created_at?: string | null
           goal_type?: string
           id?: number
@@ -260,6 +264,8 @@ export type Database = {
         }
         Update: {
           completed?: boolean | null
+          completed_amount?: number | null
+          completed_at?: string | null
           created_at?: string | null
           goal_type?: string
           id?: number

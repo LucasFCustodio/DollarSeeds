@@ -4,19 +4,24 @@
  * Behaviour:
  * ✅ Fetch balance, history, active goals, completed goals on focus
  * ✅ General Savings goal auto-seeded on first load (pinned card, no delete)
- * ✅ POST deposit / withdrawal to /savings/transaction/ (source='income')
+ * ✅ POST deposit to /savings/transaction/ (source='income')
  * ✅ POST transfer from General Savings → specific goal to /savings/transfer/
  * ✅ Funding source chips shown when depositing to a specific (non-general) goal
- * ✅ PATCH goal to completed on withdrawal with a linked goal
- * ✅ POST new goal to /savings/goal/
+ * ✅ POST new goal to /savings/goal/ · PATCH edits via the per-card gear icon
+ * ✅ One-tap completion (arrow on the card) → POST /savings/goal/{id}/finish
  * ✅ DELETE transaction + DELETE goal (with current_month redistribution)
- * ✅ Negative-balance alert on withdrawal
- * ✅ Active / Completed tabs
+ * ✅ Confirmations on complete + delete · Active / Completed tabs
+ *
+ * A deposit is the ONLY transaction the user writes by hand. Money leaves savings by
+ * completing a goal, which withdraws that goal's balance server-side — so to spend from
+ * the pool you create a goal, fund it (from income or General Savings), and complete it.
+ * Withdrawal rows still exist in the data model (goal completion, transfers, rollover
+ * all write them); there is simply no hand-written withdrawal form.
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
     View, Text, ScrollView, Pressable,
-    TextInput, StyleSheet, Alert,
+    TextInput, StyleSheet, Alert, Modal,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
@@ -31,7 +36,7 @@ import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
 import {
     SavingsJar, IconPlus, IconArrow, IconSavingsGoalMascot, IconDebtMascot,
-    IconTrash, IconCheck, IconSavings,
+    IconTrash, IconCheck, IconSavings, IconGear,
 } from '../../components/icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -63,6 +68,12 @@ type Goal = {
     // `outstanding` = money you'd saved but later spent, still to be repaid.
     is_reconciliation?: boolean;
     outstanding?: number;
+    // Snapshot taken when the goal was completed. allocated_amount is computed as
+    // deposits − withdrawals, and completing withdraws everything, so it drops to $0 —
+    // this is what the goal actually held. Null on goals completed before the snapshot
+    // column existed, hence the allocated_amount fallback in the Completed tab.
+    completed_amount?: number | null;
+    completed_at?: string | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -100,10 +111,13 @@ export default function PiggyBankScreen() {
 
     // ── UI state ──────────────────────────────────────────────────────────────
     const [activeTab,    setActiveTab]    = useState<'active' | 'completed'>('active');
-    const [activeForm,   setActiveForm]   = useState<'deposit' | 'withdrawal' | null>(null);
+    // Deposits are the only transaction a user writes by hand. Money leaves savings by
+    // completing a goal (which withdraws the goal's balance server-side), so there is no
+    // withdrawal form: to spend from the pool you make a goal, fund it, and complete it.
+    const [showTxForm,   setShowTxForm]   = useState(false);
     const [showGoalForm, setShowGoalForm] = useState(false);
 
-    // Transaction form
+    // Deposit form
     const [txAmount,      setTxAmount]      = useState('');
     const [txGoalId,      setTxGoalId]      = useState<number | null>(null);
     // 'income' = this month's income · 'general' = transfer from General Savings ·
@@ -120,6 +134,14 @@ export default function PiggyBankScreen() {
     const [goalMonth,  setGoalMonth]  = useState(MONTHS[today.getMonth()]);
     const [goalYear,   setGoalYear]   = useState(today.getFullYear());
     const [goalError,  setGoalError]  = useState('');
+
+    // Goal edit modal (gear icon on a goal card). Non-null = open.
+    const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+    const [editTitle,   setEditTitle]   = useState('');
+    const [editAmount,  setEditAmount]  = useState('');
+    const [editMonth,   setEditMonth]   = useState(MONTHS[today.getMonth()]);
+    const [editYear,    setEditYear]    = useState(today.getFullYear());
+    const [editError,   setEditError]   = useState('');
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
     const fetchData = async () => {
@@ -176,10 +198,11 @@ export default function PiggyBankScreen() {
     const reconOutstanding = reconGoal?.outstanding ?? 0;
     const reconActive = !!reconGoal && reconOutstanding > 0;
 
-    const allGoalsForChips: Goal[] = [
+    const goalChips: Goal[] = [
         ...(generalGoal ? [generalGoal] : []),
         ...goals,
-        // Allow paying down the Reconciliation debt like any other goal.
+        // Allow paying down the Reconciliation debt like any other goal — repaying it is
+        // a plain deposit (see _recon_summary: repaid = Σ deposits).
         ...(reconActive ? [reconGoal as Goal] : []),
     ];
 
@@ -191,7 +214,6 @@ export default function PiggyBankScreen() {
     const firstGoalWithTarget = goals.find(g => g.target_amount);
     const jarMax = firstGoalWithTarget?.target_amount ?? 3000;
     const jarFill = balance > 0 ? Math.min(1, balance / jarMax) : 0.05;
-    const isDeposit = activeForm === 'deposit';
 
     // Is the currently-selected goal the General Savings pool?
     const isGeneralSelected = txGoalId !== null && txGoalId === generalGoal?.id;
@@ -211,18 +233,18 @@ export default function PiggyBankScreen() {
 
     // Show the picker only when there's a real choice beyond "this month's income".
     const showFundingSource =
-        isDeposit &&
         txGoalId !== null &&
         !isGeneralSelected &&
         fundingOptions.length > 1;
 
     // ── Handlers ──────────────────────────────────────────────────────────────
-    const toggleForm = (type: 'deposit' | 'withdrawal') => {
-        if (activeForm === type) {
-            setActiveForm(null); setTxAmount(''); setTxGoalId(null); setFundingSource('income');
-        } else {
-            setActiveForm(type); setTxAmount(''); setTxGoalId(null); setFundingSource('income');
-        }
+    const closeTxForm = () => {
+        setShowTxForm(false); setTxAmount(''); setTxGoalId(null); setFundingSource('income');
+    };
+
+    const toggleTxForm = () => {
+        if (showTxForm) { closeTxForm(); return; }
+        setShowTxForm(true); setTxAmount(''); setTxGoalId(null); setFundingSource('income');
     };
 
     const selectGoalChip = (id: number) => {
@@ -232,15 +254,14 @@ export default function PiggyBankScreen() {
         setFundingSource('income');
     };
 
-    const doSubmitTransaction = async () => {
+    const submitTransaction = async () => {
         const parsed = parseFloat(txAmount);
         if (!txAmount || isNaN(parsed) || parsed <= 0) return;
 
-        const selectedGoal = allGoalsForChips.find(g => g.id === txGoalId) ?? null;
+        const selectedGoal = goalChips.find(g => g.id === txGoalId) ?? null;
 
         try {
             if (
-                isDeposit &&
                 fundingSource === 'general' &&
                 txGoalId !== null &&
                 !isGeneralSelected &&
@@ -263,19 +284,19 @@ export default function PiggyBankScreen() {
                     analytics.savingsGoalFunded({ goal_id: txGoalId });
                 }
             } else {
-                // ── Normal deposit / withdrawal ────────────────────────────
-                // Funding a deposit from an earlier open month books it against that
-                // month's Goals budget (fundingSource holds the month name). Otherwise
-                // ('income') it lands in the current month, same as before.
+                // ── Deposit ───────────────────────────────────────────────
+                // Funding from an earlier open month books it against that month's Goals
+                // budget (fundingSource holds the month name). Otherwise ('income') it
+                // lands in the current month.
                 const bookMonth =
-                    isDeposit && fundingSource !== 'income' && fundingSource !== 'general'
+                    fundingSource !== 'income' && fundingSource !== 'general'
                         ? fundingSource
                         : currentMonth;
                 await axios.post(`${BASE}/savings/transaction/`, {
                     user_id: user?.id,
-                    title: selectedGoal?.title ?? (isDeposit ? 'Deposit' : 'Withdrawal'),
+                    title: selectedGoal?.title ?? 'Deposit',
                     amount: parsed,
-                    type: activeForm,
+                    type: 'deposit',
                     day: today.getDate(),
                     month: bookMonth,
                     goal_id: txGoalId ?? null,
@@ -283,40 +304,17 @@ export default function PiggyBankScreen() {
                 });
                 // A deposit into a specific (non-general, non-reconciliation) goal counts
                 // as funding it — same event family as the transfer branch above.
-                if (isDeposit && selectedGoal && !selectedGoal.is_general && !selectedGoal.is_reconciliation) {
+                if (selectedGoal && !selectedGoal.is_general && !selectedGoal.is_reconciliation) {
                     if (selectedGoal.goal_type === 'debt') {
                         analytics.debtGoalFunded({ goal_id: selectedGoal.id });
                     } else {
                         analytics.savingsGoalFunded({ goal_id: selectedGoal.id });
                     }
                 }
-                // Mark goal complete on withdrawal (not for General Savings or the
-                // auto-managed Reconciliation goal, which is never "completed" by hand)
-                if (activeForm === 'withdrawal' && selectedGoal && !selectedGoal.is_general && !selectedGoal.is_reconciliation) {
-                    await axios.patch(`${BASE}/savings/goal/${selectedGoal.id}/complete?user_id=${user?.id}`);
-                    analytics.goalCompleted({ goal_id: selectedGoal.id, goal_type: selectedGoal.goal_type });
-                }
             }
-            setTxAmount(''); setTxGoalId(null); setActiveForm(null); setFundingSource('income');
+            closeTxForm();
             fetchData();
         } catch (err) { console.error('Transaction error:', err); }
-    };
-
-    const submitTransaction = () => {
-        const parsed = parseFloat(txAmount);
-        if (!txAmount || isNaN(parsed) || parsed <= 0) return;
-        if (activeForm === 'withdrawal' && parsed > balance) {
-            Alert.alert(
-                'Heads up!',
-                `You only have $${balance.toFixed(2)} saved. Your balance will go negative.\n\nAre you sure?`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Continue', style: 'destructive', onPress: doSubmitTransaction },
-                ],
-            );
-        } else {
-            doSubmitTransaction();
-        }
     };
 
     const submitGoal = async () => {
@@ -361,7 +359,7 @@ export default function PiggyBankScreen() {
         }
     };
 
-    const deleteGoal = async (id: number) => {
+    const doDeleteGoal = async (id: number) => {
         try {
             await axios.delete(
                 `${BASE}/savings/goal/${id}?user_id=${user?.id}&current_month=${currentMonth}`
@@ -373,6 +371,154 @@ export default function PiggyBankScreen() {
                 Alert.alert('Month closed', `Cannot delete from closed month. Reopen ${currentMonth} to edit`);
             } else { console.error('Delete goal error:', e); }
         }
+    };
+
+    const deleteGoal = (g: Goal) => {
+        const isDebt = g.goal_type === 'debt';
+        Alert.alert(
+            isDebt ? 'Remove this debt?' : 'Remove this goal?',
+            `"${g.title}" will be removed. Money you put in during earlier months goes back ` +
+            `to General Savings, and anything you added this month is returned to this month's Goals budget.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Remove', style: 'destructive', onPress: () => doDeleteGoal(g.id) },
+            ],
+        );
+    };
+
+    // ── Complete a goal (the arrow on the card) ───────────────────────────────
+    // The server withdraws whatever the goal holds and snapshots it, so the user never
+    // types an amount or picks a goal from a list — this replaces "I bought it" for
+    // specific goals.
+    const doCompleteGoal = async (g: Goal) => {
+        try {
+            await axios.post(`${BASE}/savings/goal/${g.id}/finish`, {
+                user_id: user?.id,
+                day: today.getDate(),
+                month: currentMonth,
+            });
+            analytics.goalCompleted({ goal_id: g.id, goal_type: g.goal_type });
+            fetchData();
+        } catch (e: any) {
+            if (e?.response?.status === 409) {
+                Alert.alert('Month closed', `Cannot complete a goal in a closed month. Reopen ${currentMonth} to edit`);
+            } else { console.error('Complete goal error:', e); }
+        }
+    };
+
+    const completeGoal = (g: Goal) => {
+        const isDebt = g.goal_type === 'debt';
+        const saved  = g.allocated_amount ?? 0;
+        const target = g.target_amount ?? 0;
+        const short  = target > 0 && saved < target;
+
+        const moved = `$${fmtAmt(saved)} will come out of your savings and "${g.title}" moves to Completed.`;
+        Alert.alert(
+            isDebt ? 'Mark this debt as paid off?' : 'Move this goal to completed?',
+            short
+                ? `You've only ${isDebt ? 'paid' : 'saved'} $${fmtAmt(saved)} of your $${fmtAmt(target)} ${isDebt ? 'debt' : 'goal'}. ${moved}\n\nComplete anyway?`
+                : moved,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Yes, complete', style: 'destructive', onPress: () => doCompleteGoal(g) },
+            ],
+        );
+    };
+
+    // ── Edit a goal (the gear on the card) ────────────────────────────────────
+    const openEditGoal = (g: Goal) => {
+        setEditingGoal(g);
+        setEditTitle(g.title);
+        setEditAmount(String(g.target_amount ?? ''));
+        setEditMonth(g.target_month ?? currentMonth);
+        setEditYear(g.target_year ?? today.getFullYear());
+        setEditError('');
+    };
+
+    const submitEditGoal = async () => {
+        if (!editingGoal) return;
+        const amount = parseFloat(editAmount);
+        if (!editTitle.trim() || isNaN(amount) || amount <= 0) {
+            setEditError('Enter a name and a target amount greater than zero.');
+            return;
+        }
+        try {
+            await axios.patch(`${BASE}/savings/goal/${editingGoal.id}`, {
+                user_id: user?.id,
+                title: editTitle.trim(),
+                target_amount: amount,
+                target_month: editMonth,
+                target_year: editYear,
+            });
+            setEditingGoal(null);
+            fetchData();
+        } catch (e: any) {
+            if (e?.response?.status === 400) {
+                setEditError(e.response.data?.detail ?? 'A goal with this name already exists.');
+            } else { console.error('Edit goal error:', e); }
+        }
+    };
+
+    // Month / year pickers — shared by the create form and the edit modal.
+    const renderMonthChips = (selected: string, onSelect: (m: string) => void) => (
+        <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginBottom: 14 }}
+            contentContainerStyle={{ flexDirection: 'row', gap: 8 }}
+        >
+            {MONTH_ABBRS.map((abbr, i) => {
+                const active = selected === MONTHS[i];
+                return (
+                    <Pressable
+                        key={abbr}
+                        onPress={() => onSelect(MONTHS[i])}
+                        style={[
+                            styles.chip,
+                            {
+                                backgroundColor: active ? theme.brand : theme.surface,
+                                borderColor: active ? theme.brand : theme.border,
+                            },
+                        ]}
+                    >
+                        <Text style={[styles.chipText, { color: active ? '#fff' : theme.ink2 }]}>
+                            {abbr}
+                        </Text>
+                    </Pressable>
+                );
+            })}
+        </ScrollView>
+    );
+
+    const renderYearChips = (selected: number, onSelect: (y: number) => void) => {
+        // Default range is this year + 2, but an existing goal may hold a year outside it
+        // (an old deadline, or one set before the year rolled over) — keep it selectable.
+        const base = [today.getFullYear(), today.getFullYear() + 1, today.getFullYear() + 2];
+        const years = Array.from(new Set([...base, selected])).sort((a, b) => a - b);
+        return (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+                {years.map(y => {
+                    const active = selected === y;
+                    return (
+                        <Pressable
+                            key={y}
+                            onPress={() => onSelect(y)}
+                            style={[
+                                styles.chip,
+                                {
+                                    backgroundColor: active ? theme.brand : theme.surface,
+                                    borderColor: active ? theme.brand : theme.border,
+                                },
+                            ]}
+                        >
+                            <Text style={[styles.chipText, { color: active ? '#fff' : theme.ink2 }]}>
+                                {y}
+                            </Text>
+                        </Pressable>
+                    );
+                })}
+            </View>
+        );
     };
 
     // Renders one active goal card. Savings and debt goals use identical mechanics
@@ -416,12 +562,17 @@ export default function PiggyBankScreen() {
                             </Text>
                         )}
                     </View>
-                    <Pressable onPress={() => deleteGoal(g.id)} hitSlop={10}>
-                        <IconTrash size={14} color={theme.ink3} />
-                    </Pressable>
+                    <View style={styles.goalActions}>
+                        <Pressable onPress={() => openEditGoal(g)} hitSlop={10}>
+                            <IconGear size={14} color={theme.ink3} />
+                        </Pressable>
+                        <Pressable onPress={() => deleteGoal(g)} hitSlop={10}>
+                            <IconTrash size={14} color={theme.ink3} />
+                        </Pressable>
+                    </View>
                 </View>
 
-                {/* Saved / target */}
+                {/* Saved / target + one-tap completion */}
                 <View style={styles.goalAmtRow}>
                     <Text style={[styles.goalSaved, { color: theme.ink }]}>
                         ${fmtAmt(g.allocated_amount)}
@@ -429,6 +580,19 @@ export default function PiggyBankScreen() {
                     <Text style={[styles.goalOf, { color: theme.ink3 }]}>
                         {' '}of ${fmtAmt(target)}{isDebt ? ' paid' : ''}
                     </Text>
+                    <View style={{ flex: 1 }} />
+                    <Pressable
+                        onPress={() => completeGoal(g)}
+                        hitSlop={8}
+                        accessibilityLabel={isDebt ? 'Mark debt as paid off' : 'Move goal to completed'}
+                        style={({ pressed }) => [
+                            styles.completeBtn,
+                            { backgroundColor: accentSoft, borderColor: accent },
+                            pressed && { opacity: 0.7 },
+                        ]}
+                    >
+                        <IconArrow dir="right" size={16} color={accent} />
+                    </Pressable>
                 </View>
 
                 <AnimatedProgressBar
@@ -443,6 +607,7 @@ export default function PiggyBankScreen() {
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
+        <>
         <ScrollView
             style={{ flex: 1, backgroundColor: theme.bg }}
             contentContainerStyle={{ paddingBottom: 120 }}
@@ -459,7 +624,7 @@ export default function PiggyBankScreen() {
                         <Pressable
                             onPress={() => {
                                 setShowGoalForm(true);
-                                setActiveForm(null);
+                                closeTxForm();
                             }}
                             style={({ pressed }) => [styles.circleBtn, pressed && { opacity: 0.7 }]}
                         >
@@ -477,14 +642,14 @@ export default function PiggyBankScreen() {
                         </View>
                     </View>
 
-                    {/* Action buttons */}
+                    {/* Action button — depositing is the only hand-written transaction */}
                     <View style={styles.actionRow}>
                         <Pressable
-                            onPress={() => toggleForm('deposit')}
+                            onPress={toggleTxForm}
                             style={({ pressed }) => [
                                 styles.actionBtn,
                                 {
-                                    backgroundColor: activeForm === 'deposit'
+                                    backgroundColor: showTxForm
                                         ? 'rgba(255,255,255,0.28)'
                                         : 'rgba(255,255,255,0.16)',
                                     borderColor: 'rgba(255,255,255,0.22)',
@@ -495,21 +660,6 @@ export default function PiggyBankScreen() {
                             <IconPlus size={15} color="#fff" />
                             <Text style={styles.actionBtnText}>Set aside</Text>
                         </Pressable>
-                        <Pressable
-                            onPress={() => toggleForm('withdrawal')}
-                            style={({ pressed }) => [
-                                styles.actionBtn,
-                                {
-                                    backgroundColor: activeForm === 'withdrawal'
-                                        ? 'rgba(255,255,255,0.22)'
-                                        : 'rgba(0,0,0,0.18)',
-                                    borderColor: 'rgba(255,255,255,0.18)',
-                                },
-                                pressed && { opacity: 0.85 },
-                            ]}
-                        >
-                            <Text style={styles.actionBtnText}>I bought it</Text>
-                        </Pressable>
                     </View>
 
                 </View>
@@ -517,11 +667,11 @@ export default function PiggyBankScreen() {
 
             <View style={styles.content}>
 
-                {/* ── Inline transaction form ───────────────────────── */}
-                {activeForm !== null && (
+                {/* ── Inline deposit form ───────────────────────────── */}
+                {showTxForm && (
                     <Card theme={theme} depth={5} padding={20} style={styles.txForm}>
                         <Text style={[styles.formTitle, { color: theme.ink }]}>
-                            {isDeposit ? 'Set aside money' : 'I bought it'}
+                            Set aside money
                         </Text>
 
                         {/* Amount */}
@@ -543,13 +693,13 @@ export default function PiggyBankScreen() {
                         </View>
 
                         {/* Goal chips */}
-                        {allGoalsForChips.length > 0 && (
+                        {goalChips.length > 0 && (
                             <>
                                 <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
-                                    {isDeposit ? 'WHICH GOAL' : 'GOAL COMPLETED'}
+                                    WHICH GOAL
                                 </Text>
                                 <View style={styles.chipWrap}>
-                                    {allGoalsForChips.map(g => {
+                                    {goalChips.map(g => {
                                         const active = txGoalId === g.id;
                                         return (
                                             <Pressable
@@ -623,23 +773,17 @@ export default function PiggyBankScreen() {
                                 onPress={submitTransaction}
                                 style={({ pressed }) => [
                                     styles.submitBtn,
-                                    { backgroundColor: isDeposit ? theme.goals : theme.danger },
+                                    { backgroundColor: theme.goals },
                                     pressed && { opacity: 0.85 },
                                 ]}
                             >
                                 <IconCheck size={15} color="#fff" />
                                 <Text style={styles.submitBtnText}>
-                                    {isDeposit
-                                        ? (fundingSource === 'general' ? 'Transfer' : 'Plant Seed')
-                                        : 'Withdraw'
-                                    }
+                                    {fundingSource === 'general' ? 'Transfer' : 'Plant Seed'}
                                 </Text>
                             </Pressable>
                             <Pressable
-                                onPress={() => {
-                                    setActiveForm(null); setTxAmount('');
-                                    setTxGoalId(null); setFundingSource('income');
-                                }}
+                                onPress={closeTxForm}
                                 style={({ pressed }) => [
                                     styles.cancelBtn, { borderColor: theme.border },
                                     pressed && { opacity: 0.7 },
@@ -697,7 +841,9 @@ export default function PiggyBankScreen() {
                                     <View style={{ flex: 1 }}>
                                         <Text style={[styles.goalTitle, { color: theme.goals }]}>{g.title}</Text>
                                         <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
-                                            ${fmtAmt(g.allocated_amount ?? 0)} of ${fmtAmt(g.target_amount ?? 0)} · {g.target_month} {g.target_year}
+                                            {/* completed_amount is the snapshot taken at completion; older
+                                                goals predate the column, so fall back to the computed value. */}
+                                            ${fmtAmt(g.completed_amount ?? g.allocated_amount ?? 0)} {g.goal_type === 'debt' ? 'paid' : 'saved'} of ${fmtAmt(g.target_amount ?? 0)} · {g.target_month} {g.target_year}
                                         </Text>
                                     </View>
                                 </View>
@@ -894,57 +1040,10 @@ export default function PiggyBankScreen() {
                                 />
 
                                 <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET MONTH</Text>
-                                <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    style={{ marginBottom: 14 }}
-                                    contentContainerStyle={{ flexDirection: 'row', gap: 8 }}
-                                >
-                                    {MONTH_ABBRS.map((abbr, i) => {
-                                        const active = goalMonth === MONTHS[i];
-                                        return (
-                                            <Pressable
-                                                key={abbr}
-                                                onPress={() => setGoalMonth(MONTHS[i])}
-                                                style={[
-                                                    styles.chip,
-                                                    {
-                                                        backgroundColor: active ? theme.brand : theme.surface,
-                                                        borderColor: active ? theme.brand : theme.border,
-                                                    },
-                                                ]}
-                                            >
-                                                <Text style={[styles.chipText, { color: active ? '#fff' : theme.ink2 }]}>
-                                                    {abbr}
-                                                </Text>
-                                            </Pressable>
-                                        );
-                                    })}
-                                </ScrollView>
+                                {renderMonthChips(goalMonth, setGoalMonth)}
 
                                 <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET YEAR</Text>
-                                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
-                                    {[today.getFullYear(), today.getFullYear() + 1, today.getFullYear() + 2].map(y => {
-                                        const active = goalYear === y;
-                                        return (
-                                            <Pressable
-                                                key={y}
-                                                onPress={() => setGoalYear(y)}
-                                                style={[
-                                                    styles.chip,
-                                                    {
-                                                        backgroundColor: active ? theme.brand : theme.surface,
-                                                        borderColor: active ? theme.brand : theme.border,
-                                                    },
-                                                ]}
-                                            >
-                                                <Text style={[styles.chipText, { color: active ? '#fff' : theme.ink2 }]}>
-                                                    {y}
-                                                </Text>
-                                            </Pressable>
-                                        );
-                                    })}
-                                </View>
+                                {renderYearChips(goalYear, setGoalYear)}
 
                                 <View style={styles.formBtnRow}>
                                     <Pressable
@@ -1032,6 +1131,88 @@ export default function PiggyBankScreen() {
 
             </View>
         </ScrollView>
+
+        {/* ── Edit goal modal (gear icon on a goal card) ────────────── */}
+        <Modal
+            visible={editingGoal !== null}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setEditingGoal(null)}
+        >
+            <View style={styles.modalOverlay}>
+                <View style={[styles.modalCard, { backgroundColor: theme.surface, ...(shadow(9) as object) }]}>
+                    <Text style={[styles.modalTitle, { color: theme.ink }]}>
+                        {editingGoal?.goal_type === 'debt' ? 'Edit debt' : 'Edit goal'}
+                    </Text>
+
+                    <ScrollView keyboardShouldPersistTaps="handled">
+                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
+                            {editingGoal?.goal_type === 'debt' ? 'DEBT NAME' : 'GOAL NAME'}
+                        </Text>
+                        <TextInput
+                            style={[styles.textInput, {
+                                backgroundColor: theme.surfaceSoft,
+                                borderColor: theme.border,
+                                color: theme.ink,
+                            }]}
+                            placeholderTextColor={theme.ink3}
+                            value={editTitle}
+                            onChangeText={t => { setEditTitle(t); setEditError(''); }}
+                            maxLength={30}
+                        />
+                        {editError !== '' && (
+                            <Text style={[styles.errorText, { color: theme.danger }]}>{editError}</Text>
+                        )}
+
+                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
+                            {editingGoal?.goal_type === 'debt' ? 'TOTAL TO PAY OFF' : 'TARGET AMOUNT'}
+                        </Text>
+                        <TextInput
+                            style={[styles.textInput, {
+                                backgroundColor: theme.surfaceSoft,
+                                borderColor: theme.border,
+                                color: theme.ink,
+                            }]}
+                            placeholder="5,000"
+                            placeholderTextColor={theme.ink3}
+                            value={editAmount}
+                            onChangeText={t => { setEditAmount(t); setEditError(''); }}
+                            keyboardType="decimal-pad"
+                            maxLength={10}
+                        />
+
+                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET MONTH</Text>
+                        {renderMonthChips(editMonth, setEditMonth)}
+
+                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET YEAR</Text>
+                        {renderYearChips(editYear, setEditYear)}
+                    </ScrollView>
+
+                    <View style={styles.formBtnRow}>
+                        <Pressable
+                            onPress={submitEditGoal}
+                            style={({ pressed }) => [
+                                styles.submitBtn, { backgroundColor: theme.brand },
+                                pressed && { opacity: 0.85 },
+                            ]}
+                        >
+                            <IconCheck size={15} color="#fff" />
+                            <Text style={styles.submitBtnText}>Save changes</Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={() => setEditingGoal(null)}
+                            style={({ pressed }) => [
+                                styles.cancelBtn, { borderColor: theme.border },
+                                pressed && { opacity: 0.7 },
+                            ]}
+                        >
+                            <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>Cancel</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+        </>
     );
 }
 
@@ -1279,6 +1460,41 @@ const styles = StyleSheet.create({
     goalOf: {
         fontFamily: 'Geist-Regular',
         fontSize: ft(13, 1.18),
+    },
+    goalActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+    },
+    // Sits in the baseline-aligned amount row, so it opts out with alignSelf.
+    completeBtn: {
+        width: tv(44, 54),
+        height: tv(32, 40),
+        borderRadius: 10,
+        borderWidth: 1.5,
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'center',
+    },
+
+    // Edit goal modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    modalCard: {
+        width: '100%',
+        maxHeight: '85%',
+        borderRadius: 22,
+        padding: 22,
+    },
+    modalTitle: {
+        fontFamily: 'InstrumentSerif-Regular',
+        fontSize: ft(22, 1.3),
+        marginBottom: 14,
     },
 
     // Plant new goal button
