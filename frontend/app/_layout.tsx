@@ -1,3 +1,5 @@
+import '../lib/axiosConfig'; // sets axios.defaults.timeout before any screen can fire a request
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

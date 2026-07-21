@@ -31,6 +31,18 @@ export const STARTING_BALANCE_STORAGE_PREFIX = 'starting_balance_set_';
 export const startingBalanceKey = (userId: string) =>
     `${STARTING_BALANCE_STORAGE_PREFIX}${userId}`;
 
+// Per-user AsyncStorage key recording when the user last tapped "Skip for now" on
+// the starting-balance gate. The gate is mandatory-by-default but must never trap
+// the app (App Review requirement), so a skip suppresses it for a cooldown window
+// rather than forever — the user is asked again later instead of being nagged
+// every single launch.
+export const STARTING_BALANCE_SKIP_PREFIX = 'starting_balance_skipped_at_';
+
+export const startingBalanceSkipKey = (userId: string) =>
+    `${STARTING_BALANCE_SKIP_PREFIX}${userId}`;
+
+export const STARTING_BALANCE_SKIP_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24h
+
 // Shared eligibility check for both first-run flows: only accounts created on/after
 // the cutoff are "new". Beta accounts predate it and are never prompted.
 export const isNewAccount = (createdAt?: string | null) => {

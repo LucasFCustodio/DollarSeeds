@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.lucasfcustodio.dollarseeds",
       "buildNumber": "1",
       "supportsTablet": true,
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSUserNotificationsUsageDescription": "DollarSeeds sends daily reminders to help you log income and spending.",
         "ITSAppUsesNonExemptEncryption": false
@@ -34,6 +35,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-apple-authentication",
       [
         "expo-splash-screen",
         {

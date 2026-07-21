@@ -7,6 +7,7 @@ import {
   TextInput,
   Pressable,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +16,7 @@ import { useTheme, Fonts, shadow } from '../context/ThemeContext';
 const logo = require('../assets/images/dollar-seeds-logo.png');
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -74,44 +76,94 @@ export default function AuthScreen() {
   }
 
   const signInWithGoogle = async () => {
-    // 1. Tell Google exactly where to return to after the login finishes
-    const redirectTo = makeRedirectUri();
+    setLoading(true);
+    try {
+        // 1. Tell Google exactly where to return to after the login finishes
+        const redirectTo = makeRedirectUri();
 
-    console.log("EXPO REDIRECT URL IS:", redirectTo);
+        // 2. Ask Supabase for the secure Google Login page URL. The client is
+        // configured with flowType: 'pkce' (see lib/supabase.ts), so this URL's
+        // callback carries a one-time `code` rather than tokens in the fragment.
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: redirectTo,
+                skipBrowserRedirect: true, // Crucial: We want Expo to open the browser, not Supabase
+            },
+        });
 
-    // 2. Ask Supabase for the secure Google Login page URL
-    const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-            redirectTo: redirectTo,
-            skipBrowserRedirect: true, // Crucial: We want Expo to open the browser, not Supabase
-        },
-    });
-
-    if (error || !data?.url) {
-        console.error("OAuth Error:", error);
-        return;
-    }
-
-    // 3. Pop open the phone's web browser to the Google login screen
-    const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
-    // 4. When the browser closes, grab the secure tokens it brought back
-    if (res.type === 'success') {
-        const url = res.url;
-
-        // Extract the raw tokens from the returned URL string
-        const access_token = url.split("access_token=")[1]?.split("&")[0];
-        const refresh_token = url.split("refresh_token=")[1]?.split("&")[0];
-
-        if (access_token && refresh_token) {
-            // Hand the VIP pass directly to Supabase.
-            // Your AuthContext will instantly detect this and kick the router into gear!
-            await supabase.auth.setSession({
-                access_token,
-                refresh_token
-            });
+        if (error || !data?.url) {
+            console.error("OAuth Error:", error);
+            Alert.alert('Error signing in with Google', error?.message ?? 'Please try again.');
+            return;
         }
+
+        // 3. Pop open the phone's web browser to the Google login screen
+        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+
+        if (res.type !== 'success') {
+            // User closed the browser or cancelled — not an error, just no session.
+            return;
+        }
+
+        // 4. Hand the full callback URL to Supabase so it can exchange the PKCE
+        // `code` for a session using the verifier it stored when signInWithOAuth
+        // was called above. This sets and persists the session itself — no manual
+        // token parsing — and AuthContext's onAuthStateChange picks it up from there.
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(res.url);
+        if (exchangeError) {
+            console.error('OAuth session exchange error:', exchangeError);
+            Alert.alert('Error signing in with Google', exchangeError.message);
+        }
+    } finally {
+        setLoading(false);
+    }
+};
+
+  // The Apple Sign In Function (iOS only). Native flow: Apple returns a signed
+  // identity token, which Supabase verifies directly via signInWithIdToken — no
+  // browser redirect, no URL parsing. AuthContext's onAuthStateChange picks up the
+  // resulting session and routes into the app, same as the other providers.
+  const signInWithApple = async () => {
+    setLoading(true);
+    try {
+        const credential = await AppleAuthentication.signInAsync({
+            requestedScopes: [
+                AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+                AppleAuthentication.AppleAuthenticationScope.EMAIL,
+            ],
+        });
+
+        if (!credential.identityToken) {
+            throw new Error('No identity token returned from Apple.');
+        }
+
+        const { error } = await supabase.auth.signInWithIdToken({
+            provider: 'apple',
+            token: credential.identityToken,
+        });
+
+        if (error) {
+            console.error('Apple sign-in error:', error);
+            Alert.alert('Error signing in with Apple', error.message);
+            return;
+        }
+
+        // Apple only returns the user's name on the FIRST authorization — the identity
+        // token never carries it. Persist it now (into user metadata) or it's lost for good.
+        if (credential.fullName?.givenName || credential.fullName?.familyName) {
+            const full_name = [credential.fullName?.givenName, credential.fullName?.familyName]
+                .filter(Boolean)
+                .join(' ');
+            if (full_name) await supabase.auth.updateUser({ data: { full_name } });
+        }
+    } catch (e: any) {
+        // User tapped "Cancel" in the Apple sheet — not an error, just no session.
+        if (e?.code === 'ERR_REQUEST_CANCELED') return;
+        console.error('Apple sign-in exception:', e);
+        Alert.alert('Apple sign-in failed', e?.message ?? 'Please try again.');
+    } finally {
+        setLoading(false);
     }
 };
 
@@ -149,6 +201,18 @@ export default function AuthScreen() {
         />
 
         <View style={styles.buttonContainer}>
+          {/* Sign in with Apple — iOS only. Apple's HIG asks for it to be at least as
+              prominent as other providers, so it leads the stack. Uses Apple's own
+              button component (a custom-styled one risks a design rejection). */}
+          {Platform.OS === 'ios' && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={12}
+              style={styles.appleButton}
+              onPress={signInWithApple}
+            />
+          )}
           <AuthButton label="Create Account" onPress={signUpWithEmail} disabled={loading} />
           <AuthButton label="Sign in/up with Google" onPress={signInWithGoogle} disabled={loading} />
           <AuthButton label={loading ? "Loading..." : "Sign In"} onPress={signInWithEmail} disabled={loading} />
@@ -195,6 +259,10 @@ const styles = StyleSheet.create({
   buttonContainer: {
     marginTop: 12,
     gap: 16,
+  },
+  appleButton: {
+    width: '100%',
+    height: 52,
   },
   button: {
     backgroundColor: '#FFFFFF',

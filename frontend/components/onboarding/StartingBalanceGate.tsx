@@ -4,9 +4,10 @@
  *
  * Runs right after the guided tour finishes or is skipped (it waits for the tour to go
  * inactive), for new accounts only — beta accounts created before ONBOARDING_RELEASE_DATE
- * are never prompted, using the same isNewAccount check the tour uses. There is no skip
- * or backdrop dismiss: the modal stays until the balance is submitted, so quitting the
- * app mid-flow just brings it back on next launch.
+ * are never prompted, using the same isNewAccount check the tour uses. There is no backdrop
+ * dismiss, but "Skip for now" always escapes it (see STARTING_BALANCE_SKIP_COOLDOWN_MS) —
+ * the gate must never be able to trap the app. Quitting mid-flow without skipping just
+ * brings it back on next launch.
  *
  * The amount is posted to /savings/starting-balance/, which books it into General Savings
  * with source='opening' — deliberately NOT source='income', so pre-app money never
@@ -24,7 +25,9 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
-import { isNewAccount, startingBalanceKey } from '../../constants/onboarding';
+import {
+    isNewAccount, startingBalanceKey, startingBalanceSkipKey, STARTING_BALANCE_SKIP_COOLDOWN_MS,
+} from '../../constants/onboarding';
 import Button from '../ui/Button';
 import InputField from '../ui/InputField';
 
@@ -73,16 +76,36 @@ export default function StartingBalanceGate() {
         let cancelled = false;
         (async () => {
             try {
-                const done = await AsyncStorage.getItem(startingBalanceKey(user.id));
-                if (!cancelled) setNeedsBalance(!done);
+                const [done, skippedAt] = await Promise.all([
+                    AsyncStorage.getItem(startingBalanceKey(user.id)),
+                    AsyncStorage.getItem(startingBalanceSkipKey(user.id)),
+                ]);
+                const withinSkipCooldown = !!skippedAt
+                    && Date.now() - Number(skippedAt) < STARTING_BALANCE_SKIP_COOLDOWN_MS;
+                if (!cancelled) setNeedsBalance(!done && !withinSkipCooldown);
             } catch (err) {
                 console.error('Starting balance flag read error:', err);
+                // Fail open — never let a storage error trap the user behind the gate.
                 if (!cancelled) setNeedsBalance(false);
             }
         })();
 
         return () => { cancelled = true; };
     }, [initialized, user?.id, user?.created_at]);
+
+    // "Skip for now" — the gate must never be able to trap the app. Skipping hides
+    // it for a cooldown window (see STARTING_BALANCE_SKIP_COOLDOWN_MS) rather than
+    // forever, so the user is asked again later instead of being nagged every launch.
+    const skip = useCallback(async () => {
+        setNeedsBalance(false);
+        if (!user?.id) return;
+        try {
+            await AsyncStorage.setItem(startingBalanceSkipKey(user.id), String(Date.now()));
+        } catch (err) {
+            console.error('Starting balance skip flag write error:', err);
+            // Storage failed, but the gate is already hidden for this session — fine.
+        }
+    }, [user?.id]);
 
     const parsed = parseFloat(amount);
     const valid = !!amount && !isNaN(parsed) && parsed >= 0;
@@ -97,13 +120,17 @@ export default function StartingBalanceGate() {
                 amount: parsed,
                 day: 1,
                 month: currentMonth,
-            });
+            }, { timeout: 15000 }); // belt-and-suspenders on top of the axios.defaults timeout
             // Also covers { already_set: true } — either way the balance exists now.
             await AsyncStorage.setItem(startingBalanceKey(user.id), 'true');
             setNeedsBalance(false);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Starting balance save error:', err);
-            setError("Couldn't save your starting balance. Please try again.");
+            setError(
+                err?.code === 'ECONNABORTED'
+                    ? "That's taking too long. Check your connection and try again."
+                    : "Couldn't save your starting balance. Please try again.",
+            );
         } finally {
             setSaving(false);
         }
@@ -160,7 +187,7 @@ export default function StartingBalanceGate() {
                                     <ActivityIndicator color={theme.brand} />
                                 ) : (
                                     <Button
-                                        label="Yes"
+                                        label={error ? 'Retry' : 'Yes'}
                                         variant="primary"
                                         size="lg"
                                         color={theme.onBrand}
@@ -218,6 +245,19 @@ export default function StartingBalanceGate() {
                                     onPress={() => { Keyboard.dismiss(); setConfirming(true); }}
                                 />
                             </View>
+
+                            {/* Escape hatch — this gate must never be able to trap the app.
+                                Skipping asks again later instead of forever, so it's opt-out,
+                                not opt-in-then-stuck. */}
+                            <Pressable
+                                onPress={() => { Keyboard.dismiss(); skip(); }}
+                                hitSlop={8}
+                                style={styles.skipBtn}
+                            >
+                                <Text style={[styles.skipText, { color: theme.ink2 }]}>
+                                    Skip for now
+                                </Text>
+                            </Pressable>
                         </>
                     )}
                 </View>
@@ -252,6 +292,8 @@ const styles = StyleSheet.create({
     doneBtn: { alignSelf: 'flex-end', paddingVertical: 6, paddingHorizontal: 4 },
     doneText: { fontFamily: Fonts.sansSemiBold, fontSize: 14 },
     addRow: { marginTop: 16 },
+    skipBtn: { alignSelf: 'center', marginTop: 14, paddingVertical: 6, paddingHorizontal: 4 },
+    skipText: { fontFamily: Fonts.sansMedium, fontSize: 13, textDecorationLine: 'underline' },
     confirmRow: {
         flexDirection: 'row',
         alignItems: 'center',

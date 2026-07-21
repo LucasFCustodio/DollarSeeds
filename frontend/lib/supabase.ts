@@ -10,6 +10,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
+    // React Native has no browser location bar for Supabase to inspect, so automatic
+    // URL detection is off — the OAuth redirect URL is instead handed explicitly to
+    // exchangeCodeForSession() (see signInWithGoogle in app/auth.tsx). PKCE means that
+    // exchange trades a `code` for a session server-side, instead of a token sitting
+    // in a redirect URL for us to parse by hand.
     detectSessionInUrl: false,
+    flowType: 'pkce',
   },
 });
