@@ -106,11 +106,22 @@ export default function AuthScreen() {
             return;
         }
 
-        // 4. Hand the full callback URL to Supabase so it can exchange the PKCE
-        // `code` for a session using the verifier it stored when signInWithOAuth
-        // was called above. This sets and persists the session itself — no manual
-        // token parsing — and AuthContext's onAuthStateChange picks it up from there.
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(res.url);
+        // 4. exchangeCodeForSession expects the bare authorization CODE, not the full
+        // redirect URL. Passing the whole URL makes Supabase treat it as the code and
+        // reject it with "invalid flow state, no valid flow state found". Extract the
+        // `code` query param and hand over just that; Supabase pairs it with the PKCE
+        // verifier it stored during signInWithOAuth and AuthContext picks up the session.
+        const code = /[?&]code=([^&#]+)/.exec(res.url)?.[1];
+        if (!code) {
+            const errDesc = /[?&]error_description=([^&#]+)/.exec(res.url)?.[1];
+            Alert.alert(
+                'Error signing in with Google',
+                errDesc ? decodeURIComponent(errDesc.replace(/\+/g, ' ')) : 'No authorization code was returned.',
+            );
+            return;
+        }
+
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(decodeURIComponent(code));
         if (exchangeError) {
             console.error('OAuth session exchange error:', exchangeError);
             Alert.alert('Error signing in with Google', exchangeError.message);
