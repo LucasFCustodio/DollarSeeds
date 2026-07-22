@@ -53,26 +53,34 @@ export default function AuthScreen() {
   // The Sign Up Function
   async function signUpWithEmail() {
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: email,
-      password: password,
-    });
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: email,
+        password: password,
+      });
 
-    if (error) Alert.alert("Error signing up", error.message);
-    else Alert.alert("Success!", "Check your email for the confirmation link!");
-    setLoading(false);
+      if (error) Alert.alert("Error signing up", error.message);
+      else Alert.alert("Success!", "Check your email for the confirmation link!");
+    } finally {
+      // Always re-enable the button, even if the request throws or the network hangs.
+      setLoading(false);
+    }
   }
 
   // The Log In Function
   async function signInWithEmail() {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
 
-    if (error) Alert.alert("Error logging in", error.message);
-    setLoading(false);
+      if (error) Alert.alert("Error logging in", error.message);
+    } finally {
+      // Always re-enable the button, even if the request throws or the network hangs.
+      setLoading(false);
+    }
   }
 
   const signInWithGoogle = async () => {
@@ -81,9 +89,9 @@ export default function AuthScreen() {
         // 1. Tell Google exactly where to return to after the login finishes
         const redirectTo = makeRedirectUri();
 
-        // 2. Ask Supabase for the secure Google Login page URL. The client is
-        // configured with flowType: 'pkce' (see lib/supabase.ts), so this URL's
-        // callback carries a one-time `code` rather than tokens in the fragment.
+        // 2. Ask Supabase for the Google login URL. The client uses the implicit flow
+        // (see lib/supabase.ts), so the redirect back carries the session tokens in the
+        // URL fragment — no server-side code exchange, no flow-state to go stale.
         const { data, error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
@@ -106,25 +114,29 @@ export default function AuthScreen() {
             return;
         }
 
-        // 4. exchangeCodeForSession expects the bare authorization CODE, not the full
-        // redirect URL. Passing the whole URL makes Supabase treat it as the code and
-        // reject it with "invalid flow state, no valid flow state found". Extract the
-        // `code` query param and hand over just that; Supabase pairs it with the PKCE
-        // verifier it stored during signInWithOAuth and AuthContext picks up the session.
-        const code = /[?&]code=([^&#]+)/.exec(res.url)?.[1];
-        if (!code) {
-            const errDesc = /[?&]error_description=([^&#]+)/.exec(res.url)?.[1];
+        // 4. The redirect URL carries the tokens in its fragment, e.g.
+        //    dollarseeds://#access_token=...&refresh_token=...&expires_in=...
+        // Pull them out and set the session directly. AuthContext's onAuthStateChange
+        // then picks it up and routes into the app.
+        const getParam = (name: string) =>
+            new RegExp(`[#?&]${name}=([^&#]+)`).exec(res.url)?.[1];
+
+        const access_token = getParam('access_token');
+        const refresh_token = getParam('refresh_token');
+
+        if (!access_token || !refresh_token) {
+            const errDesc = getParam('error_description');
             Alert.alert(
                 'Error signing in with Google',
-                errDesc ? decodeURIComponent(errDesc.replace(/\+/g, ' ')) : 'No authorization code was returned.',
+                errDesc ? decodeURIComponent(errDesc.replace(/\+/g, ' ')) : 'No session was returned from Google.',
             );
             return;
         }
 
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(decodeURIComponent(code));
-        if (exchangeError) {
-            console.error('OAuth session exchange error:', exchangeError);
-            Alert.alert('Error signing in with Google', exchangeError.message);
+        const { error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (sessionError) {
+            console.error('Set session error:', sessionError);
+            Alert.alert('Error signing in with Google', sessionError.message);
         }
     } finally {
         setLoading(false);
@@ -212,9 +224,12 @@ export default function AuthScreen() {
         />
 
         <View style={styles.buttonContainer}>
-          {/* Sign in with Apple — iOS only. Apple's HIG asks for it to be at least as
-              prominent as other providers, so it leads the stack. Uses Apple's own
-              button component (a custom-styled one risks a design rejection). */}
+          <AuthButton label="Create Account" onPress={signUpWithEmail} disabled={loading} />
+          <AuthButton label={loading ? "Loading..." : "Sign In"} onPress={signInWithEmail} disabled={loading} />
+          <AuthButton label="Sign in/up with Google" onPress={signInWithGoogle} disabled={loading} />
+          {/* Sign in with Apple — iOS only. Uses Apple's own button component (a
+              custom-styled one risks a design rejection). Note: Apple's HIG suggests
+              placing this at least as prominently as other providers. */}
           {Platform.OS === 'ios' && (
             <AppleAuthentication.AppleAuthenticationButton
               buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
@@ -224,9 +239,6 @@ export default function AuthScreen() {
               onPress={signInWithApple}
             />
           )}
-          <AuthButton label="Create Account" onPress={signUpWithEmail} disabled={loading} />
-          <AuthButton label="Sign in/up with Google" onPress={signInWithGoogle} disabled={loading} />
-          <AuthButton label={loading ? "Loading..." : "Sign In"} onPress={signInWithEmail} disabled={loading} />
         </View>
 
         <View style={styles.logoWrap}>

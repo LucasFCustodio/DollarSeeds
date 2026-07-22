@@ -11,11 +11,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     // React Native has no browser location bar for Supabase to inspect, so automatic
-    // URL detection is off — the OAuth redirect URL is instead handed explicitly to
-    // exchangeCodeForSession() (see signInWithGoogle in app/auth.tsx). PKCE means that
-    // exchange trades a `code` for a session server-side, instead of a token sitting
-    // in a redirect URL for us to parse by hand.
+    // URL detection is off — signInWithGoogle (app/auth.tsx) reads the redirect URL
+    // itself. We use the implicit flow: Supabase returns the session tokens in the
+    // redirect fragment and we hand them to setSession(). The PKCE code-exchange flow
+    // was unreliable in this native split-browser setup (it failed with "invalid flow
+    // state, no valid flow state found"); implicit is the flow Supabase's React Native
+    // guide uses for exactly this case.
     detectSessionInUrl: false,
-    flowType: 'pkce',
+    flowType: 'implicit',
   },
 });
