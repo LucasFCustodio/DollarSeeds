@@ -20,8 +20,25 @@ All backend calls use Axios with a hardcoded base URL.
 - Pattern used in: [frontend/app/(tabs)/index.tsx](../../frontend/app/(tabs)/index.tsx), [frontend/components/expense/ExpenseContainer.jsx](../../frontend/components/expense/ExpenseContainer.jsx), [frontend/components/income/IncomeContainer.jsx](../../frontend/components/income/IncomeContainer.jsx), [frontend/app/details.tsx](../../frontend/app/details.tsx)
 - Current base URLs: `http://10.0.0.13:8000` (phone on LAN) or `http://127.0.0.1:8000` (desktop)
 - All POST requests include header `'ngrok-skip-browser-warning': 'true'`
-- `user_id` from `useAuth()` is always sent — as a query param on GET, in the request body on POST
+- `user_id` from `useAuth()` is still sent by most call sites (query param on GET, body on POST). It is **legacy and inert** — the backend ignores it and uses the token instead. New code need not send it.
 - Errors are caught and `console.error`'d; no UI feedback to the user today
+
+---
+
+## API Authentication
+
+The backend authenticates **every** request (only `GET /` is public) from the Supabase
+access token. Identity is the token's verified `sub` claim — never a client-supplied
+`user_id`.
+
+- **Frontend**: an axios request interceptor in [frontend/lib/axiosConfig.ts](../../frontend/lib/axiosConfig.ts) attaches `Authorization: Bearer <access_token>` to every request aimed at the backend host. It reads the token fresh per request via `supabase.auth.getSession()` (which refreshes an expired one), and retries once after a 401. **Nothing needs doing at the call site** — screens keep calling the bare `axios` singleton.
+- The interceptor deliberately attaches the token **only** to the backend host, so Sentry, PostHog and Supabase Storage playback URLs never see a user credential.
+- **Backend**: the `get_current_user_id` dependency in [backend/main.py](../../backend/main.py) verifies the JWT and returns the user id. Every protected route takes `user_id: str = Depends(get_current_user_id)`.
+- **How the signature is checked**: the project's Supabase JWT signing key is **ECC P-256**, so access tokens are **ES256**. They are verified against the project's public keys from `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`, cached in-process for an hour — no network call per request, and **no secret to configure**. If the JWKS fetch fails, the cached client is dropped and that request falls back to `supabase.auth.get_user()` so a blip can't lock the whole app out.
+- The verifier always passes a **fixed algorithm allowlist** — never the token's own `alg` — and only ever hands the JWKS public key to asymmetric algorithms. That is what makes an HS256-token-signed-with-the-public-key forgery impossible.
+- **Adding a route**: it must take that dependency. Anything reaching the database must use the injected `user_id`, not a value off the request model — the Supabase client uses the **service_role** key, which bypasses RLS, so this file is the only access control there is.
+- Tests in [backend/tests/](../../backend/tests/) enforce both halves; `test_every_protected_route_is_in_the_table` fails if a new route ships without security coverage.
+- **Env vars**: none new. `SUPABASE_JWT_SECRET` is an optional dormant escape hatch for a rollback to a legacy HS256 shared secret; this project's HS256 key is already rotated out, so leave it unset. `PyJWT[crypto]` in `requirements.txt` is required — plain `PyJWT` cannot verify ES256.
 
 ---
 
@@ -29,7 +46,7 @@ All backend calls use Axios with a hardcoded base URL.
 
 All Supabase queries are in [backend/main.py](../../backend/main.py) using the Python Supabase client.
 
-- Every query filters by `user_id` for tenant isolation
+- Every query filters by `user_id` for tenant isolation — and that `user_id` must come from `Depends(get_current_user_id)` (see API Authentication above), never from the request
 - Query style: `.table(name).select(...).eq("user_id", uid).eq(...)`
 - Month values are stored as month-name strings (e.g., `"April"`), not numbers
 - Budget percentages (50/30/20) are computed in Python from total income — see `main.py:53-55`

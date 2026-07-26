@@ -1,9 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from typing import Optional
 import os
 import datetime
 import uuid
+import jwt
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -19,10 +21,169 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    # The API is cookie-free — clients authenticate with an Authorization header —
+    # so credentialed cross-origin requests are never needed. (Browsers also reject
+    # allow_origins=["*"] combined with credentials.)
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ─── Authentication ───────────────────────────────────────────────────────────
+# The Supabase client above is built with the SERVICE_ROLE key, which bypasses Row
+# Level Security completely. That makes this file the ONLY thing standing between a
+# request and every user's financial data: all authorization has to live here.
+#
+# Identity therefore comes from the caller's Supabase access token — a signed JWT —
+# and NEVER from a `user_id` the client supplies. Routes still accept `user_id` in
+# query params / request bodies for backward compatibility with older app builds,
+# but it is inert: every handler uses the id resolved from the verified token.
+
+# This project signs access tokens with an ASYMMETRIC key (Supabase Dashboard → JWT
+# Keys → current key is ECC P-256, i.e. ES256). There is no shared secret to check
+# those against — verification uses the project's PUBLIC keys, published at the JWKS
+# endpoint below. Those keys are public by design, so this needs no configuration and
+# no new environment variable.
+JWKS_URL: Optional[str] = f"{URL.rstrip('/')}/auth/v1/.well-known/jwks.json" if URL else None
+
+# Algorithms we will verify. Fixed list, never taken from the token's own header —
+# letting the token pick its algorithm is the classic JWT confusion attack.
+ASYMMETRIC_ALGORITHMS = ["ES256", "RS256", "EdDSA"]
+
+# Optional legacy escape hatch. This project's HS256 key is already rotated out
+# ("Previously used keys"), so the variable is expected to be UNSET and the HS256 path
+# below stays dormant. It exists only so a rollback to a shared secret, or a standby
+# HS256 key, doesn't require a code change.
+JWT_SECRET: Optional[str] = os.environ.get("SUPABASE_JWT_SECRET")
+
+# Supabase stamps every end-user access token with aud='authenticated'. Checking it
+# is not a formality: the project's ANON key is also a JWT issued by this project, and
+# it ships inside the app binary — i.e. it is public. Without this check anyone could
+# paste it in as a bearer token. (It carries role='anon' and no `sub`, so the missing-
+# subject check below independently rejects it too.)
+JWT_AUDIENCE = "authenticated"
+
+# auto_error=False so a missing/!Bearer header reaches us and we can raise our own
+# 401 instead of FastAPI's 403.
+_bearer = HTTPBearer(auto_error=False)
+
+# Fetched once and cached in-process; re-fetched when the cache lifespan expires, so a
+# key rotation in Supabase is picked up without a redeploy.
+_jwk_client: Optional[jwt.PyJWKClient] = None
+
+
+def _unauthorized(detail: str = "Not authenticated.") -> HTTPException:
+    return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
+
+
+def _get_jwk_client() -> Optional[jwt.PyJWKClient]:
+    global _jwk_client
+    if _jwk_client is None and JWKS_URL:
+        _jwk_client = jwt.PyJWKClient(JWKS_URL, lifespan=3600, timeout=10)
+    return _jwk_client
+
+
+def _decode(token: str, key, algorithms: list[str]) -> dict:
+    """Shared decode policy: signature, expiry, audience, and a required subject."""
+    return jwt.decode(
+        token,
+        key,
+        algorithms=algorithms,
+        audience=JWT_AUDIENCE,
+        # Supabase (which issues the token) and Render (which checks it) keep their own
+        # clocks. A few seconds of skew must not 401 a user holding a valid token.
+        leeway=10,
+        options={"require": ["exp", "sub"]},
+    )
+
+
+def _verify_with_jwks(token: str) -> dict:
+    """Verify an asymmetrically-signed token against the project's published public
+    keys. The keys are cached in-process, so this costs no network call per request —
+    which matters because every screen fires several.
+
+    The public key is only ever used with asymmetric algorithms. It is never handed to
+    an HS256 decode: a public key used as an HMAC secret is public knowledge, and that
+    is precisely the algorithm-confusion forgery this ordering prevents."""
+    client = _get_jwk_client()
+    if client is None:
+        raise jwt.PyJWKClientError("No JWKS endpoint configured (SUPABASE_URL unset).")
+    signing_key = client.get_signing_key_from_jwt(token)
+    return _decode(token, signing_key.key, ASYMMETRIC_ALGORITHMS)
+
+
+def _verify_with_secret(token: str) -> dict:
+    """Legacy HS256 path — dormant unless SUPABASE_JWT_SECRET is set."""
+    return _decode(token, JWT_SECRET, ["HS256"])
+
+
+def _verify_remotely(token: str) -> dict:
+    """Last resort: let Supabase verify the token and tell us who it belongs to.
+
+    Only reached when we cannot verify locally — the JWKS endpoint is unreachable, or
+    the token uses an algorithm we have no key for. Costs a round-trip, so it is not
+    the normal path, but the token is still cryptographically verified: an unverified
+    token is never trusted anywhere in this file."""
+    res = supabase.auth.get_user(token)
+    user = getattr(res, "user", None)
+    if not user or not getattr(user, "id", None):
+        raise ValueError("Token did not resolve to a user.")
+    return {"sub": user.id}
+
+
+def get_current_user_id(
+    cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> str:
+    """FastAPI dependency: the authenticated caller's Supabase user id.
+
+    Rejects a missing, malformed, expired, tampered or wrongly-signed token with 401.
+    The returned value is the token's verified `sub` claim — the authoritative user id.
+    """
+    if cred is None or not cred.credentials:
+        raise _unauthorized("Missing bearer token.")
+    token = cred.credentials
+
+    # The header's `alg` only decides WHICH key to try — it can never widen what we
+    # accept, because each verifier passes its own fixed algorithm allowlist.
+    try:
+        alg = jwt.get_unverified_header(token).get("alg")
+    except Exception:
+        raise _unauthorized("Malformed token.")
+
+    try:
+        if alg in ASYMMETRIC_ALGORITHMS:
+            try:
+                claims = _verify_with_jwks(token)
+            except jwt.PyJWKClientError:
+                # Couldn't retrieve the public keys (network blip, or a rotation whose
+                # new kid isn't in our cached set). Drop the cached client so the next
+                # request re-fetches, and verify this one through Supabase rather than
+                # locking every user out of the app.
+                global _jwk_client
+                _jwk_client = None
+                claims = _verify_remotely(token)
+        elif alg == "HS256" and JWT_SECRET:
+            claims = _verify_with_secret(token)
+        else:
+            # No key of our own for this token: an HS256 token with no configured
+            # secret, or an unsigned/unknown alg such as 'none'. Supabase decides.
+            claims = _verify_remotely(token)
+    except HTTPException:
+        raise
+    except Exception:
+        # Deliberately opaque: never tell a caller *why* their token failed.
+        raise _unauthorized("Invalid or expired token.")
+
+    user_id = claims.get("sub")
+    if not user_id:
+        raise _unauthorized("Token has no subject.")
+    return str(user_id)
+
+# NOTE on `user_id` in the models below: it is accepted (older app builds still send
+# it) but NEVER trusted. Every handler overwrites it with the id from the verified
+# token before anything reaches the database. It is Optional so a future client can
+# simply stop sending it.
 
 class Expense(BaseModel):
     title: str
@@ -30,21 +191,21 @@ class Expense(BaseModel):
     category: str
     day: int
     month: str
-    user_id: str
+    user_id: Optional[str] = None
     sub_category: Optional[str] = None
 
 class Income(BaseModel):
     amount: float
     day: int
     month: str
-    user_id: str
+    user_id: Optional[str] = None
     title: Optional[str] = None
     source: Optional[str] = None
     # Legacy field — kept optional for backward compat with existing rows
     jobTitle: Optional[str] = None
 
 class SavingsEntry(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     title: str
     amount: float
     type: str  # "deposit" or "withdrawal"
@@ -54,13 +215,13 @@ class SavingsEntry(BaseModel):
     source: str = "income"  # "income" | "transfer"
 
 class StartingBalance(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     amount: float
     day: int
     month: str
 
 class SavingsGoal(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     title: str
     target_amount: Optional[float] = None   # nullable for General Savings
     target_month: Optional[str] = None
@@ -74,7 +235,7 @@ class SavingsGoalUpdate(BaseModel):
     """Partial edit of a user-created goal. Every field is optional; only the ones
     the client sends are written. General Savings and Reconciliation are auto-managed
     and reject edits."""
-    user_id: str
+    user_id: Optional[str] = None
     title: Optional[str] = None
     target_amount: Optional[float] = None
     target_month: Optional[str] = None
@@ -83,12 +244,12 @@ class SavingsGoalUpdate(BaseModel):
 class SavingsGoalFinish(BaseModel):
     """Completing a goal in one tap: the server withdraws whatever the goal holds
     (no user-typed amount) and marks it done. day/month book the withdrawal row."""
-    user_id: str
+    user_id: Optional[str] = None
     day: int
     month: str
 
 class SavingsTransfer(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     amount: float
     to_goal_id: int        # destination specific goal
     general_goal_id: int   # General Savings goal id
@@ -97,7 +258,7 @@ class SavingsTransfer(BaseModel):
     to_goal_title: str     # label for the deposit row
 
 class UserSettings(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     # Optional so PATCH /settings/ can update each field independently without
     # clobbering the others. GET responses return the raw row (all fields populated).
     tithe_enabled: Optional[bool] = None
@@ -106,7 +267,7 @@ class UserSettings(BaseModel):
     firm_foundation_goals_prompted: Optional[bool] = None
 
 class AccountDeletion(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     confirmation: str  # must equal exactly "DELETE" for the request to proceed
 
 
@@ -210,7 +371,7 @@ def read_root():
     return {"message": "DollarSeeds Backend is running!"}
 
 @app.get("/dashboard/trends/")
-def get_spending_trends(user_id: str):
+def get_spending_trends(user_id: str = Depends(get_current_user_id)):
     all_months = ["January", "February", "March", "April", "May", "June", "July",
                   "August", "September", "October", "November", "December"]
 
@@ -309,7 +470,7 @@ def get_spending_trends(user_id: str):
 
 
 @app.get("/dashboard/{current_month}")
-def get_dashboard_data(current_month: str, user_id: str):
+def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_user_id)):
     income_response = supabase.table("income").select("amount, day, tithe_enabled, tithe_rate, budget_type").eq("month", current_month).eq("user_id", user_id).execute()
     total_income = sum(item["amount"] for item in income_response.data)
 
@@ -396,19 +557,22 @@ def get_dashboard_data(current_month: str, user_id: str):
     }
 
 @app.post("/expenses/")
-def create_expense(expense: Expense):
-    _assert_month_open(expense.user_id, expense.month)
-    response = supabase.table("expenses").insert(expense.model_dump()).execute()
+def create_expense(expense: Expense, user_id: str = Depends(get_current_user_id)):
+    _assert_month_open(user_id, expense.month)
+    payload = expense.model_dump()
+    payload["user_id"] = user_id  # never trust the body's user_id
+    response = supabase.table("expenses").insert(payload).execute()
     return {"message": "Expense successfully added to database!", "data": response.data}
 
 @app.post("/income/")
-def create_income(income: Income):
+def create_income(income: Income, user_id: str = Depends(get_current_user_id)):
     # Snapshot the user's CURRENT tithe setting onto the row. This freezes the month's
     # split: even if the user later toggles tithing, past income keeps its original
     # treatment. The live current month is still computed from user_settings.
-    _assert_month_open(income.user_id, income.month)
-    settings = _get_user_settings(income.user_id)
+    _assert_month_open(user_id, income.month)
+    settings = _get_user_settings(user_id)
     payload = income.model_dump()
+    payload["user_id"] = user_id  # never trust the body's user_id
     payload["tithe_enabled"] = bool(settings.get("tithe_enabled"))
     payload["tithe_rate"] = float(
         settings.get("tithe_rate") if settings.get("tithe_rate") is not None else DEFAULT_TITHE_RATE
@@ -420,15 +584,15 @@ def create_income(income: Income):
     return {"message": "Income successfully added to database!", "data": response.data}
 
 @app.get("/settings/")
-def get_settings(user_id: str):
+def get_settings(user_id: str = Depends(get_current_user_id)):
     """Return the user's settings, lazily creating a default row if missing."""
     return {"data": _get_user_settings(user_id)}
 
 @app.patch("/settings/")
-def update_settings(update: UserSettings):
+def update_settings(update: UserSettings, user_id: str = Depends(get_current_user_id)):
     """Update tithe_enabled, tithe_rate, budget_type and/or the firm-foundation
     prompt flag for a user (partial update)."""
-    _get_user_settings(update.user_id)  # ensure a row exists first
+    _get_user_settings(user_id)  # ensure a row exists first
     fields: dict = {}
     if update.tithe_enabled is not None:
         fields["tithe_enabled"] = update.tithe_enabled
@@ -441,12 +605,12 @@ def update_settings(update: UserSettings):
     if update.firm_foundation_goals_prompted is not None:
         fields["firm_foundation_goals_prompted"] = update.firm_foundation_goals_prompted
     if not fields:
-        return {"data": _get_user_settings(update.user_id)}
-    res = supabase.table("user_settings").update(fields).eq("user_id", update.user_id).execute()
+        return {"data": _get_user_settings(user_id)}
+    res = supabase.table("user_settings").update(fields).eq("user_id", user_id).execute()
     return {"message": "Settings updated.", "data": res.data[0] if res.data else None}
 
 @app.get("/expenses/details/")
-def get_expense_details(month: str, category: str, user_id: str):
+def get_expense_details(month: str, category: str, user_id: str = Depends(get_current_user_id)):
     # "Goals" is kept allowed for READ-ONLY historical access: the old "Investments"
     # expense bucket wrote category='Goals', and past-month dashboards still need to
     # render those rows. No code path CREATES new 'Goals' expenses anymore — debt and
@@ -457,7 +621,7 @@ def get_expense_details(month: str, category: str, user_id: str):
     return {"data": response.data}
 
 @app.delete("/expenses/delete/{id}")
-def delete_expense(id: int, user_id: str):
+def delete_expense(id: int, user_id: str = Depends(get_current_user_id)):
     row = supabase.table("expenses").select("month").eq("id", id).eq("user_id", user_id).execute()
     if row.data:
         _assert_month_open(user_id, row.data[0].get("month"))
@@ -465,7 +629,7 @@ def delete_expense(id: int, user_id: str):
     return response.data
 
 @app.delete("/income/delete/{id}")
-def delete_income(id: int, user_id: str):
+def delete_income(id: int, user_id: str = Depends(get_current_user_id)):
     row = supabase.table("income").select("month").eq("id", id).eq("user_id", user_id).execute()
     if row.data:
         _assert_month_open(user_id, row.data[0].get("month"))
@@ -481,13 +645,13 @@ USER_DATA_TABLES = [
 ]
 
 @app.post("/account/delete/")
-def delete_account(req: AccountDeletion):
+def delete_account(req: AccountDeletion, user_id: str = Depends(get_current_user_id)):
+    """Irreversibly delete the CALLER'S OWN account. `user_id` from the body is ignored
+    entirely — the only account this route can ever touch is the token's own."""
     # Authoritative guard: only proceed when the user typed exactly "DELETE".
     # Anything else is a silent no-op (200, no error) per product spec.
     if req.confirmation != "DELETE":
         return {"deleted": False}
-
-    user_id = req.user_id
 
     # Wipe all user-owned data first, then remove the auth identity itself.
     for table in USER_DATA_TABLES:
@@ -506,12 +670,12 @@ def delete_account(req: AccountDeletion):
     return {"deleted": True}
 
 @app.get("/income/details/")
-def get_income_details(month: str, user_id: str):
+def get_income_details(month: str, user_id: str = Depends(get_current_user_id)):
     response = supabase.table("income").select("*").eq("month", month).eq("user_id", user_id).execute()
     return {"data": response.data}
 
 @app.get("/income/funding-months/")
-def get_funding_months(user_id: str, current_month: str):
+def get_funding_months(current_month: str, user_id: str = Depends(get_current_user_id)):
     """Months earlier in the calendar than current_month that are still OPEN (not
     closed) and have > $0 of income. Each can fund a goal deposit from that month's
     leftover income — the deposit is booked against that month's Goals budget."""
@@ -530,7 +694,7 @@ def get_funding_months(user_id: str, current_month: str):
     return {"data": result}
 
 @app.get("/savings/balance/")
-def get_savings_balance(user_id: str):
+def get_savings_balance(user_id: str = Depends(get_current_user_id)):
     response = supabase.table("savings_transactions").select("amount, type").eq("user_id", user_id).execute()
     balance = sum(
         r["amount"] if r["type"] == "deposit" else -r["amount"]
@@ -539,23 +703,26 @@ def get_savings_balance(user_id: str):
     return {"balance": balance}
 
 @app.post("/savings/transaction/")
-def create_savings_transaction(entry: SavingsEntry):
-    _assert_month_open(entry.user_id, entry.month)
-    response = supabase.table("savings_transactions").insert(entry.model_dump()).execute()
+def create_savings_transaction(entry: SavingsEntry, user_id: str = Depends(get_current_user_id)):
+    _assert_month_open(user_id, entry.month)
+    _assert_owns_goals(user_id, entry.goal_id)
+    payload = entry.model_dump()
+    payload["user_id"] = user_id  # never trust the body's user_id
+    response = supabase.table("savings_transactions").insert(payload).execute()
     return {"message": "Savings transaction recorded.", "data": response.data}
 
 # Pre-app savings the user already had when they signed up. Excluded from budget math.
 OPENING_SOURCE = "opening"
 
 @app.post("/savings/starting-balance/")
-def set_starting_balance(entry: StartingBalance):
+def set_starting_balance(entry: StartingBalance, user_id: str = Depends(get_current_user_id)):
     """One-time capture of the savings the user already had BEFORE they started using
     the app. Booked into General Savings with source='opening' — like 'rollover', that
     source is excluded from the budget math (which allowlists source='income'), so
     money brought in from before never consumes the Goals budget of the month it lands
     in. Idempotent: a user can only ever have one opening row."""
     existing = supabase.table("savings_transactions").select("id") \
-        .eq("user_id", entry.user_id).eq("source", OPENING_SOURCE).limit(1).execute()
+        .eq("user_id", user_id).eq("source", OPENING_SOURCE).limit(1).execute()
     if existing.data:
         return {"message": "Starting balance already set.", "already_set": True}
 
@@ -564,10 +731,10 @@ def set_starting_balance(entry: StartingBalance):
     if entry.amount <= 0:
         return {"message": "No starting balance to record.", "already_set": False}
 
-    _assert_month_open(entry.user_id, entry.month)
-    general_id = _ensure_general_savings(entry.user_id)
+    _assert_month_open(user_id, entry.month)
+    general_id = _ensure_general_savings(user_id)
     supabase.table("savings_transactions").insert({
-        "user_id": entry.user_id,
+        "user_id": user_id,
         "title": "Starting balance",
         "amount": entry.amount,
         "type": "deposit",
@@ -579,18 +746,19 @@ def set_starting_balance(entry: StartingBalance):
     return {"message": "Starting balance recorded.", "already_set": False}
 
 @app.post("/savings/transfer/")
-def transfer_from_general(transfer: SavingsTransfer):
+def transfer_from_general(transfer: SavingsTransfer, user_id: str = Depends(get_current_user_id)):
     """Move money from General Savings into a specific goal.
     Creates two transactions with source='transfer' so neither affects the Goals budget.
     Both legs share a `transfer_group` uuid so Recent Activity can collapse them into a
     single entry and deleting that entry removes both legs together (see
     get_savings_history / delete_savings_transaction)."""
-    _assert_month_open(transfer.user_id, transfer.month)
+    _assert_month_open(user_id, transfer.month)
+    _assert_owns_goals(user_id, transfer.general_goal_id, transfer.to_goal_id)
     group = str(uuid.uuid4())
     # Withdrawal from General Savings. Its title is the human-readable label shown for
     # the collapsed transfer entry in Recent Activity.
     supabase.table("savings_transactions").insert({
-        "user_id": transfer.user_id,
+        "user_id": user_id,
         "title": f"Transfer from General Savings to {transfer.to_goal_title}",
         "amount": transfer.amount,
         "type": "withdrawal",
@@ -602,7 +770,7 @@ def transfer_from_general(transfer: SavingsTransfer):
     }).execute()
     # Deposit into the destination goal
     supabase.table("savings_transactions").insert({
-        "user_id": transfer.user_id,
+        "user_id": user_id,
         "title": transfer.to_goal_title,
         "amount": transfer.amount,
         "type": "deposit",
@@ -615,7 +783,7 @@ def transfer_from_general(transfer: SavingsTransfer):
     return {"message": "Transfer recorded."}
 
 @app.get("/savings/history/")
-def get_savings_history(user_id: str, month: str = None):
+def get_savings_history(month: str = None, user_id: str = Depends(get_current_user_id)):
     query = supabase.table("savings_transactions").select("*").eq("user_id", user_id)
     if month:
         query = query.eq("month", month)
@@ -649,7 +817,7 @@ def _collapse_transfers(rows: list) -> list:
     return collapsed
 
 @app.delete("/savings/transaction/{id}")
-def delete_savings_transaction(id: int, user_id: str):
+def delete_savings_transaction(id: int, user_id: str = Depends(get_current_user_id)):
     row = supabase.table("savings_transactions").select("month, transfer_group").eq("id", id).eq("user_id", user_id).execute()
     if row.data:
         _assert_month_open(user_id, row.data[0].get("month"))
@@ -677,6 +845,22 @@ def _with_allocated(goals_data: list, user_id: str) -> list:
             allocated[gid] = allocated.get(gid, 0) + delta
     return [{**g, "allocated_amount": max(0.0, allocated.get(g["id"], 0.0))} for g in goals_data]
 
+def _assert_owns_goals(user_id: str, *goal_ids: Optional[int]):
+    """Reject goal ids that don't belong to the caller.
+
+    The token settles WHO is acting, but `goal_id` still arrives from the client. Rows
+    are written with the caller's own user_id, so a foreign goal_id can't leak data —
+    it would corrupt another user's goal allocation, since goal balances are summed by
+    goal_id. Verifying ownership closes that."""
+    ids = [g for g in goal_ids if g is not None]
+    if not ids:
+        return
+    res = supabase.table("savings_goals").select("id").eq("user_id", user_id).in_("id", ids).execute()
+    owned = {r["id"] for r in (res.data or [])}
+    if any(g not in owned for g in ids):
+        raise HTTPException(status_code=404, detail="Goal not found.")
+
+
 def _ensure_general_savings(user_id: str) -> int:
     """Ensure a General Savings goal exists for this user. Returns its id."""
     gen = supabase.table("savings_goals").select("id").eq("user_id", user_id).eq("is_general", True).execute()
@@ -691,7 +875,7 @@ def _ensure_general_savings(user_id: str) -> int:
     return result.data[0]["id"]
 
 @app.get("/savings/goal/")
-def get_savings_goals(user_id: str, goal_type: Optional[str] = None):
+def get_savings_goals(goal_type: Optional[str] = None, user_id: str = Depends(get_current_user_id)):
     # Lazily seed General Savings for this user if it doesn't exist yet
     _ensure_general_savings(user_id)
     query = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", False)
@@ -719,7 +903,7 @@ def _decorate_reconciliation(goals: list, user_id: str) -> list:
     return goals
 
 @app.get("/savings/goal/completed/")
-def get_completed_goals(user_id: str, goal_type: Optional[str] = None):
+def get_completed_goals(goal_type: Optional[str] = None, user_id: str = Depends(get_current_user_id)):
     query = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", True)
     if goal_type in ("saving", "debt"):
         query = query.eq("goal_type", goal_type)
@@ -727,16 +911,18 @@ def get_completed_goals(user_id: str, goal_type: Optional[str] = None):
     return {"data": _with_allocated(goals_res.data, user_id)}
 
 @app.patch("/savings/goal/{id}/complete")
-def complete_savings_goal(id: int, user_id: str):
+def complete_savings_goal(id: int, user_id: str = Depends(get_current_user_id)):
     response = supabase.table("savings_goals").update({"completed": True}).eq("id", id).eq("user_id", user_id).execute()
     return {"message": "Goal marked as complete.", "data": response.data}
 
 @app.post("/savings/goal/")
-def create_savings_goal(goal: SavingsGoal):
-    existing = supabase.table("savings_goals").select("id").eq("user_id", goal.user_id).eq("title", goal.title).execute()
+def create_savings_goal(goal: SavingsGoal, user_id: str = Depends(get_current_user_id)):
+    existing = supabase.table("savings_goals").select("id").eq("user_id", user_id).eq("title", goal.title).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="A goal with this name already exists.")
-    response = supabase.table("savings_goals").insert(goal.model_dump()).execute()
+    payload = goal.model_dump()
+    payload["user_id"] = user_id  # never trust the body's user_id
+    response = supabase.table("savings_goals").insert(payload).execute()
     return {"message": "Goal created.", "data": response.data}
 
 def _editable_goal(id: int, user_id: str) -> dict:
@@ -752,8 +938,8 @@ def _editable_goal(id: int, user_id: str) -> dict:
     return goal
 
 @app.patch("/savings/goal/{id}")
-def update_savings_goal(id: int, update: SavingsGoalUpdate):
-    goal = _editable_goal(id, update.user_id)
+def update_savings_goal(id: int, update: SavingsGoalUpdate, user_id: str = Depends(get_current_user_id)):
+    goal = _editable_goal(id, user_id)
 
     fields = update.model_dump(exclude={"user_id"}, exclude_none=True)
     if not fields:
@@ -765,23 +951,23 @@ def update_savings_goal(id: int, update: SavingsGoalUpdate):
     new_title = fields.get("title")
     if new_title and new_title != goal["title"]:
         clash = supabase.table("savings_goals").select("id") \
-            .eq("user_id", update.user_id).eq("title", new_title).neq("id", id).execute()
+            .eq("user_id", user_id).eq("title", new_title).neq("id", id).execute()
         if clash.data:
             raise HTTPException(status_code=400, detail="A goal with this name already exists.")
 
-    response = supabase.table("savings_goals").update(fields).eq("id", id).eq("user_id", update.user_id).execute()
+    response = supabase.table("savings_goals").update(fields).eq("id", id).eq("user_id", user_id).execute()
 
     # Transaction titles are denormalized copies of the goal title, so a rename would
     # leave stale labels in Recent Activity. Only rows still carrying the OLD title are
     # renamed — rows like "Returned from deleted goal" keep their own wording.
     if new_title and new_title != goal["title"]:
         supabase.table("savings_transactions").update({"title": new_title}) \
-            .eq("goal_id", id).eq("user_id", update.user_id).eq("title", goal["title"]).execute()
+            .eq("goal_id", id).eq("user_id", user_id).eq("title", goal["title"]).execute()
 
     return {"message": "Goal updated.", "data": response.data}
 
 @app.post("/savings/goal/{id}/finish")
-def finish_savings_goal(id: int, body: SavingsGoalFinish):
+def finish_savings_goal(id: int, body: SavingsGoalFinish, user_id: str = Depends(get_current_user_id)):
     """One-tap completion. Withdraws exactly what the goal holds — no hand-typed
     amount — and snapshots it, since allocated_amount (deposits − withdrawals) drops
     to 0 the moment the withdrawal lands.
@@ -790,18 +976,18 @@ def finish_savings_goal(id: int, body: SavingsGoalFinish):
     transaction across them, so if one has to fail it must be the second. Marking first
     means a failure leaves the goal active with its money intact (retry is safe);
     withdrawing first would take the money and leave the goal active at $0."""
-    goal = _editable_goal(id, body.user_id)
+    goal = _editable_goal(id, user_id)
     if goal.get("completed"):
         raise HTTPException(status_code=400, detail="Goal is already completed.")
-    _assert_month_open(body.user_id, body.month)
+    _assert_month_open(user_id, body.month)
 
-    allocated = max(0.0, _goal_balance(body.user_id, id))
+    allocated = max(0.0, _goal_balance(user_id, id))
     # Self-heal: a goal whose balance is already 0 but which has deposits on record was
     # withdrawn by an earlier half-failed finish. Snapshot what it HELD so the Completed
     # card isn't blank, and skip the withdrawal below (the money is already gone).
     if allocated == 0:
         deps = supabase.table("savings_transactions").select("amount") \
-            .eq("user_id", body.user_id).eq("goal_id", id).eq("type", "deposit").execute()
+            .eq("user_id", user_id).eq("goal_id", id).eq("type", "deposit").execute()
         snapshot = _r(sum(d["amount"] for d in deps.data))
     else:
         snapshot = allocated
@@ -811,7 +997,7 @@ def finish_savings_goal(id: int, body: SavingsGoalFinish):
             "completed": True,
             "completed_amount": snapshot,
             "completed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        }).eq("id", id).eq("user_id", body.user_id).execute()
+        }).eq("id", id).eq("user_id", user_id).execute()
     except Exception as e:
         # Surfaced to the client instead of 500-ing anonymously: the likeliest cause is a
         # stale PostgREST schema cache after the 0004 migration (PGRST204).
@@ -819,7 +1005,7 @@ def finish_savings_goal(id: int, body: SavingsGoalFinish):
 
     if allocated > 0:
         supabase.table("savings_transactions").insert({
-            "user_id": body.user_id,
+            "user_id": user_id,
             "title": goal["title"],
             "amount": allocated,
             "type": "withdrawal",
@@ -832,7 +1018,7 @@ def finish_savings_goal(id: int, body: SavingsGoalFinish):
     return {"message": "Goal completed.", "allocated": allocated, "completed_amount": snapshot}
 
 @app.delete("/savings/goal/{id}")
-def delete_savings_goal(id: int, user_id: str, current_month: str):
+def delete_savings_goal(id: int, current_month: str, user_id: str = Depends(get_current_user_id)):
     # Block deletion of General Savings
     goal_res = supabase.table("savings_goals").select("is_general, is_reconciliation").eq("id", id).eq("user_id", user_id).execute()
     if not goal_res.data:
@@ -1100,7 +1286,7 @@ def reconcile_month(user_id: str, month: str) -> float:
 
 
 @app.get("/rollover/preview/")
-def rollover_preview(user_id: str, month: str):
+def rollover_preview(month: str, user_id: str = Depends(get_current_user_id)):
     """Target rollover + per-category breakdown (split used for display only) and
     whether the month is closed. Does not mutate anything."""
     target, breakdown, budgetable = _compute_target_rollover(user_id, month)
@@ -1115,38 +1301,40 @@ def rollover_preview(user_id: str, month: str):
     }
 
 class RolloverAction(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     month: str
 
 @app.post("/rollover/close/")
-def rollover_close(action: RolloverAction):
+def rollover_close(action: RolloverAction, user_id: str = Depends(get_current_user_id)):
     """Reconcile the month (first close defines the rollover entry) then mark it
     closed. Safe to call repeatedly — reconcile is idempotent."""
-    moved = reconcile_month(action.user_id, action.month)
+    moved = reconcile_month(user_id, action.month)
     supabase.table("month_status").upsert({
-        "user_id": action.user_id, "month": action.month,
+        "user_id": user_id, "month": action.month,
         "closed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }).execute()
     return {"message": f"{action.month} closed.", "month": action.month, "rolled_over": moved}
 
 @app.post("/rollover/reopen/")
-def rollover_reopen(action: RolloverAction):
+def rollover_reopen(action: RolloverAction, user_id: str = Depends(get_current_user_id)):
     """Unlock a closed month for editing. Recompute happens on the next close
     (or whenever reconcile_month runs), the single deterministic recompute point."""
     supabase.table("month_status").upsert({
-        "user_id": action.user_id, "month": action.month, "closed_at": None,
+        "user_id": user_id, "month": action.month, "closed_at": None,
     }).execute()
     return {"message": f"{action.month} reopened.", "month": action.month}
 
 
 class LessonRating(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     lesson_id: int
     rating: int  # 1–5
 
 @app.post("/lesson-ratings/")
-def create_lesson_rating(entry: LessonRating):
-    response = supabase.table("lesson_ratings").insert(entry.model_dump()).execute()
+def create_lesson_rating(entry: LessonRating, user_id: str = Depends(get_current_user_id)):
+    payload = entry.model_dump()
+    payload["user_id"] = user_id  # never trust the body's user_id
+    response = supabase.table("lesson_ratings").insert(payload).execute()
     return {"message": "Rating recorded.", "data": response.data}
 
 
@@ -1195,7 +1383,7 @@ class PlaybackResponse(BaseModel):
 
 
 @app.get("/lessons/series/")
-def list_lesson_series():
+def list_lesson_series(user_id: str = Depends(get_current_user_id)):
     """Published video series for the Lessons page, ordered by sort_order. Each carries
     a DERIVED lesson_count (never stored, so it can't drift). No video paths are exposed."""
     series = supabase.table("lesson_series") \
@@ -1225,7 +1413,7 @@ def list_lesson_series():
 
 
 @app.get("/lessons/series/{series_id}/")
-def get_lesson_series(series_id: str):
+def get_lesson_series(series_id: str, user_id: str = Depends(get_current_user_id)):
     """A single published series plus its lessons ordered by sort_order. Returns only the
     metadata the playlist screen needs — NEVER raw video paths/URLs (see /playback/)."""
     s = supabase.table("lesson_series") \
@@ -1252,7 +1440,7 @@ def get_lesson_series(series_id: str):
 
 
 @app.get("/lessons/{lesson_id}/playback/")
-def get_lesson_playback(lesson_id: str):
+def get_lesson_playback(lesson_id: str, user_id: str = Depends(get_current_user_id)):
     """Mint a SHORT-LIVED signed URL to stream one lesson's video. The private
     `lesson-videos` bucket is never public, so this is the only way the app gets a
     (temporary, expiring) URL. Returns { url, expires_in }."""

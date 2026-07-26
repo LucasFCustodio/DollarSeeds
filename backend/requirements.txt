@@ -3,3 +3,11 @@ uvicorn[standard]
 pydantic
 python-dotenv
 supabase
+# Verifies the Supabase access token on every protected request
+# (main.get_current_user_id). Declared directly rather than relying on supabase-auth
+# happening to pull it in.
+#
+# The [crypto] extra is REQUIRED, not optional: this project's Supabase JWT signing
+# key is ECC P-256, so access tokens are ES256, and PyJWT cannot verify an asymmetric
+# signature without `cryptography`. Plain `PyJWT` would 401 every request in prod.
+PyJWT[crypto]
