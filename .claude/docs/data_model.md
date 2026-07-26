@@ -80,7 +80,59 @@ goals_budget  = total_income * 0.20
 
 The dashboard's 50/30/20 split shows **"Needs / Wants / Goals"**, and the DB stores expense categories with those same plural names (`Needs`/`Wants`/`Goals`) — they match. The Goals bucket total = historical `Goals` expenses + income-sourced savings deposits (`savings_transactions` where `type='deposit'` AND `source='income'`); transfers between goals (`source='transfer'`) are excluded so they don't double-count. (Note: earlier docs described the categories as `Need/Want/Savings/Debt` — that was never the stored reality; see the audited values above.)
 
+## Row Level Security
+
+**RLS is not what protects this app's data.** The backend connects with the
+**service_role** key, which bypasses RLS entirely, so every policy below is invisible
+to [backend/main.py](../../backend/main.py). Access control for anything reaching the
+API is the verified-JWT dependency `get_current_user_id` — see
+[architectural_patterns.md](architectural_patterns.md#api-authentication). RLS is the
+second layer: it governs direct PostgREST access with the **anon** key, which ships
+inside every app binary and is therefore public.
+
+State as verified **2026-07-26** — already correct, nothing to apply:
+
+| Tables | RLS | Policies |
+|--------|-----|----------|
+| `expenses`, `income`, `savings_transactions`, `savings_goals`, `month_status`, `lesson_ratings` | enabled | One `ALL` policy each, role `authenticated`, `USING (auth.uid() = user_id)` |
+| `user_settings` | enabled | Three policies — `SELECT` / `INSERT` / `UPDATE`, same `auth.uid() = user_id` — but on role `public`, not `authenticated`. No `DELETE` policy. |
+| `lesson_series`, `lessons` | enabled | **None** — deny-all to anon and authenticated, by design. Shared content is served only through the backend (`GET /lessons/...`) on service_role. |
+
+Notes on the two irregularities, both deliberate to leave alone:
+
+- **`user_settings` on role `public`**: `public` means *every* role, including `anon`.
+  Harmless in practice — an anon caller has `auth.uid() = NULL`, and `NULL = user_id`
+  is never true, so no rows come back. It is loose scoping, not an opening. The
+  missing `DELETE` policy likewise doesn't matter: account deletion runs through the
+  backend on service_role.
+- **`relforcerowsecurity = false` everywhere**: the Supabase default. FORCE only
+  affects connections made *as the table owner*; PostgREST connects as
+  `anon`/`authenticated`/`service_role`, never the owner, so it changes nothing for
+  the app. **Do not enable it** — lesson content is loaded manually through the
+  Supabase dashboard, and forcing RLS risks those admin queries returning filtered or
+  empty results.
+
+Confirmed empirically: with the anon key, `expenses`, `income`,
+`savings_transactions`, `savings_goals` and `lesson_ratings` all return **0 rows**
+while actually holding data (126 / 50 / 65 / 54 / 3 rows respectively).
+
+To re-verify after any schema change:
+
+```sql
+-- Policies and the expression that enforces ownership
+select tablename, policyname, roles, cmd, qual as using_expression, with_check
+from pg_policies where schemaname = 'public' order by tablename, cmd;
+
+-- RLS flags per table
+select c.relname, c.relrowsecurity as rls_enabled, c.relforcerowsecurity as rls_forced
+from pg_class c join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public' and c.relkind = 'r' order by c.relname;
+```
+
+Every `using_expression` should read `(auth.uid() = user_id)`. A policy with
+`USING (true)` would be a real hole.
+
 ## Supabase Client Setup
 
-- Frontend: [frontend/lib/supabase.ts](../../frontend/lib/supabase.ts) — initialized with `EXPO_PUBLIC_SUPABASE_URL` and anon key; uses AsyncStorage as the session store
-- Backend: [backend/main.py](../../backend/main.py) top of file — initialized with URL and service/anon key from `.env`
+- Frontend: [frontend/lib/supabase.ts](../../frontend/lib/supabase.ts) — project URL and **anon** key are hardcoded in the file (not env vars); uses AsyncStorage as the session store. Subject to RLS.
+- Backend: [backend/main.py](../../backend/main.py) top of file — URL and `SUPABASE_KEY` from `.env`. That key is the **service_role** key (required by `auth.admin.delete_user`), so it **bypasses RLS** — which is why authorization must live in the route dependencies.
