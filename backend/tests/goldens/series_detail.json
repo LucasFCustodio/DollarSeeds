@@ -1,0 +1,19 @@
+{
+  "data": {
+    "id": "64f33aa6-9348-4cee-8c69-28527af23b48",
+    "title": "Rethinking Finances Through a Godly Lens",
+    "description": "Lucas Custodio, founder of DollarSeeds, explains his design philosophy behind DollarSeeds, and why The Biblical Perspective was so significant",
+    "creator": "Lucas Custodio",
+    "thumbnail_url": "https://vbvsblpyeylnemrecyqv.supabase.co/storage/v1/object/public/lesson-thumbnails/dollar-seeds-logo.png",
+    "lessons": [
+      {
+        "id": "844072b0-d03c-46af-adea-661b0f59f76e",
+        "title": "Lesson 1 - Math vs Stewardship",
+        "description": null,
+        "duration_seconds": 41,
+        "thumbnail_url": null,
+        "sort_order": 0
+      }
+    ]
+  }
+}

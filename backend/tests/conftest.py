@@ -139,6 +139,50 @@ def other_ec_key():
     return _new_ec_key()
 
 
+# ── Premium subscriptions ───────────────────────────────────────────────────────
+
+WEBHOOK_SECRET = "test-revenuecat-webhook-secret"
+
+
+@pytest.fixture(autouse=True)
+def reset_premium_module_state(monkeypatch):
+    """main.py holds process-wide state: the app_config cache, the RevenueCat lookup
+    cache, and the two credentials read at import. Left alone, one test's flag flip or
+    cached entitlement miss leaks into the next and suite ORDER starts to matter — the
+    kind of bug that only shows up in CI. Reset before every test.
+
+    Both credentials default to empty, so the safe posture (no RevenueCat fallback, and
+    a webhook that refuses everything) is what a test gets unless it opts in."""
+    monkeypatch.setattr(main, "_app_config_cache", None)
+    monkeypatch.setattr(main, "_fallback_cache", {})
+    monkeypatch.setattr(main, "REVENUECAT_API_KEY", "")
+    monkeypatch.setattr(main, "REVENUECAT_WEBHOOK_AUTH", "")
+
+
+@pytest.fixture
+def webhook_secret(monkeypatch) -> str:
+    """Configure the webhook receiver. Without this the route 503s by design."""
+    monkeypatch.setattr(main, "REVENUECAT_WEBHOOK_AUTH", WEBHOOK_SECRET)
+    return WEBHOOK_SECRET
+
+
+@pytest.fixture
+def premium_on(supabase_db):
+    """Flip the server-side kill switch on. Off is the default everywhere, matching how
+    this ships: release 1 goes out dark."""
+    supabase_db.seed("app_config", {"key": "premium_enabled", "value": "true"})
+    main._app_config_cache = None
+    return supabase_db
+
+
+def v2(user_id: str = USER_A, features: str = "premium") -> dict:
+    """Headers for a v2+ build: authenticated AND advertising the premium capability.
+
+    The distinction between this and plain auth() is the whole backward-compatibility
+    story — auth() is the binary already in the App Store."""
+    return {**auth(user_id), "X-Client-Features": features}
+
+
 @pytest.fixture
 def client(supabase_db) -> TestClient:
     # raise_server_exceptions=False so an unexpected 500 surfaces as a failed

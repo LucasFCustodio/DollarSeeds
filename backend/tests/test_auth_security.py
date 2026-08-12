@@ -55,6 +55,7 @@ PROTECTED_ROUTES = [
     ("GET",    "/lessons/series/",                {},                                   None),
     ("GET",    "/lessons/series/abc/",            {},                                   None),
     ("GET",    "/lessons/abc/playback/",          {},                                   None),
+    ("GET",    "/me/entitlements/",               {},                                   None),
 ]
 
 ROUTE_IDS = [f"{m} {p}" for m, p, _, _ in PROTECTED_ROUTES]
@@ -80,8 +81,17 @@ def test_every_protected_route_is_in_the_table():
     # Deliberately public: the health check (returns no data of any kind) and
     # FastAPI's built-in schema/docs pages, which describe the API's shape but expose
     # no user data — and every route they describe now requires a token.
+    #
+    # Two more, both deliberate and both covered by their own tests below:
+    #   GET  /config/            — the force-update gate has to work BEFORE sign-in, and
+    #                              the three values it returns are not user-specific.
+    #   POST /webhooks/revenuecat — called by RevenueCat, which has no Supabase token.
+    #                              Authorized by a shared secret instead; see
+    #                              test_webhook_* below, which prove a missing, wrong,
+    #                              or server-side-unset secret all fail closed.
     public = {("GET", "/"), ("GET", "/docs"), ("GET", "/docs/oauth2-redirect"),
-              ("GET", "/redoc"), ("GET", "/openapi.json")}
+              ("GET", "/redoc"), ("GET", "/openapi.json"),
+              ("GET", "/config/"), ("POST", "/webhooks/revenuecat")}
     covered = {(m, p) for m, p, _, _ in PROTECTED_ROUTES}
 
     # Match table entries (concrete URLs) to route templates by path shape.

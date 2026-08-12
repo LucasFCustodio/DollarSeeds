@@ -1,10 +1,14 @@
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from typing import Optional
 import os
 import datetime
+import hmac
+import time
 import uuid
+import httpx
 import jwt
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -639,9 +643,15 @@ def delete_income(id: int, user_id: str = Depends(get_current_user_id)):
 
 # Every table that stores per-user rows (keyed by user_id). Shared content tables
 # (lesson_series, lessons) are intentionally excluded.
+#
+# `subscriptions` is here for privacy, but note what it does NOT do: deleting the row
+# does not cancel the store subscription, and a webhook arriving afterwards will simply
+# re-create an orphan row (there is no FK — see migration 0005). That orphan is
+# deliberate; it is the audit trail for a refund on an account that no longer exists.
+# The user must cancel in the App Store themselves — the delete-account screen says so.
 USER_DATA_TABLES = [
     "expenses", "income", "savings_transactions", "savings_goals",
-    "month_status", "lesson_ratings", "user_settings",
+    "month_status", "lesson_ratings", "user_settings", "subscriptions",
 ]
 
 @app.post("/account/delete/")
@@ -1338,6 +1348,277 @@ def create_lesson_rating(entry: LessonRating, user_id: str = Depends(get_current
     return {"message": "Rating recorded.", "data": response.data}
 
 
+# ─── Premium subscriptions: capability marker, config, entitlement ────────────
+# DollarSeeds is live, and the binaries already on people's phones keep calling this
+# API forever. They have no RevenueCat SDK, no paywall and no purchase path, so showing
+# one a locked series is a dead end with no way out. Everything here is built around a
+# single rule:
+#
+#   AN UNMARKED REQUEST MUST TAKE EXACTLY THE CODE PATH IT TOOK BEFORE THIS FEATURE.
+#
+# Not "a path that usually succeeds" — the same path, issuing the same queries. That is
+# why the gate in /playback/ returns before it reads app_config, lesson_series or
+# subscriptions. Three tests seed a lesson whose series_id has NO lesson_series row
+# (test_auth_security::test_lesson_video_urls_require_authentication, and two in
+# test_regression); they pass untouched, and that is the proof. If they ever need
+# editing to accommodate a change here, the change is wrong.
+#
+# v2 identifies itself with `X-Client-Features: premium`, attached once in the app's
+# axios request interceptor. A header rather than a query param because that
+# interceptor is a single choke point already scoped to this host: one line there marks
+# every request the app will ever make, including routes that don't exist yet. A query
+# param would have to be added at each call site and forgotten at the next one.
+
+PREMIUM_FEATURE = "premium"
+PREMIUM_ENTITLEMENT_ID = "premium"
+
+# Two switches, deliberately not one:
+#   * Hiding premium series from UNMARKED clients is ALWAYS on. It is backward
+#     compatibility, not a business rule, and must survive every rollback.
+#   * premium_enabled gates only MARKED clients. Flipping it off hands v2 users free
+#     access without ever exposing premium content to an old binary — which matters,
+#     because content given away cannot be taken back (no series is ever retro-paywalled).
+APP_CONFIG_DEFAULTS = {
+    "premium_enabled": "false",
+    "min_supported_version": "0.0.0",
+    "update_url": "",
+}
+_APP_CONFIG_TTL_SECONDS = 60
+_app_config_cache: Optional[tuple] = None   # (monotonic_stamp, values)
+
+REVENUECAT_API_KEY: str = os.environ.get("REVENUECAT_API_KEY", "").strip()
+REVENUECAT_WEBHOOK_AUTH: str = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "").strip()
+REVENUECAT_API_URL = "https://api.revenuecat.com/v1/subscribers"
+REVENUECAT_TIMEOUT_SECONDS = 3.0
+
+# Caches BOTH outcomes of a RevenueCat lookup for a minute, keyed by user id. The
+# negative half stops a denied user re-hitting the API on every tap; the positive half
+# stops an entitled user doing so while the webhook is still in flight. Evicted the
+# moment a webhook writes anything for that user, so a fresh purchase is never masked.
+_FALLBACK_CACHE_TTL_SECONDS = 60
+_fallback_cache: dict = {}   # user_id -> (monotonic_stamp, bool)
+
+# Adoption telemetry for rollout step 3 ("flip once adoption looks reasonable").
+# Logged to Render's stream only — never exposed on /config/, which is public and
+# unauthenticated. In-process and per-instance, reset by every deploy: the question is
+# a ratio, not a total, so that costs nothing and needs no schema.
+_marked_requests = 0
+_unmarked_requests = 0
+_client_mix_logged_at = 0.0
+_CLIENT_MIX_LOG_INTERVAL_SECONDS = 60
+
+
+class PremiumRequired(Exception):
+    """403 carrying a machine-readable code the app branches on.
+
+    Every other error in this file is `{"detail": "<sentence>"}` and stays that way —
+    screens pass `detail` straight to Alert.alert, so making it an object would break
+    them. This adds a TOP-LEVEL `code` instead, which is the one thing the paywall path
+    needs: the client must tell "you need to subscribe" apart from any other 403 in
+    order to show a paywall rather than a generic "couldn't load this video"."""
+
+
+@app.exception_handler(PremiumRequired)
+def _premium_required_handler(request: Request, exc: PremiumRequired):
+    return JSONResponse(
+        status_code=403,
+        content={
+            "code": "premium_required",
+            "detail": "This series is part of DollarSeeds Premium.",
+        },
+    )
+
+
+class _EntitlementLookupUnavailable(Exception):
+    """RevenueCat could not be reached inside the timeout. Distinct from "they said no"
+    so the caller can choose its own failure posture."""
+
+
+def _client_features(x_client_features: Optional[str] = Header(default=None)) -> set:
+    """Which capabilities the calling BUILD supports. No header = the shipped binary,
+    which supports none of them."""
+    global _marked_requests, _unmarked_requests
+    if x_client_features:
+        _marked_requests += 1
+        features = {f.strip().lower() for f in x_client_features.split(",") if f.strip()}
+    else:
+        _unmarked_requests += 1
+        features = set()
+    _log_client_mix()
+    return features
+
+
+def _log_client_mix() -> None:
+    global _client_mix_logged_at
+    now = time.monotonic()
+    if now - _client_mix_logged_at < _CLIENT_MIX_LOG_INTERVAL_SECONDS:
+        return
+    _client_mix_logged_at = now
+    total = _marked_requests + _unmarked_requests
+    if total:
+        pct = 100.0 * _marked_requests / total
+        print(f"client-mix: {_marked_requests}/{total} lesson requests on v2+ ({pct:.1f}%)")
+
+
+def _app_config() -> dict:
+    """Server-side flags, cached for a minute.
+
+    A table rather than env vars so the kill switch is one UPDATE in the Supabase
+    dashboard: no Render redeploy, and — the point — the lever still works when a bad
+    deploy is what broke things.
+
+    FAILS OPEN. A read that throws yields premium_enabled=false, i.e. exactly today's
+    behaviour, matching the app's own "never trap the user behind a gate" rule. The
+    failure is not cached, so the next request retries."""
+    global _app_config_cache
+    now = time.monotonic()
+    if _app_config_cache and now - _app_config_cache[0] < _APP_CONFIG_TTL_SECONDS:
+        return _app_config_cache[1]
+
+    values = dict(APP_CONFIG_DEFAULTS)
+    try:
+        rows = supabase.table("app_config").select("key, value").execute().data
+    except Exception as e:
+        print(f"app_config read failed; falling back to defaults (premium off): {e}")
+        return values
+    for row in rows:
+        if row.get("key") in values and row.get("value") is not None:
+            values[row["key"]] = str(row["value"])
+
+    _app_config_cache = (now, values)
+    return values
+
+
+def _premium_enabled() -> bool:
+    return _app_config().get("premium_enabled", "false").strip().lower() == "true"
+
+
+def _parse_ts(value) -> Optional[datetime.datetime]:
+    """Postgres timestamptz -> aware datetime. None for anything unparseable, which
+    every caller reads as "no access" rather than guessing."""
+    if not value:
+        return None
+    if isinstance(value, datetime.datetime):
+        return value if value.tzinfo else value.replace(tzinfo=datetime.timezone.utc)
+    try:
+        parsed = datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=datetime.timezone.utc)
+
+
+def _ms_to_iso(ms) -> Optional[str]:
+    """RevenueCat sends epoch milliseconds; Postgres wants a timestamptz string."""
+    if ms in (None, ""):
+        return None
+    try:
+        return datetime.datetime.fromtimestamp(
+            int(ms) / 1000, datetime.timezone.utc
+        ).isoformat()
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _has_premium(user_id: str) -> bool:
+    """Is this user entitled RIGHT NOW, according to our own table?
+
+    Deliberately NOT driven by `status`. RevenueCat delivers a refund as a CANCELLATION,
+    and a cancellation that merely turns auto-renew off must NOT revoke access — the
+    user paid for the period. Deriving access from a status string collapses those two
+    into one field and necessarily gets one of them wrong. `expires_at` is the single
+    quantity that is right in both cases, because RevenueCat moves it: forward when
+    Apple extends a grace period, back to the refund moment when money is returned.
+
+        entitled  <=>  expires_at > now()  AND  revoked_at IS NULL
+
+    `status`, `auto_renew` and `cancelled_at` are descriptive only — support and the
+    paywall's "Current: ..." line read them; access never does.
+
+    Compared in Python, not SQL, matching the house style (totals are summed in Python
+    after fetching rows). A user has one or two rows; there is nothing to push down."""
+    try:
+        rows = supabase.table("subscriptions") \
+            .select("expires_at, revoked_at").eq("user_id", user_id).execute().data
+    except Exception as e:
+        print(f"entitlement read failed for {user_id}: {e}")
+        return False
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for row in rows:
+        if row.get("revoked_at"):
+            continue
+        expires = _parse_ts(row.get("expires_at"))
+        if expires and expires > now:
+            return True
+    return False
+
+
+def _entitlement_via_revenuecat(user_id: str) -> bool:
+    """Ask RevenueCat directly after a miss against our own table.
+
+    Without this, a misconfigured webhook is an invisible total outage: no paying user
+    has access and there is no way to backfill. It also closes the purchase->playback
+    race, where StoreKit has already succeeded but the webhook has not landed.
+
+    Runs ONLY after a local miss, which is what makes the cache safe: a user whose
+    webhook has since arrived is served from the table and never consults it.
+
+    Raises _EntitlementLookupUnavailable on timeout/upstream error — the caller picks
+    the failure posture, because a gate and a status read want different ones."""
+    if not REVENUECAT_API_KEY:
+        return False
+
+    cached = _fallback_cache.get(user_id)
+    if cached and time.monotonic() - cached[0] < _FALLBACK_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    try:
+        res = httpx.get(
+            f"{REVENUECAT_API_URL}/{user_id}",
+            headers={"Authorization": f"Bearer {REVENUECAT_API_KEY}"},
+            timeout=REVENUECAT_TIMEOUT_SECONDS,
+        )
+        res.raise_for_status()
+        body = res.json()
+    except Exception as e:
+        print(f"RevenueCat lookup failed for {user_id}: {e}")
+        raise _EntitlementLookupUnavailable() from e
+
+    entitlement = ((body.get("subscriber") or {}).get("entitlements") or {}) \
+        .get(PREMIUM_ENTITLEMENT_ID) or {}
+    expires = _parse_ts(entitlement.get("expires_date"))
+    active = bool(expires and expires > datetime.datetime.now(datetime.timezone.utc))
+
+    # Deliberately no write-through. The subscriber REST payload has a different shape
+    # from a webhook event, and parsing it into a row would mean a second, rarely
+    # exercised writer for the same table. The cache bounds the API calls instead, and
+    # the webhook remains the ONLY writer.
+    _fallback_cache[user_id] = (time.monotonic(), active)
+    return active
+
+
+def _is_entitled(user_id: str) -> bool:
+    """Local table first, RevenueCat only on a miss."""
+    if _has_premium(user_id):
+        return True
+    return _entitlement_via_revenuecat(user_id)
+
+
+def _series_is_premium(series_id: Optional[str]) -> bool:
+    """FAILS OPEN: an absent series_id, a missing row, or a read error all mean "not
+    premium". Locking a paying user out over a lookup blip is worse than serving one
+    video we meant to gate."""
+    if not series_id:
+        return False
+    try:
+        rows = supabase.table("lesson_series").select("is_premium") \
+            .eq("id", series_id).execute().data
+    except Exception as e:
+        print(f"is_premium lookup failed for series {series_id}: {e}")
+        return False
+    return bool(rows and rows[0].get("is_premium", False))
+
+
 # ─── Video lesson series ──────────────────────────────────────────────────────
 # Cloud-hosted VIDEO series (distinct from the written lessons, which live entirely
 # in the frontend constant `constants/lessons.ts` + local AsyncStorage). Data model:
@@ -1383,12 +1664,25 @@ class PlaybackResponse(BaseModel):
 
 
 @app.get("/lessons/series/")
-def list_lesson_series(user_id: str = Depends(get_current_user_id)):
+def list_lesson_series(features: set = Depends(_client_features),
+                       user_id: str = Depends(get_current_user_id)):
     """Published video series for the Lessons page, ordered by sort_order. Each carries
-    a DERIVED lesson_count (never stored, so it can't drift). No video paths are exposed."""
+    a DERIVED lesson_count (never stored, so it can't drift). No video paths are exposed.
+
+    Premium series are hidden OUTRIGHT from clients that don't advertise the `premium`
+    feature. That is not a business rule and is not behind the kill switch — a build
+    with no paywall and no purchase path can only render a locked card as a dead end,
+    and hiding it costs no revenue because that build cannot transact anyway."""
+    supports_premium = PREMIUM_FEATURE in features
+
     series = supabase.table("lesson_series") \
-        .select("id, title, description, creator, thumbnail_url") \
+        .select("id, title, description, creator, thumbnail_url, is_premium") \
         .eq("is_published", True).order("sort_order").execute().data
+
+    if not supports_premium:
+        # Filter BEFORE deriving counts, so lesson_count and ordering for the series an
+        # old binary DOES see are bit-for-bit what it receives today.
+        series = [s for s in series if not s.get("is_premium", False)]
 
     # Derive lesson_count with a single COUNT-style query over the published series' ids.
     counts: dict[str, int] = {}
@@ -1398,8 +1692,9 @@ def list_lesson_series(user_id: str = Depends(get_current_user_id)):
         for r in rows:
             counts[r["series_id"]] = counts.get(r["series_id"], 0) + 1
 
-    data = [
-        {
+    data = []
+    for s in series:
+        item = {
             "id": s["id"],
             "title": s["title"],
             "description": s.get("description"),
@@ -1407,53 +1702,86 @@ def list_lesson_series(user_id: str = Depends(get_current_user_id)):
             "thumbnail_url": s.get("thumbnail_url"),
             "lesson_count": counts.get(s["id"], 0),
         }
-        for s in series
-    ]
+        if supports_premium:
+            # Only marked clients get the extra key, so the unmarked response stays
+            # byte-identical. They need it to draw the lock badge BEFORE the tap: the
+            # 403 from /playback/ is the enforcement backstop, not the UX trigger.
+            item["is_premium"] = bool(s.get("is_premium", False))
+        data.append(item)
     return {"data": data}
 
 
 @app.get("/lessons/series/{series_id}/")
-def get_lesson_series(series_id: str, user_id: str = Depends(get_current_user_id)):
+def get_lesson_series(series_id: str,
+                      features: set = Depends(_client_features),
+                      user_id: str = Depends(get_current_user_id)):
     """A single published series plus its lessons ordered by sort_order. Returns only the
-    metadata the playlist screen needs — NEVER raw video paths/URLs (see /playback/)."""
+    metadata the playlist screen needs — NEVER raw video paths/URLs (see /playback/).
+
+    Deliberately NOT marker-filtered: an old binary cannot reach a premium series id,
+    because it never appears in its list, and nothing here exposes a video path. Marked
+    clients additionally get `is_premium` so the playlist can lock rows before the tap."""
     s = supabase.table("lesson_series") \
-        .select("id, title, description, creator, thumbnail_url, is_published") \
+        .select("id, title, description, creator, thumbnail_url, is_published, is_premium") \
         .eq("id", series_id).execute().data
     if not s or not s[0].get("is_published"):
         raise HTTPException(status_code=404, detail="Series not found.")
     series = s[0]
 
+    # DO NOT add columns to this select. Unlike the series fields below, these rows are
+    # passed to the client verbatim, so anything selected here lands on the wire — and
+    # this is the only line in the file where that can leak a new field to old binaries.
     lessons = supabase.table("lessons") \
         .select("id, title, description, duration_seconds, thumbnail_url, sort_order") \
         .eq("series_id", series_id).order("sort_order").execute().data
 
-    return {
-        "data": {
-            "id": series["id"],
-            "title": series["title"],
-            "description": series.get("description"),
-            "creator": series.get("creator"),
-            "thumbnail_url": series.get("thumbnail_url"),
-            "lessons": lessons,
-        }
+    data = {
+        "id": series["id"],
+        "title": series["title"],
+        "description": series.get("description"),
+        "creator": series.get("creator"),
+        "thumbnail_url": series.get("thumbnail_url"),
+        "lessons": lessons,
     }
+    if PREMIUM_FEATURE in features:
+        data["is_premium"] = bool(series.get("is_premium", False))
+    return {"data": data}
 
 
 @app.get("/lessons/{lesson_id}/playback/")
-def get_lesson_playback(lesson_id: str, user_id: str = Depends(get_current_user_id)):
+def get_lesson_playback(lesson_id: str,
+                        features: set = Depends(_client_features),
+                        user_id: str = Depends(get_current_user_id)):
     """Mint a SHORT-LIVED signed URL to stream one lesson's video. The private
     `lesson-videos` bucket is never public, so this is the only way the app gets a
     (temporary, expiring) URL. Returns { url, expires_in }."""
     row = supabase.table("lessons") \
-        .select("id, video_provider, video_id").eq("id", lesson_id).execute().data
+        .select("id, series_id, video_provider, video_id").eq("id", lesson_id).execute().data
     if not row:
         raise HTTPException(status_code=404, detail="Lesson not found.")
     lesson = row[0]
 
-    # ── FUTURE: subscription / is_premium gate ──────────────────────────────────
-    # When the paid tier ships, look up the lesson's series.is_premium here and, if
-    # premium, verify the requesting user's subscription before minting a URL
-    # (raise 402/403 otherwise). Intentionally NOT gated yet — all content is open.
+    # ── Premium gate ────────────────────────────────────────────────────────────
+    # THE ORDER OF THESE CONDITIONS IS THE BACKWARD-COMPATIBILITY GUARANTEE. Python
+    # short-circuits `and`, so an unmarked request leaves this line having issued not
+    # one extra query — no app_config read, no lesson_series lookup, no subscriptions
+    # scan. Anything hoisted above the marker check breaks a live app that cannot be
+    # rolled back. Three tests seed a lesson whose series_id has no lesson_series row
+    # precisely so that a hoist shows up as an IndexError instead of shipping.
+    if (PREMIUM_FEATURE in features
+            and _premium_enabled()
+            and _series_is_premium(lesson.get("series_id"))):
+        try:
+            entitled = _is_entitled(user_id)
+        except _EntitlementLookupUnavailable:
+            # FAIL CLOSED — but to a 403, never a 500. A 403 renders the paywall, which
+            # the user can act on; a 500 renders "Couldn't load this video", a dead end.
+            # A deliberate local exception to the fail-open posture everywhere else: it
+            # cannot touch old binaries (they never reach this line), and a marked
+            # client here has already missed against our own table.
+            entitled = False
+        if not entitled:
+            raise PremiumRequired()
 
     provider = lesson.get("video_provider") or "supabase"
     if provider != "supabase":
@@ -1467,3 +1795,320 @@ def get_lesson_playback(lesson_id: str, user_id: str = Depends(get_current_user_
     if not url:
         raise HTTPException(status_code=500, detail="Could not sign video URL.")
     return {"url": url, "expires_in": SIGNED_URL_TTL_SECONDS}
+
+
+# ─── Premium subscriptions: routes ────────────────────────────────────────────
+
+@app.get("/config/")
+def get_client_config():
+    """PUBLIC client bootstrap: the premium kill switch and the force-update floor.
+
+    No bearer token, deliberately — the force-update gate has to work before sign-in,
+    and none of these three values is user-specific or sensitive. It is in the `public`
+    set of tests/test_auth_security.py for that reason.
+
+    The CLIENT MUST FAIL OPEN if this is unreachable: behave as unrestricted rather than
+    bricking. The adoption counters go to the Render log, never into this response."""
+    cfg = _app_config()
+    return {
+        "premium_enabled": cfg.get("premium_enabled", "false").strip().lower() == "true",
+        "min_supported_version": cfg.get("min_supported_version", "0.0.0"),
+        "update_url": cfg.get("update_url", ""),
+    }
+
+
+@app.get("/me/entitlements/")
+def get_my_entitlements(user_id: str = Depends(get_current_user_id)):
+    """The CALLER'S OWN subscription state. Server-side truth: the client never asserts
+    its entitlement to us, it asks.
+
+    Returns more than premium_active/expires_at because the paywall has to say
+    "Current: Intermediate Monthly" and, after a crossgrade, "your new tier starts on
+    <expires_at>". Safe to be generous — this route is new, so it has no old clients.
+
+    product_id is REPORTING ONLY. Every tier grants the same entitlement; nothing
+    downstream may branch on it."""
+    try:
+        rows = supabase.table("subscriptions").select(
+            "store, product_id, pending_product_id, expires_at, revoked_at, auto_renew, status"
+        ).eq("user_id", user_id).execute().data
+    except Exception as e:
+        print(f"entitlements read failed for {user_id}: {e}")
+        rows = []
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    live = []
+    for row in rows:
+        if row.get("revoked_at"):
+            continue
+        expires = _parse_ts(row.get("expires_at"))
+        if expires and expires > now:
+            live.append((expires, row))
+
+    if live:
+        # Furthest-out subscription wins — a user holding both an App Store and a Play
+        # Store row (rare, but possible) should see the one that actually governs access.
+        _, row = max(live, key=lambda pair: pair[0])
+        return {
+            "premium_active": True,
+            "expires_at": row.get("expires_at"),
+            "product_id": row.get("product_id"),
+            "pending_product_id": row.get("pending_product_id"),
+            "store": row.get("store"),
+            "auto_renew": bool(row.get("auto_renew", True)),
+        }
+
+    # No live local row. Ask RevenueCat before answering no: the webhook may simply not
+    # have landed yet. This is a status read rather than a gate, so an unreachable
+    # RevenueCat answers "false" instead of failing closed the way /playback/ does.
+    try:
+        fallback_active = _entitlement_via_revenuecat(user_id)
+    except _EntitlementLookupUnavailable:
+        fallback_active = False
+
+    return {
+        "premium_active": fallback_active,
+        "expires_at": None,
+        "product_id": None,
+        "pending_product_id": None,
+        "store": None,
+        "auto_renew": False,
+    }
+
+
+# Events that grant or restore access. All of them do the same thing: trust
+# expiration_at_ms. That is the whole point of driving entitlement off expires_at.
+_GRANTING_EVENTS = {
+    "INITIAL_PURCHASE", "RENEWAL", "UNCANCELLATION", "SUBSCRIPTION_EXTENDED",
+    "REFUND_REVERSED", "NON_RENEWING_PURCHASE", "TEMPORARY_ENTITLEMENT_GRANT",
+}
+
+
+def _is_unique_violation(exc: Exception) -> bool:
+    code = getattr(exc, "code", None)
+    text = str(exc).lower()
+    return code == "23505" or "23505" in text or "duplicate key value" in text
+
+
+def _as_uuid(value) -> Optional[str]:
+    """RevenueCat App User IDs are Supabase user ids because the app calls
+    Purchases.logIn(user.id) at sign-in. Anything that isn't a UUID — most often an
+    anonymous "$RCAnonymousID:..." from a client that never logged in — has no
+    DollarSeeds user to credit."""
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _apply_subscription_patch(identity: dict, user_id: str, patch: dict,
+                              event_id: str, event_at: Optional[str]) -> bool:
+    """Write one event's effect. Idempotent, monotonic and race-free.
+
+    The conditional UPDATE is the entire mechanism: `where <identity> and
+    (last_event_at is null or last_event_at < :event_at)`. A duplicate delivery (same
+    timestamp) and a stale out-of-order delivery (older timestamp) both match ZERO rows,
+    atomically. That matters because FastAPI runs these handlers in a threadpool and
+    Render runs several workers, so a read-compare-write in Python would let a stale
+    event win a race and, say, expire a subscription that had just renewed.
+
+    Returns True if the row was written, False if the event was deliberately dropped."""
+    body = dict(patch)
+    body["last_event_id"] = event_id
+    body["last_event_at"] = event_at
+    body["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    def _conditional_update():
+        q = supabase.table("subscriptions").update(body)
+        for col, val in identity.items():
+            q = q.eq(col, val)
+        if event_at:
+            q = q.or_(f"last_event_at.is.null,last_event_at.lt.{event_at}")
+        return q.execute().data
+
+    if _conditional_update():
+        _fallback_cache.pop(user_id, None)
+        return True
+
+    # Zero rows updated: either no row exists yet, or this event is stale.
+    q = supabase.table("subscriptions").select("id")
+    for col, val in identity.items():
+        q = q.eq(col, val)
+    if q.execute().data:
+        return False   # stale — correctly dropped
+
+    try:
+        supabase.table("subscriptions").insert(
+            {**identity, "user_id": user_id, **body}
+        ).execute()
+    except Exception as e:
+        if not _is_unique_violation(e):
+            raise
+        # Lost an insert race with a concurrent worker. The row exists now, so replay
+        # the same conditional update against it — still monotonic, still idempotent.
+        _conditional_update()
+    _fallback_cache.pop(user_id, None)
+    return True
+
+
+@app.post("/webhooks/revenuecat")
+def revenuecat_webhook(payload: dict, authorization: Optional[str] = Header(default=None)):
+    """The ONLY writer of `subscriptions`.
+
+    NO TRAILING SLASH, unlike the rest of this file: with redirect_slashes on, the
+    slashed form would 307 and we would be betting that RevenueCat re-POSTs to the
+    redirect target. The URL configured in their dashboard must match this exactly.
+
+    Sync `def`, like every other handler here, and that is load-bearing: the supabase
+    client is blocking, so an `async def` would block the event loop on every DB call.
+    Taking the body as a dict rather than a Request is what keeps it sync."""
+    # ── Authorization ───────────────────────────────────────────────────────────
+    # RevenueCat does NOT sign the body. The Authorization header value configured in
+    # their dashboard is the ENTIRE security boundary — do not add anything named
+    # "verify_signature" here later, because there is no signature to verify.
+    #
+    # This must NEVER adopt the JWT_SECRET idiom above (unset -> that path is skipped).
+    # An unset secret here would compare "" against "" and accept anonymous writes to
+    # the entitlement table over a service-role connection. Unset means refuse everything.
+    if not REVENUECAT_WEBHOOK_AUTH:
+        raise HTTPException(status_code=503, detail="Webhook receiver is not configured.")
+    if not hmac.compare_digest(
+        (authorization or "").encode("utf-8"),
+        REVENUECAT_WEBHOOK_AUTH.encode("utf-8"),
+    ):
+        raise HTTPException(status_code=401, detail="Invalid webhook credentials.")
+
+    event = (payload or {}).get("event") or {}
+    event_id = event.get("id")
+    event_type = (event.get("type") or "").upper()
+
+    # FROM HERE ON, ALMOST EVERYTHING RETURNS 200. A 4xx/5xx makes RevenueCat retry for
+    # 72 hours and then alert a human — right for a transient DB fault, wrong for "we
+    # looked at this and deliberately ignored it". Only genuine transient failures raise.
+    if not event_id:
+        print(f"revenuecat webhook: event with no id ({event_type or 'no type'}), ignoring")
+        return {"received": True, "applied": False, "reason": "missing_event_id"}
+
+    app_user_id = event.get("app_user_id") or event.get("original_app_user_id")
+    store_txn_id = (event.get("original_transaction_id")
+                    or event.get("transaction_id")
+                    or event.get("original_app_user_id"))
+
+    # Audit log first, but NOT load-bearing: PostgREST gives no cross-table transaction,
+    # so a duplicate here never short-circuits the state write. Idempotency lives in the
+    # conditional update instead, which means replaying a logged-but-unapplied event is
+    # safe — and a crash between the two writes loses nothing.
+    duplicate = False
+    try:
+        supabase.table("subscription_events").insert({
+            "event_id": event_id,
+            "event_type": event_type,
+            "app_user_id": app_user_id,
+            "store_txn_id": store_txn_id,
+            "payload": payload,
+        }).execute()
+    except Exception as e:
+        duplicate = _is_unique_violation(e)
+        if not duplicate:
+            print(f"revenuecat webhook: audit write failed for {event_id}: {e}")
+
+    user_id = _as_uuid(app_user_id)
+    if user_id is None:
+        print(f"revenuecat webhook: {event_type} for non-user {app_user_id!r}, ignoring")
+        return {"received": True, "applied": False, "reason": "unknown_user"}
+
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    event_at = _ms_to_iso(event.get("event_timestamp_ms"))
+    expires_at = _ms_to_iso(event.get("expiration_at_ms"))
+
+    if event_type in _GRANTING_EVENTS:
+        patch = {
+            "expires_at": expires_at,
+            "revoked_at": None,
+            "auto_renew": True,
+            "cancelled_at": None,
+            "status": "active",
+        }
+        if event.get("product_id"):
+            # A renewal is the ONLY thing that promotes a pending crossgrade: the
+            # event's own product_id is by definition the one now in force, so taking
+            # it verbatim is self-correcting even if we mis-recorded the pending value.
+            patch["product_id"] = event["product_id"]
+            patch["pending_product_id"] = None
+
+    elif event_type == "CANCELLATION":
+        # Cancelling is NOT losing access — the user paid for the period and keeps it
+        # until expires_at. Only a refund revokes immediately, and RevenueCat delivers
+        # that as a CANCELLATION too, distinguished solely by cancel_reason.
+        #
+        # CUSTOMER_SUPPORT only. UNKNOWN is Apple declining to give a reason, and
+        # treating it as a refund would cut off paying users who merely turned off
+        # auto-renew. A genuine refund also self-corrects: the EXPIRATION that follows
+        # carries expiration_at_ms at the refund moment, and expires_at is what governs.
+        patch = {"auto_renew": False, "cancelled_at": now_iso, "status": "cancelled"}
+        if (event.get("cancel_reason") or "").upper() == "CUSTOMER_SUPPORT":
+            patch["revoked_at"] = now_iso
+            patch["status"] = "refunded"
+        if expires_at:
+            patch["expires_at"] = expires_at
+
+    elif event_type == "EXPIRATION":
+        patch = {"expires_at": expires_at or now_iso, "status": "expired",
+                 "pending_product_id": None}
+
+    elif event_type == "BILLING_ISSUE":
+        # Access is untouched: Apple retries for ~16 days and extends expires_at while
+        # it does, and that extension arrives as its own event.
+        patch = {"status": "in_grace_period"}
+        if expires_at:
+            patch["expires_at"] = expires_at
+
+    elif event_type == "PRODUCT_CHANGE":
+        # PENDING, not applied. Every product sits at Level 1 in one subscription group,
+        # so every switch is a crossgrade that takes effect at the NEXT RENEWAL — never
+        # prorated, never immediate. product_id therefore must not move here, and
+        # entitlement must not wobble. A change naming the current product means the
+        # user reverted a pending switch, so clear it.
+        new_product = event.get("new_product_id")
+        patch = {"pending_product_id":
+                 None if (not new_product or new_product == event.get("product_id"))
+                 else new_product}
+
+    elif event_type == "SUBSCRIPTION_PAUSED":
+        # Play Store only. Without this a paused Android user keeps access to the old
+        # expires_at.
+        patch = {"revoked_at": now_iso, "status": "paused"}
+
+    elif event_type == "TRANSFER":
+        # The entitlement moved to a different App User ID — the delete-account-then-
+        # re-signup and shared-Apple-ID paths. The identity key is (store, environment,
+        # store_txn_id) and excludes user_id precisely so the row can be re-pointed
+        # rather than duplicated into a unique-constraint violation.
+        patch = {"user_id": user_id}
+
+    else:
+        # TEST, PAYWALL_*, EXPERIMENT_ENROLLMENT, VIRTUAL_CURRENCY_TRANSACTION,
+        # SUBSCRIBER_ALIAS, and anything RevenueCat adds later. Logged, acknowledged,
+        # never a 500.
+        return {"received": True, "applied": False, "reason": "ignored_event_type",
+                "duplicate": duplicate}
+
+    if not store_txn_id:
+        print(f"revenuecat webhook: {event_type} with no transaction identity, ignoring")
+        return {"received": True, "applied": False, "reason": "no_transaction_identity"}
+
+    identity = {
+        "store": (event.get("store") or "APP_STORE").strip().lower(),
+        "environment": (event.get("environment") or "PRODUCTION").strip().lower(),
+        "store_txn_id": str(store_txn_id),
+    }
+
+    try:
+        applied = _apply_subscription_patch(identity, user_id, patch, event_id, event_at)
+    except Exception as e:
+        # A genuine transient fault IS worth a retry, so this one does raise.
+        print(f"revenuecat webhook: applying {event_type} {event_id} failed: {e}")
+        raise HTTPException(status_code=503, detail="Could not record the event.")
+
+    return {"received": True, "applied": applied, "duplicate": duplicate,
+            **({} if applied else {"reason": "stale_event"})}

@@ -70,3 +70,36 @@ All colors and theme tokens come from `useTheme()` — **never hardcode colors**
 | [.claude/docs/data_model.md](.claude/docs/data_model.md) | When touching DB queries, Supabase tables, or budget calculation logic |
 | [.claude/docs/design_system.md](.claude/docs/design_system.md) | When building UI — color tokens, Button variants, dark mode, SVG setup |
 | [.claude/docs/lessons_page.md](.claude/docs/lessons_page.md) | When touching the Lessons tab — written vs video content, series/lessons schema, storage buckets, backend routes |
+
+## Important - DB Changes
+
+The app is live with active users, and the frontend ships as **app-store builds** — old binaries stay installed on people's phones indefinitely and cannot be force-updated. "Don't break the current build" is therefore not enough: every DB and API change must also keep working for the app versions already in the wild.
+
+### Expand → contract (never skip to contract)
+
+Any change that adds, removes, renames, or reshapes a field is split across **two releases**:
+
+1. **Expand — this release.** Add the new form *alongside* the old. Both are written and both are served. Old apps keep reading the old field; new apps read the new one.
+2. **Contract — a later release.** Once the new version is out, adopted, and confirmed working, remove the old field.
+
+Never do both in one release, even when every frontend call site has been updated — those updated call sites only exist on phones that took the update.
+
+### Database rules
+
+- **Additive only.** No `DROP TABLE` / `DROP COLUMN`, no renames, no type narrowing, no tightening a `CHECK` against existing rows, no `NOT NULL` without a default on a populated table.
+- New columns are **nullable** and added with `add column if not exists`, with a documented fallback for pre-migration rows.
+- Widening a `CHECK` (allowing a new value) is safe; narrowing one is a contract step.
+- To rename or reshape: add the new column, dual-write both, backfill, and only drop the old one at the contract step.
+- Every change is a numbered file in [backend/migrations/](backend/migrations/), following the format of [0004_goal_completion_snapshot.sql](backend/migrations/0004_goal_completion_snapshot.sql) — a header comment stating why, what old rows fall back to, and an `Applied to project … on <date>` line.
+- **Claude writes migrations; the user applies them** via the Supabase dashboard. Never run schema DDL against production directly.
+
+### API rules
+
+- Never remove, rename, or retype a response field in the same release that adds its replacement — serve **both** keys until the contract step.
+- New request fields must be **optional with a server-side default**, so old clients that omit them still succeed.
+- Never make an existing endpoint stricter (new required param, tighter validation) — old clients will start failing.
+- Behaviour old clients can't opt into belongs on a **new endpoint or a new optional field**, never in a repurposed existing one.
+
+### Branching
+
+Never commit to `main`. If the prompt specifies no branch, create a new `change-X-branch`, where X is the next unused number.

@@ -11,3 +11,8 @@ supabase
 # key is ECC P-256, so access tokens are ES256, and PyJWT cannot verify an asymmetric
 # signature without `cryptography`. Plain `PyJWT` would 401 every request in prod.
 PyJWT[crypto]
+# Server-to-server calls to RevenueCat (main._entitlement_via_revenuecat), which are
+# what stop a misconfigured webhook from becoming an invisible total outage — no paying
+# user with access and no way to backfill. Arrives transitively via supabase/starlette
+# today; declared directly because we now import it ourselves.
+httpx
