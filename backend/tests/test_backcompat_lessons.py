@@ -50,8 +50,12 @@ def shape_of(value):
 
 @pytest.fixture
 def live_content(supabase_db):
-    """The two series production actually serves, plus a premium one that must be
-    invisible to an old binary."""
+    """Production's one published series — "The Truth on Generosity", 4 lessons, every
+    field populated — mirrored field-for-field against goldens/, plus a premium series
+    that must be invisible to an old binary.
+
+    Kept deliberately faithful to the capture: if production's content changes, this
+    fixture and the goldens are re-derived together (goldens/README.md)."""
     supabase_db.seed("lesson_series", {
         "id": "s-generosity", "title": "The Truth on Generosity",
         "description": "A series on generosity.", "creator": "Igor",
@@ -59,28 +63,20 @@ def live_content(supabase_db):
         "is_published": True, "is_premium": False, "sort_order": 0,
     })
     supabase_db.seed("lesson_series", {
-        "id": "s-rethinking", "title": "Rethinking Finances Through a Godly Lens",
-        "description": "A test series.", "creator": "DollarSeeds",
-        "thumbnail_url": "https://img/rethink.png",
-        "is_published": True, "is_premium": False, "sort_order": 1,
-    })
-    supabase_db.seed("lesson_series", {
         "id": "s-premium", "title": "Premium Series",
         "description": "Paid.", "creator": "DollarSeeds",
         "thumbnail_url": "https://img/prem.png",
-        "is_published": True, "is_premium": True, "sort_order": 2,
+        "is_published": True, "is_premium": True, "sort_order": 1,
     })
     for i in range(4):
         supabase_db.seed("lessons", {
             "id": f"gen-{i}", "series_id": "s-generosity", "title": f"Generosity {i}",
+            "description": f"Lesson {i}.", "thumbnail_url": f"https://img/gen-{i}.png",
             "sort_order": i, "video_id": f"gen/{i}.mp4", "duration_seconds": 100 + i,
         })
     supabase_db.seed("lessons", {
-        "id": "rethink-0", "series_id": "s-rethinking", "title": "Rethinking 1",
-        "sort_order": 0, "video_id": "rethink/0.mp4", "duration_seconds": 300,
-    })
-    supabase_db.seed("lessons", {
         "id": "prem-0", "series_id": "s-premium", "title": "Premium 1",
+        "description": "Paid lesson.", "thumbnail_url": "https://img/prem-0.png",
         "sort_order": 0, "video_id": "prem/0.mp4", "duration_seconds": 500,
     })
     return supabase_db
@@ -95,12 +91,30 @@ def test_series_list_shape_is_unchanged(client, live_content):
 
 
 def test_series_detail_shape_is_unchanged(client, live_content):
-    # s-rethinking mirrors the series the production capture was taken from: one lesson,
-    # with a null description and null thumbnail_url. Those nulls are the point — real
-    # PostgREST emits the keys, and the fixture has to reproduce that to be a fair test.
-    res = client.get("/lessons/series/s-rethinking/", headers=OLD_BINARY)
+    res = client.get("/lessons/series/s-generosity/", headers=OLD_BINARY)
     assert res.status_code == 200
     assert shape_of(res.json()) == shape_of(golden("series_detail"))
+
+
+def test_an_empty_column_is_null_on_the_wire_not_a_missing_key(client, supabase_db):
+    """PostgREST returns a SELECTED but empty column as null; it does not drop the key.
+    The shipped app reads `lesson.description` directly, so the difference between null
+    and absent is the difference between a blank line and undefined.
+
+    This used to be covered incidentally, because the series the goldens were captured
+    from happened to have an empty description. It no longer does, so pin the invariant
+    explicitly rather than let the coverage vanish with a content edit — it is a
+    property of the API, not of whatever is published today."""
+    supabase_db.seed("lesson_series", {"id": "s-sparse", "title": "Sparse",
+                                       "is_published": True, "sort_order": 0})
+    supabase_db.seed("lessons", {"id": "sparse-0", "series_id": "s-sparse",
+                                 "title": "No description", "sort_order": 0,
+                                 "video_id": "sparse/0.mp4"})
+
+    lesson = client.get("/lessons/series/s-sparse/", headers=OLD_BINARY).json()["data"]["lessons"][0]
+    assert "description" in lesson and lesson["description"] is None
+    assert "thumbnail_url" in lesson and lesson["thumbnail_url"] is None
+    assert "duration_seconds" in lesson and lesson["duration_seconds"] is None
 
 
 def test_playback_shape_is_unchanged(client, live_content):
@@ -155,13 +169,23 @@ def test_detail_never_omits_the_lessons_key(client, supabase_db):
 def test_premium_series_is_absent_and_counts_survive(client, live_content):
     data = client.get("/lessons/series/", headers=OLD_BINARY).json()["data"]
 
-    assert [s["title"] for s in data] == [
-        "The Truth on Generosity", "Rethinking Finances Through a Godly Lens",
-    ]
+    assert [s["title"] for s in data] == ["The Truth on Generosity"]
     # Counts are derived AFTER filtering; a regression there shows up here.
-    assert [s["lesson_count"] for s in data] == [4, 1]
+    assert [s["lesson_count"] for s in data] == [4]
     # The new key is for marked clients only.
     assert all("is_premium" not in s for s in data)
+
+
+def test_ordering_survives_filtering_out_a_premium_series(client, live_content):
+    """A premium series removed from the middle must not disturb the sort_order of the
+    survivors — the filter runs in Python after the DB has ordered them."""
+    live_content.seed("lesson_series", {
+        "id": "s-later", "title": "Later Free Series", "description": "d",
+        "creator": "DS", "thumbnail_url": "u",
+        "is_published": True, "is_premium": False, "sort_order": 2,
+    })
+    data = client.get("/lessons/series/", headers=OLD_BINARY).json()["data"]
+    assert [s["title"] for s in data] == ["The Truth on Generosity", "Later Free Series"]
 
 
 @pytest.mark.parametrize("flag_on", [False, True])

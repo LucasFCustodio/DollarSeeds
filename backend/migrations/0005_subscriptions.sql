@@ -97,9 +97,8 @@ on conflict (key) do nothing;
 -- New series must be premium unless deliberately made free. Content is inserted by
 -- hand in the dashboard (see 0001), so a default of FALSE means the first forgotten
 -- flag ships a paid series for free — and the never-retro-paywall rule makes that
--- permanent. Changing the DEFAULT rewrites no existing row: both currently published
--- series ("The Truth on Generosity" and "Rethinking Finances Through a Godly Lens")
--- keep is_premium = false and stay free forever.
+-- permanent. Changing the DEFAULT rewrites no existing row: the published series
+-- ("The Truth on Generosity") keeps is_premium = false and stays free forever.
 alter table public.lesson_series alter column is_premium set default true;
 
 -- Verify after applying:

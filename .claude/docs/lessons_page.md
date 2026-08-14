@@ -82,10 +82,10 @@ All in [backend/main.py](../../backend/main.py). None return raw video paths/URL
 
 ## Premium gating
 
-Video series can be paid; written lessons and everything else stay free. Both currently
-published series ("The Truth on Generosity" and "Rethinking Finances Through a Godly
-Lens") are `is_premium = false` **permanently** — no published series is ever
-retro-paywalled, because access given away cannot be taken back.
+Video series can be paid; written lessons and everything else stay free. The one
+currently published series, **"The Truth on Generosity"**, is `is_premium = false`
+**permanently** — no published series is ever retro-paywalled, because access given away
+cannot be taken back.
 
 **Clients are told apart by the `X-Client-Features: premium` header**, attached once in
 the app's axios request interceptor. Requests without it come from a binary already in

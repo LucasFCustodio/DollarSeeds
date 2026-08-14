@@ -1,18 +1,42 @@
 {
   "data": {
-    "id": "64f33aa6-9348-4cee-8c69-28527af23b48",
-    "title": "Rethinking Finances Through a Godly Lens",
-    "description": "Lucas Custodio, founder of DollarSeeds, explains his design philosophy behind DollarSeeds, and why The Biblical Perspective was so significant",
-    "creator": "Lucas Custodio",
-    "thumbnail_url": "https://vbvsblpyeylnemrecyqv.supabase.co/storage/v1/object/public/lesson-thumbnails/dollar-seeds-logo.png",
+    "id": "37bbd484-6cc8-4938-864a-67f7f0e0d516",
+    "title": "The Truth on Generosity",
+    "description": "Get to know more about Igor Barroso, a professional trader. In this series, he talks about how he was able to rise in his professional career, the day when he gave his life to Christ, how he is able to have a generous heart, and some of the strategies he used to begin in working as a professional trader.",
+    "creator": "Igor Barroso",
+    "thumbnail_url": "https://vbvsblpyeylnemrecyqv.supabase.co/storage/v1/object/public/lesson-thumbnails/igor-thumbnail-full-cream.png",
     "lessons": [
       {
-        "id": "844072b0-d03c-46af-adea-661b0f59f76e",
-        "title": "Lesson 1 - Math vs Stewardship",
-        "description": null,
-        "duration_seconds": 41,
-        "thumbnail_url": null,
+        "id": "b4ad73a3-76b6-4f8f-8426-8479041601f9",
+        "title": "Lesson 1 - The Rise to Become a Trader",
+        "description": "Igor was not a trader at the very beginning of his career. His path to get to the place he is now has had a lot of ups and downs, triumphs, unexpected turns... In this lesson, Igor shares how he began his professional career, some of the different jobs he has had, and the amazing way that God made for him to become a trader. Throughout the story, you will also see how God has been directing his life from the very beginning, even when he did not know.",
+        "duration_seconds": 1723,
+        "thumbnail_url": "https://vbvsblpyeylnemrecyqv.supabase.co/storage/v1/object/public/lesson-thumbnails/episode-1-thumbnail.png",
         "sort_order": 0
+      },
+      {
+        "id": "561f30ad-9c0c-4ba0-b40e-ef2159184786",
+        "title": "Lesson 2 - How Igor Came to Christ",
+        "description": "Igor tells the story of how he had his true encounter with Jesus Christ. Throughout the story, he talks about the change that took place in his heart, some of the verses that he carries along with him from that day, and more.",
+        "duration_seconds": 650,
+        "thumbnail_url": "https://vbvsblpyeylnemrecyqv.supabase.co/storage/v1/object/public/lesson-thumbnails/episode-2-thumbnail.png",
+        "sort_order": 1
+      },
+      {
+        "id": "7c035442-21df-4ff4-8244-9a72a215aecf",
+        "title": "Lesson 3 - How to Have a Generous Heart",
+        "description": "Igor and Lucas discuss the principles behind having a generous heart, and talk about some of their personal experiences where being generous required courage and faith",
+        "duration_seconds": 1178,
+        "thumbnail_url": "https://vbvsblpyeylnemrecyqv.supabase.co/storage/v1/object/public/lesson-thumbnails/episode-3-thumbnail.png",
+        "sort_order": 2
+      },
+      {
+        "id": "eb582544-ac0b-4552-84f0-9b525112d076",
+        "title": "Lesson 4 - Is Trading for You?",
+        "description": "Igor shares a few helpful tips to help you understand if trading is the right area for you, and some of the things he believes you need to be a successful trader",
+        "duration_seconds": 391,
+        "thumbnail_url": "https://vbvsblpyeylnemrecyqv.supabase.co/storage/v1/object/public/lesson-thumbnails/episode-4-thumbnail.png",
+        "sort_order": 3
       }
     ]
   }
