@@ -32,7 +32,12 @@ export type AnalyticsEvent =
     | 'written_lesson_opened'
     | 'written_lesson_completed'
     | 'lesson_progress'
-    | 'lesson_video_completed';
+    | 'lesson_video_completed'
+    | 'paywall_viewed'
+    | 'paywall_dismissed'
+    | 'purchase_started'
+    | 'purchase_completed'
+    | 'restore_completed';
 
 /**
  * useAnalytics — a thin, typed wrapper over usePostHog(). One method per event so the
@@ -79,5 +84,17 @@ export function useAnalytics() {
         }) => capture('lesson_progress', p),
         lessonVideoCompleted: (p: { series_id: string; lesson_id: string }) =>
             capture('lesson_video_completed', p),
+
+        // ── Premium (product ids only — NEVER a price) ───────────────────────────
+        // RevenueCat's package and customerInfo objects carry `price`, `priceString`
+        // and currency. None of that may be forwarded: the no-financial-values rule at
+        // the top of this file covers subscription amounts exactly as it covers
+        // balances. `product_id` already identifies the tier, so the price adds
+        // nothing analytically that Supabase/RevenueCat cannot answer better.
+        paywallViewed: () => capture('paywall_viewed'),
+        paywallDismissed: () => capture('paywall_dismissed'),
+        purchaseStarted: (p: { product_id: string }) => capture('purchase_started', p),
+        purchaseCompleted: (p: { product_id: string }) => capture('purchase_completed', p),
+        restoreCompleted: () => capture('restore_completed'),
     };
 }

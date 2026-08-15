@@ -70,7 +70,13 @@ export interface AppTheme {
     success: string;  successSoft: string;
 
     // ── Accent ──────────────────────────────────────────────────
-    harvest: string;   // harvest yellow — health bar, jar fill
+    harvest: string;      // harvest yellow — health bar, jar fill, premium/giving accent
+    // `harvest` is the ONE accent that is identical in light and dark, so `ink` (which
+    // inverts) is unreadable on it — content sitting on solid harvest uses `brand`,
+    // the way the tithing icon tile in settings does. `harvestSoft` is the tinted
+    // surface for callouts, following needsSoft/wantsSoft/goalsSoft, and DOES take
+    // `ink` safely in both themes.
+    harvestSoft: string;
 
     // ── Legacy aliases (backward compat — keep for existing code) ──
     background: string;          // → bg
@@ -125,7 +131,7 @@ const LIGHT: AppTheme = {
     success: '#0F8C5C',  successSoft: '#E5F3EC',
 
     // Accent
-    harvest: '#F4D35E',
+    harvest: '#F4D35E',  harvestSoft: '#FCF2D4',
 
     // ── Legacy aliases ──────────────────────────────────────────
     background: '#F5F1E6',
@@ -180,7 +186,7 @@ const DARK: AppTheme = {
     success: '#34D399',  successSoft: '#0F2A20',
 
     // Accent
-    harvest: '#F4D35E',
+    harvest: '#F4D35E',  harvestSoft: '#2C2712',
 
     // ── Legacy aliases ──────────────────────────────────────────
     background: '#0A1612',

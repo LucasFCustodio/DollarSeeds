@@ -270,6 +270,24 @@ export const IconCheck = ({ size = 16, color = '#0F2820' }: { size?: number; col
     </Svg>
 );
 
+// Padlock — premium-locked series cards and lesson rows.
+export const IconLock = ({ size = 16, color = '#0F2820' }: { size?: number; color?: string }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path
+            d="M6 10.5h12v9H6z"
+            stroke={color}
+            strokeWidth={1.8}
+            strokeLinejoin="round"
+        />
+        <Path
+            d="M8.5 10.5V7.5a3.5 3.5 0 1 1 7 0v3"
+            stroke={color}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+        />
+    </Svg>
+);
+
 export const IconBell = ({ size = 20, color = '#0F2820' }: { size?: number; color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <Path

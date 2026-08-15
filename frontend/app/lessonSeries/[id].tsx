@@ -15,8 +15,9 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 
 import { useTheme } from '../../context/ThemeContext';
+import { useSubscription } from '../../context/SubscriptionContext';
 import { useAnalytics } from '../../lib/analytics';
-import { IconChevronLeft, IconChevronRight, IconScripture } from '../../components/icons';
+import { IconChevronLeft, IconChevronRight, IconLock } from '../../components/icons';
 
 const BASE = 'https://dollarseeds-1.onrender.com';
 
@@ -36,6 +37,8 @@ type SeriesDetail = {
     creator?: string | null;
     thumbnail_url?: string | null;
     lessons: SeriesLesson[];
+    // Sent only to builds advertising the premium capability.
+    is_premium?: boolean;
 };
 
 function formatDuration(seconds?: number | null): string | null {
@@ -50,6 +53,7 @@ export default function LessonSeriesScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { theme } = useTheme();
     const analytics = useAnalytics();
+    const { premiumActive, config, openPaywall } = useSubscription();
 
     const [detail, setDetail] = useState<SeriesDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -123,58 +127,99 @@ export default function LessonSeriesScreen() {
                         </Text>
                     )}
 
-                    {/* Lesson list */}
-                    <Text style={[styles.sectionEyebrow, { color: theme.ink3 }]}>
-                        {detail.lessons.length} {detail.lessons.length === 1 ? 'LESSON' : 'LESSONS'}
-                    </Text>
+                    {/* Lesson list. `lessons` is defaulted rather than accessed
+                        directly — the backend always sends the key, but an unguarded
+                        `.length` here is a hard crash rather than an empty state if
+                        that ever stops being true. */}
+                    {(() => {
+                        const lessons = detail.lessons ?? [];
+                        // Live config, not a boot-time snapshot: flipping the kill
+                        // switch off must clear these locks immediately.
+                        const locked = !!detail.is_premium && config.premiumEnabled && !premiumActive;
 
-                    <View style={styles.lessonList}>
-                        {detail.lessons.length === 0 ? (
-                            <Text style={[styles.stateText, { color: theme.ink3 }]}>
-                                No lessons in this series yet.
-                            </Text>
-                        ) : detail.lessons.map((lesson, index) => {
-                            const dur = formatDuration(lesson.duration_seconds);
-                            return (
-                                <Pressable
-                                    key={lesson.id}
-                                    onPress={() => {
-                                        analytics.lessonVideoClicked({
-                                            series_id: detail.id,
-                                            lesson_id: lesson.id,
-                                            title: lesson.title,
-                                        });
-                                        router.push({
-                                            pathname: '/lessonPlayer',
-                                            params: { seriesId: detail.id, lessonId: lesson.id },
-                                        } as any);
-                                    }}
-                                    style={({ pressed }) => [
-                                        styles.lessonRow,
-                                        { backgroundColor: theme.surface, borderColor: theme.ink },
-                                        pressed && { transform: [{ scale: 0.99 }], opacity: 0.9 },
-                                    ]}
-                                >
-                                    <View style={[styles.indexTile, { backgroundColor: theme.surfaceSoft, borderColor: theme.brand }]}>
-                                        <Text style={[styles.indexText, { color: theme.brand }]}>
-                                            {String(index + 1).padStart(2, '0')}
+                        return (
+                            <>
+                                <Text style={[styles.sectionEyebrow, { color: theme.ink3 }]}>
+                                    {lessons.length} {lessons.length === 1 ? 'LESSON' : 'LESSONS'}
+                                </Text>
+
+                                {locked && (
+                                    <Pressable
+                                        onPress={openPaywall}
+                                        style={({ pressed }) => [
+                                            styles.lockedBanner,
+                                            { backgroundColor: theme.harvestSoft },
+                                            pressed && { opacity: 0.8 },
+                                        ]}
+                                    >
+                                        <IconLock size={16} color={theme.ink} />
+                                        <Text style={[styles.lockedBannerText, { color: theme.ink }]}>
+                                            Subscribe to unlock this series
                                         </Text>
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={[styles.lessonTitle, { color: theme.ink }]} numberOfLines={2}>
-                                            {lesson.title}
+                                    </Pressable>
+                                )}
+
+                                <View style={styles.lessonList}>
+                                    {lessons.length === 0 ? (
+                                        <Text style={[styles.stateText, { color: theme.ink3 }]}>
+                                            No lessons in this series yet.
                                         </Text>
-                                        {dur && (
-                                            <Text style={[styles.lessonDuration, { color: theme.ink3 }]}>
-                                                {dur}
-                                            </Text>
-                                        )}
-                                    </View>
-                                    <IconChevronRight size={18} color={theme.ink3} />
-                                </Pressable>
-                            );
-                        })}
-                    </View>
+                                    ) : lessons.map((lesson, index) => {
+                                        const dur = formatDuration(lesson.duration_seconds);
+                                        return (
+                                            <Pressable
+                                                key={lesson.id}
+                                                onPress={() => {
+                                                    if (locked) { openPaywall(); return; }
+                                                    analytics.lessonVideoClicked({
+                                                        series_id: detail.id,
+                                                        lesson_id: lesson.id,
+                                                        title: lesson.title,
+                                                    });
+                                                    router.push({
+                                                        pathname: '/lessonPlayer',
+                                                        params: { seriesId: detail.id, lessonId: lesson.id },
+                                                    } as any);
+                                                }}
+                                                style={({ pressed }) => [
+                                                    styles.lessonRow,
+                                                    { backgroundColor: theme.surface, borderColor: theme.ink },
+                                                    pressed && { transform: [{ scale: 0.99 }], opacity: 0.9 },
+                                                ]}
+                                            >
+                                                <View style={[
+                                                    styles.indexTile,
+                                                    {
+                                                        backgroundColor: locked ? theme.harvest : theme.surfaceSoft,
+                                                        borderColor: theme.brand,
+                                                    },
+                                                ]}>
+                                                    {locked ? (
+                                                        <IconLock size={16} color={theme.brand} />
+                                                    ) : (
+                                                        <Text style={[styles.indexText, { color: theme.brand }]}>
+                                                            {String(index + 1).padStart(2, '0')}
+                                                        </Text>
+                                                    )}
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={[styles.lessonTitle, { color: theme.ink }]} numberOfLines={2}>
+                                                        {lesson.title}
+                                                    </Text>
+                                                    {dur && (
+                                                        <Text style={[styles.lessonDuration, { color: theme.ink3 }]}>
+                                                            {dur}
+                                                        </Text>
+                                                    )}
+                                                </View>
+                                                <IconChevronRight size={18} color={theme.ink3} />
+                                            </Pressable>
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        );
+                    })()}
                 </>
             )}
         </ScrollView>
@@ -240,6 +285,19 @@ const styles = StyleSheet.create({
         fontSize: 10,
         letterSpacing: 1.6,
         marginBottom: 12,
+    },
+    lockedBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        marginBottom: 14,
+    },
+    lockedBannerText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 13,
     },
     lessonList: {
         gap: 10,
