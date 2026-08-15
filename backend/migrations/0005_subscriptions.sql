@@ -110,4 +110,4 @@ alter table public.lesson_series alter column is_premium set default true;
 --   select tablename, count(*) from pg_policies where schemaname = 'public'
 --    and tablename in ('subscriptions','subscription_events','app_config') group by tablename;  -- 0 rows
 
--- Applied to project vbvsblpyeylnemrecyqv on <DATE — fill in when you run it>.
+-- Applied to project vbvsblpyeylnemrecyqv on 2026-08-14.

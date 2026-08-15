@@ -91,7 +91,26 @@ Never do both in one release, even when every frontend call site has been update
 - Widening a `CHECK` (allowing a new value) is safe; narrowing one is a contract step.
 - To rename or reshape: add the new column, dual-write both, backfill, and only drop the old one at the contract step.
 - Every change is a numbered file in [backend/migrations/](backend/migrations/), following the format of [0004_goal_completion_snapshot.sql](backend/migrations/0004_goal_completion_snapshot.sql) — a header comment stating why, what old rows fall back to, and an `Applied to project … on <date>` line.
-- **Claude writes migrations; the user applies them** via the Supabase dashboard. Never run schema DDL against production directly.
+- **Claude may apply migrations** to production via the authed Supabase MCP (`apply_migration`), but only after passing the gate below. Otherwise Claude writes the file and the user applies it via the Supabase dashboard.
+
+#### The gate — Claude applies a migration only if ALL of these hold
+
+The live App Store binary keeps calling production forever and cannot be force-updated. A migration that breaks it has no rollback that reaches those users. So before applying, Claude states explicitly, in the response, that every one of these is true:
+
+1. **Additive only** — creates tables/indexes, adds nullable columns, widens a `CHECK`, or changes a `DEFAULT`. Nothing dropped, renamed, retyped, or narrowed.
+2. **No existing row is rewritten or revalidated.** A new `DEFAULT` affects future inserts only; a new constraint must not be validated against existing rows.
+3. **Every currently-deployed query still returns the same rows and the same columns** after it runs — including queries in the binary already on people's phones, not just the ones on this branch.
+4. **Nothing the live app reads becomes unavailable**, even briefly. No locking rewrite of a populated table, no dropping or recreating anything the app touches.
+5. **Reversible without an app update.** If it turns out wrong, the fix is a config flag or a follow-up additive migration — never "ship a new binary."
+
+If any of the five is uncertain, that uncertainty resolves to **no**: write the file, explain what's ambiguous, and let the user apply it by hand.
+
+#### Always, when applying
+
+- Apply exactly what is committed in [backend/migrations/](backend/migrations/) — never an ad-hoc variant typed into the tool call.
+- Run the migration's own `Verify after applying` queries afterwards and report the results, including confirmation that pre-existing rows are unchanged.
+- Fill in the `Applied to project … on <date>` line with the real date and commit it.
+- **Never** `DROP`, `TRUNCATE`, `ALTER … TYPE`, or `UPDATE`/`DELETE` production data as part of a migration. Contract steps are always the user's to run by hand, after confirming adoption of the release that made them safe.
 
 ### API rules
 
