@@ -16,6 +16,7 @@ import {
     TextInput,
     StyleSheet,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
@@ -25,13 +26,16 @@ import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, shadow, Fonts } from '../context/ThemeContext';
 import { useOnboarding } from '../context/OnboardingContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { DEV_ACCOUNT_EMAIL } from '../constants/onboarding';
 import { DISCLAIMER_FULL, TERMS_URL, PRIVACY_URL } from '../constants/legal';
+import { DELETE_ACCOUNT_SUBSCRIPTION_WARNING, MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
 import { supabase } from '../lib/supabase';
 import {
     IconChevronLeft, IconScripture, IconMoon, IconSun, IconTarget, IconSparkle,
 } from '../components/icons';
 import Button from '../components/ui/Button';
+import PremiumCta from '../components/premium/PremiumCta';
 import BudgetTypeSelector from '../components/ui/BudgetTypeSelector';
 import {
     BudgetTypeKey, BUDGET_TYPES, splitLabel, DEFAULT_BUDGET_TYPE,
@@ -44,6 +48,8 @@ export default function SettingsScreen() {
     const { user } = useAuth();
     const { theme, isDark, toggleTheme } = useTheme();
     const { replay: replayOnboarding } = useOnboarding();
+    const { restore: restorePremium } = useSubscription();
+    const [restoring, setRestoring] = useState(false);
     const isDevAccount = user?.email === DEV_ACCOUNT_EMAIL;
 
     const [budgetType, setBudgetType] = useState<BudgetTypeKey>(DEFAULT_BUDGET_TYPE);
@@ -228,6 +234,31 @@ export default function SettingsScreen() {
                     </Text>
                     <BudgetTypeSelector value={budgetType} onSelect={handleSelectBudgetType} disabled={saving} />
 
+                    {/* ── Premium section ─────────────────────────────────── */}
+                    {/* Swaps to "Manage Subscription" once subscribed — a paying user
+                        must never be asked to subscribe again. */}
+                    <PremiumCta placement="settings" style={{ marginTop: 26 }} />
+
+                    {/* Restore Purchases. Also on the paywall, but required to be
+                        findable by someone who has reinstalled and therefore sees no
+                        paywall to open — they are already "subscribed" as far as the
+                        store is concerned, just not on this device yet. */}
+                    <Pressable
+                        onPress={handleRestorePurchases}
+                        disabled={restoring}
+                        style={({ pressed }) => [
+                            styles.restoreRow,
+                            { backgroundColor: theme.surface, borderColor: theme.border },
+                            pressed && { opacity: 0.6 },
+                        ]}
+                    >
+                        {restoring
+                            ? <ActivityIndicator color={theme.brand} />
+                            : <Text style={[styles.restoreText, { color: theme.brand }]}>
+                                Restore Purchases
+                            </Text>}
+                    </Pressable>
+
                     {/* ── Tithing section ─────────────────────────────────── */}
                     <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>GIVING</Text>
 
@@ -395,6 +426,24 @@ export default function SettingsScreen() {
                             below, then click Delete.
                         </Text>
 
+                        {/* App Review 5.1.1(v): deleting the account does NOT cancel an
+                            App Store subscription — the user keeps being billed for
+                            something they can no longer reach. They have to be told,
+                            and given the place to do it. */}
+                        <View style={[styles.subWarning, { backgroundColor: theme.harvestSoft }]}>
+                            <Text style={[styles.subWarningText, { color: theme.ink }]}>
+                                {DELETE_ACCOUNT_SUBSCRIPTION_WARNING}
+                            </Text>
+                            <Pressable
+                                onPress={() => WebBrowser.openBrowserAsync(MANAGE_SUBSCRIPTION_URL)}
+                                hitSlop={6}
+                            >
+                                <Text style={[styles.subWarningLink, { color: theme.brand }]}>
+                                    Manage subscriptions
+                                </Text>
+                            </Pressable>
+                        </View>
+
                         {deleteError && (
                             <Text style={[styles.deleteErrorText, { color: theme.danger }]}>
                                 That's not right — type "DELETE" exactly to confirm.
@@ -448,6 +497,25 @@ export default function SettingsScreen() {
         const { error } = await supabase.auth.signOut();
         if (error) console.error('Error logging out:', error.message);
         // AuthContext flips to the signed-out state and the router redirects to /auth.
+    }
+
+    async function handleRestorePurchases() {
+        setRestoring(true);
+        const result = await restorePremium();
+        setRestoring(false);
+
+        if (result.status === 'restored') {
+            Alert.alert('Purchases restored', 'Your subscription is active again.');
+        } else if (result.status === 'nothing') {
+            Alert.alert(
+                'Nothing to restore',
+                'No previous subscription was found for this account.',
+            );
+        } else if (result.status === 'unavailable') {
+            Alert.alert('Unavailable', 'Purchases are not available on this device yet.');
+        } else {
+            Alert.alert('Could not restore', result.message);
+        }
     }
 
     // Dev-only: clear the completed flag and restart the tour from the Dashboard.
@@ -555,6 +623,34 @@ const styles = StyleSheet.create({
     },
     modalTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 24, textAlign: 'center', marginBottom: 6 },
     modalBody: { fontFamily: 'Geist-Regular', fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 14 },
+
+    // Premium
+    restoreRow: {
+        marginTop: 10,
+        paddingVertical: 13,
+        borderRadius: 14,
+        borderWidth: 1.5,
+        alignItems: 'center',
+    },
+    restoreText: { fontFamily: 'Geist-SemiBold', fontSize: 14 },
+    subWarning: {
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 14,
+        gap: 6,
+        alignItems: 'center',
+    },
+    subWarningText: {
+        fontFamily: 'Geist-Regular',
+        fontSize: 12,
+        lineHeight: 18,
+        textAlign: 'center',
+    },
+    subWarningLink: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 12,
+        textDecorationLine: 'underline',
+    },
     suggestRow: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
         padding: 12, borderRadius: 12, marginBottom: 8,

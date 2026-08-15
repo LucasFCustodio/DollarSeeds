@@ -12,8 +12,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { OnboardingProvider } from '../context/OnboardingContext';
+import { SubscriptionProvider } from '../context/SubscriptionContext';
 import OnboardingTour from '../components/onboarding/OnboardingTour';
 import StartingBalanceGate from '../components/onboarding/StartingBalanceGate';
+import PaywallSheet from '../components/premium/PaywallSheet';
+import UpdateGate from '../components/premium/UpdateGate';
 import { useNotifications } from '../hooks/useNotifications';
 import * as Sentry from '@sentry/react-native';
 import { PostHogProvider } from 'posthog-react-native';
@@ -99,6 +102,11 @@ function RootLayoutNav() {
             </Stack>
             <OnboardingTour />
             <StartingBalanceGate />
+            {/* One paywall instance for the whole app — it opens from both CTAs, a
+                locked series card, a locked lesson row, and a 403 from the player. */}
+            <PaywallSheet />
+            {/* Last, so it covers everything above it including the auth screen. */}
+            <UpdateGate />
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         </ThemeProvider>
     );
@@ -119,9 +127,14 @@ export default Sentry.wrap(function RootLayout() {
         >
             <AuthProvider>
                 <AppThemeProvider>
-                    <OnboardingProvider>
-                        <RootLayoutNav />
-                    </OnboardingProvider>
+                    {/* Inside AuthProvider — it keys entitlement on the Supabase user
+                        id. Outside OnboardingProvider so the tour can reference
+                        premium state if it ever needs to. */}
+                    <SubscriptionProvider>
+                        <OnboardingProvider>
+                            <RootLayoutNav />
+                        </OnboardingProvider>
+                    </SubscriptionProvider>
                 </AppThemeProvider>
             </AuthProvider>
         </PostHogProvider>

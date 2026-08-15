@@ -63,7 +63,14 @@ const { theme } = useTheme();
 |-------|-------|------|-----|
 | `danger` / `dangerSoft` | `#B91C1C` / `#FBE7E7` | `#F87171` / `#2C1818` | Delete, overspend |
 | `success` / `successSoft` | `#0F8C5C` / `#E5F3EC` | `#34D399` / `#0F2A20` | Completed goals, positive balances |
-| `harvest` | `#F4D35E` | `#F4D35E` | Budget-health bar, savings jar fill |
+| `harvest` | `#F4D35E` | `#F4D35E` | Budget-health bar, savings jar fill, tithing + premium accent |
+| `harvestSoft` | `#FCF2D4` | `#2C2712` | Tinted callouts on a harvest theme (paywall equal-tiers note, locked-series banner) |
+
+> **`harvest` is the one token that is identical in light and dark.** `ink` inverts, so
+> `ink` on solid `harvest` is unreadable in dark mode. Content sitting on solid harvest
+> uses **`brand`** (dark forest in both themes) — that is what the tithing icon tile in
+> Settings does, and what the premium CTA and lock badges follow. Use `harvestSoft` for
+> tinted surfaces instead, which takes `ink` safely in both themes.
 
 ### Legacy Aliases (backward-compat — prefer new tokens in new code)
 | Alias | Maps to |

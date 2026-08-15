@@ -28,12 +28,14 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, stickerShadow, Fonts, AppTheme } from '../../context/ThemeContext';
+import { useSubscription } from '../../context/SubscriptionContext';
 import { ft, tv } from '../../constants/responsive';
 import { DISCLAIMER_FULL } from '../../constants/legal';
 import { useAnalytics } from '../../lib/analytics';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
-import { IconCheck, IconScripture, IconStar } from '../../components/icons';
+import PremiumCta from '../../components/premium/PremiumCta';
+import { IconCheck, IconLock, IconScripture, IconStar } from '../../components/icons';
 import { LESSONS } from '../../constants/lessons';
 
 const BASE = 'https://dollarseeds-1.onrender.com';
@@ -46,6 +48,9 @@ type Series = {
     creator?: string | null;
     thumbnail_url?: string | null;
     lesson_count: number;
+    // Sent only to builds that advertise the premium capability. Absent on the binary
+    // already in the App Store, which never receives a premium series in the first place.
+    is_premium?: boolean;
 };
 
 export default function LessonsScreen() {
@@ -53,6 +58,7 @@ export default function LessonsScreen() {
     const { user } = useAuth();
     const { theme } = useTheme();
     const analytics = useAnalytics();
+    const { premiumActive, config, openPaywall } = useSubscription();
 
     const [completedIds, setCompletedIds] = useState<number[]>([]);
     const [ratings, setRatings] = useState<Record<number, number>>({});
@@ -126,6 +132,9 @@ export default function LessonsScreen() {
                 </Text>
             </View>
 
+            {/* Premium CTA — hides itself entirely once subscribed */}
+            <PremiumCta placement="lessons" style={styles.ctaWrap} />
+
             {/* ── Video series (NEW) ──────────────────────────────── */}
             <View style={styles.seriesSection}>
                 <Text style={[styles.sectionEyebrow, { color: theme.ink3 }]}>
@@ -153,20 +162,28 @@ export default function LessonsScreen() {
                     </View>
                 ) : (
                     <View style={styles.seriesList}>
-                        {series.map(s => (
-                            <SeriesCard
-                                key={s.id}
-                                theme={theme}
-                                series={s}
-                                onExplore={() => {
-                                    analytics.seriesExploreClicked({ series_id: s.id, title: s.title });
-                                    router.push({
-                                        pathname: '/lessonSeries/[id]',
-                                        params: { id: s.id },
-                                    } as any);
-                                }}
-                            />
-                        ))}
+                        {series.map(s => {
+                            // Read off the LIVE config, never a boot-time snapshot: if
+                            // the kill switch is flipped off to roll back, these locks
+                            // must disappear for content the backend now serves freely.
+                            const locked = !!s.is_premium && config.premiumEnabled && !premiumActive;
+                            return (
+                                <SeriesCard
+                                    key={s.id}
+                                    theme={theme}
+                                    series={s}
+                                    locked={locked}
+                                    onExplore={() => {
+                                        if (locked) { openPaywall(); return; }
+                                        analytics.seriesExploreClicked({ series_id: s.id, title: s.title });
+                                        router.push({
+                                            pathname: '/lessonSeries/[id]',
+                                            params: { id: s.id },
+                                        } as any);
+                                    }}
+                                />
+                            );
+                        })}
                     </View>
                 )}
             </View>
@@ -314,10 +331,11 @@ export default function LessonsScreen() {
  * - "Explore ›" brand button, bottom-aligned, right edge = thumbnail's right edge
  */
 function SeriesCard({
-    theme, series, onExplore,
+    theme, series, locked, onExplore,
 }: {
     theme: AppTheme;
     series: Series;
+    locked: boolean;
     onExplore: () => void;
 }) {
     const lessonWord = series.lesson_count === 1 ? 'lesson' : 'lessons';
@@ -347,6 +365,16 @@ function SeriesCard({
                         {series.lesson_count} {lessonWord}
                     </Text>
                 </View>
+
+                {/* Lock badge — opposite corner from the lesson count, same recipe.
+                    Solid harvest takes `brand` as its foreground, not `ink`: harvest is
+                    the same yellow in both themes while ink inverts. */}
+                {locked && (
+                    <View style={[styles.lockBadge, { backgroundColor: theme.harvest }]}>
+                        <IconLock size={12} color={theme.brand} />
+                        <Text style={[styles.lockBadgeText, { color: theme.brand }]}>PREMIUM</Text>
+                    </View>
+                )}
             </View>
 
             {/* Description (min-height for uniform card rhythm) */}
@@ -356,7 +384,7 @@ function SeriesCard({
                 </Text>
             )}
 
-            {/* Explore button — bottom, right-aligned to the thumbnail edge */}
+            {/* Explore / Unlock — bottom, right-aligned to the thumbnail edge */}
             <View style={styles.exploreRow}>
                 <Pressable
                     onPress={onExplore}
@@ -366,7 +394,9 @@ function SeriesCard({
                         pressed && { transform: [{ scale: 0.97 }] },
                     ]}
                 >
-                    <Text style={[styles.exploreText, { color: theme.onBrand }]}>Explore ›</Text>
+                    <Text style={[styles.exploreText, { color: theme.onBrand }]}>
+                        {locked ? 'Unlock ›' : 'Explore ›'}
+                    </Text>
                 </Pressable>
             </View>
         </Card>
@@ -397,6 +427,12 @@ const styles = StyleSheet.create({
         lineHeight: ft(19, 1.18),
         maxWidth: tv(280, 440),
         marginBottom: 4,
+    },
+
+    // Premium CTA — sits directly under the page description
+    ctaWrap: {
+        paddingHorizontal: 18,
+        paddingTop: 14,
     },
 
     // Video series section
@@ -463,6 +499,22 @@ const styles = StyleSheet.create({
     lessonBadgeText: {
         fontFamily: 'Geist-SemiBold',
         fontSize: ft(11, 1.18),
+    },
+    lockBadge: {
+        position: 'absolute',
+        left: 8,
+        top: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    lockBadgeText: {
+        fontFamily: 'JetBrainsMono-SemiBold',
+        fontSize: ft(9, 1.18),
+        letterSpacing: 0.8,
     },
     seriesDesc: {
         fontFamily: 'Geist-Regular',

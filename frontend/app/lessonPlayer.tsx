@@ -19,6 +19,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import axios from 'axios';
 
 import { useTheme } from '../context/ThemeContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { useAnalytics } from '../lib/analytics';
 import { IconChevronLeft, IconChevronRight } from '../components/icons';
 
@@ -35,6 +36,7 @@ export default function LessonPlayerScreen() {
     const router = useRouter();
     const { theme } = useTheme();
     const analytics = useAnalytics();
+    const { openPaywall, refresh: refreshSubscription } = useSubscription();
     const params = useLocalSearchParams<{ seriesId: string; lessonId: string }>();
     const seriesId = params.seriesId;
 
@@ -42,6 +44,15 @@ export default function LessonPlayerScreen() {
     const [currentId, setCurrentId] = useState<string>(params.lessonId);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+    // 403 premium_required is a DIFFERENT failure from "the video wouldn't load": one
+    // has a way out (subscribe), the other is a dead end. Rendering the same generic
+    // error for both is exactly the trap this whole feature is designed to avoid.
+    const [locked, setLocked] = useState(false);
+    // Bumped by "Tap to retry". The retry used to be `setCurrentId(id => id)`, which
+    // sets state to the identical value — React bails out, the effect never re-runs,
+    // and the button did nothing. It matters here specifically: after subscribing, retry
+    // is the path back to the video the user just paid for.
+    const [reloadKey, setReloadKey] = useState(0);
 
     // Single player instance; source is swapped via replaceAsync as the lesson changes.
     const player = useVideoPlayer(null, p => { p.loop = false; });
@@ -60,6 +71,7 @@ export default function LessonPlayerScreen() {
         let cancelled = false;
         setLoading(true);
         setError(false);
+        setLocked(false);
 
         // DEFER: persistent video watch-progress goes here — resume the saved position
         // (e.g. player.currentTime = savedSeconds) after replaceAsync, and elsewhere
@@ -75,13 +87,24 @@ export default function LessonPlayerScreen() {
             })
             .catch(err => {
                 if (cancelled) return;
+                // The backend gate answers 403 with a top-level machine-readable code
+                // so this can be told apart from any other 403. Show the paywall, which
+                // the user can act on, rather than "Couldn't load this video".
+                if (err?.response?.status === 403
+                    && err?.response?.data?.code === 'premium_required') {
+                    setLocked(true);
+                    openPaywall();
+                    return;
+                }
                 console.error('Playback load error:', err);
                 setError(true);
             })
             .finally(() => { if (!cancelled) setLoading(false); });
 
         return () => { cancelled = true; };
-    }, [currentId, player]);
+        // `openPaywall` is stable (useCallback with no deps) but listing it keeps the
+        // lint rule honest without re-running the effect.
+    }, [currentId, player, reloadKey, openPaywall]);
 
     // ── Progress heartbeat (analytics only — NO persistent watch-progress store) ──
     // Every 15s, but ONLY while the video is actively playing, emit lesson_progress
@@ -159,10 +182,28 @@ export default function LessonPlayerScreen() {
                         <ActivityIndicator color="#fff" />
                     </View>
                 )}
-                {error && !loading && (
+                {locked && !loading && (
+                    <View style={styles.videoOverlay}>
+                        <Text style={styles.errorText}>This lesson is part of Premium.</Text>
+                        <Pressable onPress={openPaywall} hitSlop={8}>
+                            <Text style={[styles.retryText, { color: theme.brand2 }]}>
+                                View subscription options
+                            </Text>
+                        </Pressable>
+                    </View>
+                )}
+                {error && !locked && !loading && (
                     <View style={styles.videoOverlay}>
                         <Text style={styles.errorText}>Couldn&apos;t load this video.</Text>
-                        <Pressable onPress={() => setCurrentId(id => id)} hitSlop={8}>
+                        <Pressable
+                            onPress={() => {
+                                // Re-check entitlement too: the usual reason someone
+                                // retries here is that they just subscribed.
+                                refreshSubscription();
+                                setReloadKey(k => k + 1);
+                            }}
+                            hitSlop={8}
+                        >
                             <Text style={[styles.retryText, { color: theme.brand2 }]}>Tap to retry</Text>
                         </Pressable>
                     </View>

@@ -14,6 +14,10 @@
  *    token (a signed JWT) and takes the user's id from it — it no longer trusts the
  *    `user_id` the app sends in params/bodies. Attaching the header centrally here is
  *    what keeps that working across all ~43 call sites without touching one of them.
+ *
+ * 3. CAPABILITY MARKER. `X-Client-Features: premium` identifies this build as one that
+ *    can handle premium content. Its ABSENCE is what the backend keys backward
+ *    compatibility off, so it must reach every backend request and no other host.
  */
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
@@ -64,6 +68,20 @@ function isBackendUrl(rawUrl: string | undefined): boolean {
  */
 axios.interceptors.request.use(async (config) => {
     if (!isBackendUrl(config.url)) return config;
+
+    // 3. CAPABILITY MARKER. Tells the backend this build understands premium content:
+    //    it has the paywall, the purchase path, and a handler for 403 premium_required.
+    //    A request WITHOUT this header is treated as the binary already in the App
+    //    Store, which has none of those — so the backend hides premium series from it
+    //    entirely and never gates its playback. That is what keeps those users working.
+    //
+    //    Set here rather than at each call site precisely because this interceptor is
+    //    the one choke point every backend request passes through: one line covers
+    //    every screen, and every route added later, with nothing to forget. It sits
+    //    AFTER the isBackendUrl guard above so it never leaks to Sentry, PostHog, or
+    //    the Supabase Storage URLs expo-video streams.
+    config.headers.set('X-Client-Features', 'premium');
+
     try {
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
