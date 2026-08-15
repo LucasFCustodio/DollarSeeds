@@ -70,3 +70,55 @@ All colors and theme tokens come from `useTheme()` — **never hardcode colors**
 | [.claude/docs/data_model.md](.claude/docs/data_model.md) | When touching DB queries, Supabase tables, or budget calculation logic |
 | [.claude/docs/design_system.md](.claude/docs/design_system.md) | When building UI — color tokens, Button variants, dark mode, SVG setup |
 | [.claude/docs/lessons_page.md](.claude/docs/lessons_page.md) | When touching the Lessons tab — written vs video content, series/lessons schema, storage buckets, backend routes |
+
+## Important - DB Changes
+
+The app is live with active users, and the frontend ships as **app-store builds** — old binaries stay installed on people's phones indefinitely and cannot be force-updated. "Don't break the current build" is therefore not enough: every DB and API change must also keep working for the app versions already in the wild.
+
+### Expand → contract (never skip to contract)
+
+Any change that adds, removes, renames, or reshapes a field is split across **two releases**:
+
+1. **Expand — this release.** Add the new form *alongside* the old. Both are written and both are served. Old apps keep reading the old field; new apps read the new one.
+2. **Contract — a later release.** Once the new version is out, adopted, and confirmed working, remove the old field.
+
+Never do both in one release, even when every frontend call site has been updated — those updated call sites only exist on phones that took the update.
+
+### Database rules
+
+- **Additive only.** No `DROP TABLE` / `DROP COLUMN`, no renames, no type narrowing, no tightening a `CHECK` against existing rows, no `NOT NULL` without a default on a populated table.
+- New columns are **nullable** and added with `add column if not exists`, with a documented fallback for pre-migration rows.
+- Widening a `CHECK` (allowing a new value) is safe; narrowing one is a contract step.
+- To rename or reshape: add the new column, dual-write both, backfill, and only drop the old one at the contract step.
+- Every change is a numbered file in [backend/migrations/](backend/migrations/), following the format of [0004_goal_completion_snapshot.sql](backend/migrations/0004_goal_completion_snapshot.sql) — a header comment stating why, what old rows fall back to, and an `Applied to project … on <date>` line.
+- **Claude may apply migrations** to production via the authed Supabase MCP (`apply_migration`), but only after passing the gate below. Otherwise Claude writes the file and the user applies it via the Supabase dashboard.
+
+#### The gate — Claude applies a migration only if ALL of these hold
+
+The live App Store binary keeps calling production forever and cannot be force-updated. A migration that breaks it has no rollback that reaches those users. So before applying, Claude states explicitly, in the response, that every one of these is true:
+
+1. **Additive only** — creates tables/indexes, adds nullable columns, widens a `CHECK`, or changes a `DEFAULT`. Nothing dropped, renamed, retyped, or narrowed.
+2. **No existing row is rewritten or revalidated.** A new `DEFAULT` affects future inserts only; a new constraint must not be validated against existing rows.
+3. **Every currently-deployed query still returns the same rows and the same columns** after it runs — including queries in the binary already on people's phones, not just the ones on this branch.
+4. **Nothing the live app reads becomes unavailable**, even briefly. No locking rewrite of a populated table, no dropping or recreating anything the app touches.
+5. **Reversible without an app update.** If it turns out wrong, the fix is a config flag or a follow-up additive migration — never "ship a new binary."
+
+If any of the five is uncertain, that uncertainty resolves to **no**: write the file, explain what's ambiguous, and let the user apply it by hand.
+
+#### Always, when applying
+
+- Apply exactly what is committed in [backend/migrations/](backend/migrations/) — never an ad-hoc variant typed into the tool call.
+- Run the migration's own `Verify after applying` queries afterwards and report the results, including confirmation that pre-existing rows are unchanged.
+- Fill in the `Applied to project … on <date>` line with the real date and commit it.
+- **Never** `DROP`, `TRUNCATE`, `ALTER … TYPE`, or `UPDATE`/`DELETE` production data as part of a migration. Contract steps are always the user's to run by hand, after confirming adoption of the release that made them safe.
+
+### API rules
+
+- Never remove, rename, or retype a response field in the same release that adds its replacement — serve **both** keys until the contract step.
+- New request fields must be **optional with a server-side default**, so old clients that omit them still succeed.
+- Never make an existing endpoint stricter (new required param, tighter validation) — old clients will start failing.
+- Behaviour old clients can't opt into belongs on a **new endpoint or a new optional field**, never in a repurposed existing one.
+
+### Branching
+
+Never commit to `main`. If the prompt specifies no branch, create a new `change-X-branch`, where X is the next unused number.

@@ -34,7 +34,8 @@ Two tables, one-to-many (`lesson_series` 1─∞ `lessons`, `on delete cascade`)
 Rules:
 - **`lesson_count` is derived** at query time (never stored → can't drift).
 - Always `order by sort_order` (series on the page, lessons within a series).
-- `is_premium` exists for a future paid tier but is **not gated yet**.
+- `is_premium` **is gated** — see [Premium gating](#premium-gating) below. It defaults to
+  `true` since migration `0005`, so a new series is paid unless deliberately made free.
 
 ### Storage buckets
 
@@ -77,7 +78,44 @@ All in [backend/main.py](../../backend/main.py). None return raw video paths/URL
 |-------|---------|
 | `GET /lessons/series/` | Published series (`is_published=true`), ordered, each with derived `lesson_count` |
 | `GET /lessons/series/{series_id}/` | The series + its lessons ordered by `sort_order` |
-| `GET /lessons/{lesson_id}/playback/` | `{ url, expires_in }` — signed URL from `lesson-videos` (TTL `SIGNED_URL_TTL_SECONDS`, 3600s). Future `is_premium` gate goes here. |
+| `GET /lessons/{lesson_id}/playback/` | `{ url, expires_in }` — signed URL from `lesson-videos` (TTL `SIGNED_URL_TTL_SECONDS`, 3600s). **The premium gate lives here** — the only route that enforces it. |
+
+## Premium gating
+
+Video series can be paid; written lessons and everything else stay free. The one
+currently published series, **"The Truth on Generosity"**, is `is_premium = false`
+**permanently** — no published series is ever retro-paywalled, because access given away
+cannot be taken back.
+
+**Clients are told apart by the `X-Client-Features: premium` header**, attached once in
+the app's axios request interceptor. Requests without it come from a binary already in
+the App Store, which has no paywall and no purchase path:
+
+| | No marker (shipped binary) | v2, not subscribed | v2, subscribed |
+|---|---|---|---|
+| Free series | visible, plays | visible, plays | visible, plays |
+| Premium series | **not in the list at all** | visible + `is_premium: true` | visible, plays |
+| `/playback/` on premium | **always 200** | `403 {"code": "premium_required"}` | 200 |
+
+Two independent switches, and conflating them is a bug:
+
+- **Hiding premium series from unmarked clients is always on.** Backward compatibility,
+  not a business rule — it must survive every rollback.
+- **`app_config.premium_enabled` gates only marked clients.** This is the kill switch;
+  flipping it to `false` is the rollback lever and needs no app update or redeploy.
+
+Enforcement lives *only* on `/playback/`. The list and detail routes expose `is_premium`
+to marked clients so the app can lock a card before the tap — the 403 is the backstop,
+not the UX trigger.
+
+> **The rule that governs any change here:** an unmarked request must issue exactly the
+> queries it issued before this feature existed — no `app_config` read, no
+> `lesson_series` lookup, no `subscriptions` scan. `test_backcompat_lessons.py` asserts
+> the query set directly, and three older tests seed a lesson whose `series_id` has no
+> `lesson_series` row so that hoisting a lookup fails loudly instead of shipping.
+
+Entitlement, the RevenueCat webhook and the `subscriptions` schema are in
+[data_model.md](data_model.md#subscriptions).
 
 Frontend base URL: `https://dollarseeds-1.onrender.com`. **Backend deploys from `main`** — new routes are 404 until merged + deployed to Render.
 

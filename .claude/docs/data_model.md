@@ -66,6 +66,67 @@ A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdraw
 
 **Editing a goal** (`PATCH /savings/goal/{id}`) can change `title`, `target_amount`, `target_month`, `target_year`. Since `savings_transactions.title` is a denormalized copy of the goal title, a rename also rewrites the titles of that goal's transactions so Recent Activity doesn't show the old name. General Savings and the Reconciliation goal are auto-managed and reject both routes.
 
+### `subscriptions`
+
+One row per **store subscription**, not per user — a user can hold an App Store and a
+Play Store subscription at once, and TestFlight sandbox rows coexist with production
+ones. Written **only** by `POST /webhooks/revenuecat`. Migration:
+[backend/migrations/0005_subscriptions.sql](../../backend/migrations/0005_subscriptions.sql).
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid (PK) | |
+| `user_id` | uuid | Supabase user id == RevenueCat App User ID (the app calls `Purchases.logIn(user.id)`). **No FK** — see below. |
+| `store` | text | `app_store` \| `play_store` |
+| `environment` | text | `sandbox` \| `production` |
+| `store_txn_id` | text | `coalesce(original_transaction_id, transaction_id, original_app_user_id)`. Google often omits the first; a NULL here would let unlimited duplicate rows accumulate, since NULLs never collide in a unique index. |
+| `product_id` | text | Which tier. **Reporting only — never access logic.** All eight products grant the same entitlement. |
+| `pending_product_id` | text | A crossgrade the user has selected but which has not taken effect yet |
+| `expires_at` | timestamptz | **The access horizon.** The only column entitlement reads. |
+| `revoked_at` | timestamptz | Set on refund/pause; kills access immediately |
+| `auto_renew` / `cancelled_at` / `status` | bool / timestamptz / text | **Descriptive only** — support and the paywall's "Current: …" line. Access never reads them. |
+| `last_event_id` / `last_event_at` | text / timestamptz | Newest event applied; `last_event_at` is what makes the write monotonic |
+
+`unique (store, environment, store_txn_id)` is the identity. `environment` is in the key
+because Apple's sandbox and production transaction-id namespaces **overlap** — without
+it a TestFlight purchase can collide with a real one. `user_id` is deliberately *not* in
+the key, so a `TRANSFER` event can re-point a row instead of duplicating it.
+
+**Entitlement is `expires_at > now() AND revoked_at IS NULL`** — `_has_premium` in
+`main.py`. Deliberately not driven by `status`: RevenueCat delivers a refund as a
+`CANCELLATION`, and a cancellation that merely turns auto-renew off must *not* revoke
+access, since the user paid for the period. One status string cannot express both, so
+`expires_at` carries it — RevenueCat moves that value forward when Apple extends a grace
+period and back to the refund moment when money is returned.
+
+**No foreign key to `auth.users`,** matching every other table here. An FK would make a
+webhook arriving after account deletion raise a violation → 500 → 72h of RevenueCat
+retries. Without it the row is simply orphaned, which is the wanted outcome: it is the
+audit trail for a refund on a deleted account, and it is invisible to every query (all
+filter by `user_id`). `subscriptions` *is* in `USER_DATA_TABLES`, so deletion clears it —
+but note that does **not** cancel the store subscription; the user must do that in the
+App Store, and the delete-account screen says so (App Review guideline 5.1.1(v)).
+
+### `subscription_events`
+
+Append-only audit log of every RevenueCat webhook, keyed by their `event_id` (PK).
+**Deliberately not load-bearing:** PostgREST has no cross-table transaction, so nothing
+may depend on both this insert and the `subscriptions` write landing together.
+Idempotency lives in the conditional update on `subscriptions`
+(`where <identity> and (last_event_at is null or last_event_at < :event_at)`), which
+makes a duplicate delivery and a stale out-of-order delivery both match zero rows,
+atomically. This table only answers "what did RevenueCat tell us, and when".
+
+### `app_config`
+
+`key` (PK) / `value` / `updated_at`. Three rows: `premium_enabled`,
+`min_supported_version`, `update_url`. Served by the public `GET /config/`, cached 60s
+in-process, and **failing open** to `premium_enabled=false` if the read throws.
+
+A table rather than env vars on purpose: the kill switch flips with one `UPDATE` in the
+Supabase dashboard — no Render redeploy, and the lever still works when a bad deploy is
+what broke things. **This is the rollback lever** for the premium feature.
+
 ## Budget Calculation
 
 Computed server-side in [backend/main.py](../../backend/main.py) lines ~53–55 from the month's total income:
@@ -97,6 +158,7 @@ State as verified **2026-07-26** — already correct, nothing to apply:
 | `expenses`, `income`, `savings_transactions`, `savings_goals`, `month_status`, `lesson_ratings` | enabled | One `ALL` policy each, role `authenticated`, `USING (auth.uid() = user_id)` |
 | `user_settings` | enabled | Three policies — `SELECT` / `INSERT` / `UPDATE`, same `auth.uid() = user_id` — but on role `public`, not `authenticated`. No `DELETE` policy. |
 | `lesson_series`, `lessons` | enabled | **None** — deny-all to anon and authenticated, by design. Shared content is served only through the backend (`GET /lessons/...`) on service_role. |
+| `subscriptions`, `subscription_events`, `app_config` | enabled | **None** — same posture. Entitlement is served only through `GET /me/entitlements/`; letting the anon key read `subscriptions` directly would expose who pays. Added by migration `0005`. |
 
 Notes on the two irregularities, both deliberate to leave alone:
 
