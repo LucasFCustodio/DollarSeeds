@@ -279,7 +279,7 @@ export default function SettingsScreen() {
                         {restoring
                             ? <ActivityIndicator color={theme.brand} />
                             : <Text style={[styles.restoreText, { color: theme.brand }]}>
-                                Restore Purchases
+                                {t('settings:premium.restore')}
                             </Text>}
                     </Pressable>
 
@@ -414,7 +414,7 @@ export default function SettingsScreen() {
                                     <View style={{ flex: 1 }}>
                                         <Text style={[styles.rowTitle, { color: theme.ink }]}>Onboarding tour</Text>
                                         <Text style={[styles.rowSub, { color: theme.ink2 }]}>
-                                            Replay the first-run guided tour
+                                            {t('settings:dev.onboardingSubtitle')}
                                         </Text>
                                     </View>
                                 </View>
@@ -451,7 +451,7 @@ export default function SettingsScreen() {
                             ]}
                         >
                             <Text style={[styles.legalLinkText, { color: theme.brand }]}>
-                                Terms of Service
+                                {t('settings:about.terms')}
                             </Text>
                         </Pressable>
 
@@ -464,7 +464,7 @@ export default function SettingsScreen() {
                             ]}
                         >
                             <Text style={[styles.legalLinkText, { color: theme.brand }]}>
-                                Privacy Policy
+                                {t('settings:about.privacy')}
                             </Text>
                         </Pressable>
                     </View>
@@ -485,7 +485,7 @@ export default function SettingsScreen() {
                     <View style={[styles.dangerZone, { backgroundColor: theme.dangerSoft, borderColor: theme.danger }]}>
                         <Text style={[styles.dangerLabel, { color: theme.danger }]}>{t('settings:section.dangerZone')}</Text>
                         <Text style={[styles.dangerHint, { color: theme.ink2 }]}>
-                            Permanently delete your account and every record tied to it.
+                            {t('settings:delete.hint')}
                         </Text>
                         <Pressable
                             onPress={() => { setDeleteConfirm(''); setDeleteError(false); setShowDeleteModal(true); }}
@@ -525,14 +525,14 @@ export default function SettingsScreen() {
                                 hitSlop={6}
                             >
                                 <Text style={[styles.subWarningLink, { color: theme.brand }]}>
-                                    Manage subscriptions
+                                    {t('settings:delete.manageSubscriptions')}
                                 </Text>
                             </Pressable>
                         </View>
 
                         {deleteError && (
                             <Text style={[styles.deleteErrorText, { color: theme.danger }]}>
-                                That's not right — type "DELETE" exactly to confirm.
+                                {t('settings:delete.error')}
                             </Text>
                         )}
 
