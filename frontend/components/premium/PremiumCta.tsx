@@ -21,10 +21,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
 import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { ft } from '../../constants/responsive';
 import {
-    MANAGE_SUBSCRIPTION_URL, PREMIUM_CTA_BODY, describeProduct,
+    MANAGE_SUBSCRIPTION_URL, describeProduct,
 } from '../../constants/premium';
 import { IconChevronRight, IconSparkle } from '../icons';
 
@@ -39,6 +40,7 @@ type Props = {
 
 export default function PremiumCta({ placement, style }: Props) {
     const { theme } = useTheme();
+    const { t } = useTranslation('premium');
     const { premiumActive, entitlementLoaded, productId, openPaywall } = useSubscription();
 
     // No flash: say nothing until we actually know.
@@ -51,8 +53,8 @@ export default function PremiumCta({ placement, style }: Props) {
     const currentTier = describeProduct(productId);
 
     const body = isManage
-        ? (currentTier ?? 'Your premium subscription is active')
-        : PREMIUM_CTA_BODY;
+        ? (currentTier ?? t('cta.activeFallback'))
+        : t('cta.body');
 
     return (
         <View style={style}>
@@ -78,7 +80,7 @@ export default function PremiumCta({ placement, style }: Props) {
 
                 <View style={{ flex: 1 }}>
                     <Text style={[styles.title, { color: theme.ink }]}>
-                        {isManage ? 'Manage Subscription' : 'DollarSeeds Premium'}
+                        {isManage ? t('cta.manage') : t('cta.title')}
                     </Text>
                     <Text style={[styles.body, { color: theme.ink2 }]}>{body}</Text>
                 </View>

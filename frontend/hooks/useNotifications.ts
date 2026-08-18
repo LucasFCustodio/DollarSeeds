@@ -3,30 +3,20 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 
+import i18n from '../lib/i18n';
+
 // ─────────────────────────────────────────────
 // CUSTOMIZE YOUR REMINDERS HERE
+//
+// The COPY lives in locales/<lang>/notifications.json under `reminders.<key>`;
+// only the schedule lives here. Add a reminder by adding a key in both places.
 // ─────────────────────────────────────────────
 
 const REMINDERS = [
-    {
-        // Evening reminder — log the day's spending before bed
-        title: "The Soul of the Diligent is Richly Supplied 🌱",
-        body: "End the day with diligence! Plant a seed of careful planning now, so you can richly sow tomrrow",
-        hour: 21,   // 8:00 PM  ← change this number (0–23) to adjust the time
-        minute: 0,
-    },
-    {
-        title: "You don't have to be strong to be prepared 🐜",
-        body: "The ant isn't strong, but it prepares in the time of preparation. When the Winter comes, it will have enough!",
-        hour: 21,
-        minute: 0,
-    },
-    {
-        title: "Trust God with All Your Money 🪙",
-        body: "The strongest showcase of faith, is knowing how much you have, and letting God freely use it, just like the Widow.",
-        hour: 21,
-        minute: 0,
-    }
+    // Evening reminder — log the day's spending before bed
+    { key: 'diligent', hour: 21, minute: 0 },   // 9:00 PM ← change (0–23) to adjust
+    { key: 'ant', hour: 21, minute: 0 },
+    { key: 'widow', hour: 21, minute: 0 },
 ];
 
 // ─────────────────────────────────────────────
@@ -45,7 +35,9 @@ async function requestPermission(): Promise<boolean> {
 
     if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('daily-reminders', {
-            name: 'Daily Reminders',
+            // Visible in the Android system settings, so it needs translating too —
+            // easy to miss, because it never appears inside the app.
+            name: i18n.t('notifications:channelName'),
             importance: Notifications.AndroidImportance.DEFAULT,
             sound: 'default',
         });
@@ -58,15 +50,23 @@ async function requestPermission(): Promise<boolean> {
     return status === 'granted';
 }
 
-async function scheduleDailyReminders() {
+/**
+ * Cancel everything and schedule one daily reminder in the CURRENT language.
+ *
+ * Exported because the language setter calls it directly. Scheduling happens at the
+ * OS level, so a notification queued in English stays English until it is replaced —
+ * re-running this on a mount effect alone would leave a user who switched language and
+ * force-quit receiving English reminders indefinitely.
+ */
+export async function scheduleDailyReminders() {
     await Notifications.cancelAllScheduledNotificationsAsync();
 
     const reminder = REMINDERS[Math.floor(Math.random() * REMINDERS.length)];
 
     await Notifications.scheduleNotificationAsync({
         content: {
-            title: reminder.title,
-            body: reminder.body,
+            title: i18n.t(`notifications:reminders.${reminder.key}.title`),
+            body: i18n.t(`notifications:reminders.${reminder.key}.body`),
             sound: true,
         },
         trigger: {
@@ -75,6 +75,26 @@ async function scheduleDailyReminders() {
             minute: reminder.minute,
         },
     });
+}
+
+/** Re-schedule in the active language, if permission was already granted. */
+export async function rescheduleRemindersForLanguage() {
+    try {
+        if (!Device.isDevice) return;
+        if (Platform.OS === 'android') {
+            await Notifications.setNotificationChannelAsync('daily-reminders', {
+                name: i18n.t('notifications:channelName'),
+                importance: Notifications.AndroidImportance.DEFAULT,
+                sound: 'default',
+            });
+        }
+        const { status } = await Notifications.getPermissionsAsync();
+        if (status === 'granted') await scheduleDailyReminders();
+    } catch (err) {
+        // A reminder in the previous language is a cosmetic problem; failing to
+        // change language over it would not be.
+        console.warn('Could not re-schedule reminders:', err);
+    }
 }
 
 export function useNotifications(isReady: boolean) {

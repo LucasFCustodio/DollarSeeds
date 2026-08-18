@@ -25,6 +25,9 @@ import Svg, { Path } from 'react-native-svg';
 import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
+import { useLocale } from '../../context/LocaleContext';
+import { MONTHS } from '../../constants/months';
+import { CURRENCIES } from '../../constants/currencies';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
 import { ft } from '../../constants/responsive';
 import { useAnalytics } from '../../lib/analytics';
@@ -32,11 +35,6 @@ import { IconChevronLeft, IconCheck } from '../icons';
 import { resolveBudgetType } from '../../constants/budgetTypes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const MONTHS = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December',
-];
-const MONTH_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const SOURCES = ['Paycheck', 'Side gig', 'Gift', 'Refund', 'Bonus', 'Other'];
 
@@ -113,6 +111,8 @@ export default function IncomeContainer({ embedded = false }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
+    const { formatMoney: fmtMoney, parseAmount, currency } = useLocale();
+    const currencySymbol = CURRENCIES[currency].symbol;
     const analytics = useAnalytics();
 
     const today = new Date();
@@ -136,18 +136,16 @@ export default function IncomeContainer({ embedded = false }) {
     }, [user?.id]);
 
     const bt = resolveBudgetType(budgetTypeKey);
-    const parsedAmt = parseFloat(amount) || 0;
+    const parsedAmt = parseAmount(amount) ?? 0;
     const needsAmt  = parsedAmt * bt.needs;
     const wantsAmt  = parsedAmt * bt.wants;
     const goalsAmt  = parsedAmt * bt.savings;
     const pct = (n) => Math.round(n * 100);
 
-    const fmt = (n) =>
-        n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
     // ── Submit ─────────────────────────────────────────────────────────────────
     const submitIncome = async () => {
-        const parsed = parseFloat(amount);
+        const parsed = parseAmount(amount) ?? NaN;
         const parsedDay = parseInt(day, 10);
         if (!amount || isNaN(parsed) || parsed <= 0) return;
         if (!month || !MONTHS.includes(month)) return;
@@ -231,7 +229,7 @@ export default function IncomeContainer({ embedded = false }) {
                     <View style={styles.amountInner}>
                         <Text style={styles.amountEyebrow}>AMOUNT RECEIVED</Text>
                         <View style={styles.amountRow}>
-                            <Text style={styles.amountDollar}>$</Text>
+                            <Text style={styles.amountDollar}>{currencySymbol}</Text>
                             <TextInput
                                 style={styles.amountInput}
                                 value={amount}
@@ -269,21 +267,21 @@ export default function IncomeContainer({ embedded = false }) {
                                 <View style={[styles.dot, { backgroundColor: theme.needs }]} />
                                 <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{pct(bt.needs)}% Needs</Text>
                             </View>
-                            <Text style={[styles.splitAmt, { color: theme.ink }]}>${fmt(needsAmt)}</Text>
+                            <Text style={[styles.splitAmt, { color: theme.ink }]}>{fmtMoney(needsAmt)}</Text>
                         </View>
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.wants }]} />
                                 <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{pct(bt.wants)}% Wants</Text>
                             </View>
-                            <Text style={[styles.splitAmt, { color: theme.ink }]}>${fmt(wantsAmt)}</Text>
+                            <Text style={[styles.splitAmt, { color: theme.ink }]}>{fmtMoney(wantsAmt)}</Text>
                         </View>
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.goals }]} />
                                 <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{pct(bt.savings)}% Goals</Text>
                             </View>
-                            <Text style={[styles.splitAmt, { color: theme.ink }]}>${fmt(goalsAmt)}</Text>
+                            <Text style={[styles.splitAmt, { color: theme.ink }]}>{fmtMoney(goalsAmt)}</Text>
                         </View>
                     </View>
                 </View>

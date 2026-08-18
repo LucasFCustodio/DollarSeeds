@@ -1,0 +1,17 @@
+{
+  "channelName": "Lembretes diários",
+  "reminders": {
+    "diligent": {
+      "title": "A alma do diligente é ricamente suprida 🌱",
+      "body": "Termine o dia com diligência! Plante hoje uma semente de planejamento cuidadoso, para colher com fartura amanhã"
+    },
+    "ant": {
+      "title": "Você não precisa ser forte para estar preparado 🐜",
+      "body": "A formiga não é forte, mas se prepara no tempo do preparo. Quando o inverno chegar, ela terá o suficiente!"
+    },
+    "widow": {
+      "title": "Confie a Deus todo o seu dinheiro 🪙",
+      "body": "A maior demonstração de fé é saber quanto você tem e deixar que Deus use livremente, assim como fez a viúva."
+    }
+  }
+}

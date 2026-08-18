@@ -19,6 +19,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import axios from 'axios';
 
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useAnalytics } from '../lib/analytics';
 import { IconChevronLeft, IconChevronRight } from '../components/icons';
@@ -35,6 +36,7 @@ type SeriesLesson = {
 export default function LessonPlayerScreen() {
     const router = useRouter();
     const { theme } = useTheme();
+    const { t } = useTranslation('premium');
     const analytics = useAnalytics();
     const { openPaywall, refresh: refreshSubscription } = useSubscription();
     const params = useLocalSearchParams<{ seriesId: string; lessonId: string }>();
@@ -184,10 +186,10 @@ export default function LessonPlayerScreen() {
                 )}
                 {locked && !loading && (
                     <View style={styles.videoOverlay}>
-                        <Text style={styles.errorText}>This lesson is part of Premium.</Text>
+                        <Text style={styles.errorText}>{t('lock.playerLocked')}</Text>
                         <Pressable onPress={openPaywall} hitSlop={8}>
                             <Text style={[styles.retryText, { color: theme.brand2 }]}>
-                                View subscription options
+                                {t('lock.playerCta')}
                             </Text>
                         </Pressable>
                     </View>

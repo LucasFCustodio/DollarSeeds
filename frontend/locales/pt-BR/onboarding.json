@@ -1,0 +1,32 @@
+{
+  "chrome": {
+    "skip": "Pular",
+    "next": "Avançar",
+    "getStarted": "Começar",
+    "progress": "{{step}} de {{total}}"
+  },
+  "steps": {
+    "dashboard": {
+      "eyebrow": "PAINEL",
+      "title": "Bem-vindo ao DollarSeeds",
+      "body": "Aqui você vê sua renda atual, quanto ainda pode gastar e quanto tem disponível em cada categoria de gasto"
+    },
+    "transactions": {
+      "eyebrow": "TRANSAÇÕES",
+      "title": "Registre suas entradas e saídas",
+      "body": "Digite um valor, escolha uma categoria, dê um nome, selecione a data e salve. Cada nova entrada é dividida automaticamente entre todas as categorias"
+    },
+    "goals": {
+      "eyebrow": "METAS",
+      "title": "Acompanhe suas metas",
+      "body": "Crie uma meta pessoal ou de dívida. Coloque dinheiro nela a partir da renda deste mês ou da sua Poupança Geral (PG). ",
+      "subnote": "Use a PG sempre que não tiver uma meta específica. O que não for gasto entra na sua PG no fim do mês"
+    },
+    "lessons": {
+      "eyebrow": "SÉRIES",
+      "title": "Cresça em sabedoria",
+      "body": "Séries em vídeo fundamentadas nas Escrituras sobre dinheiro, generosidade e mordomia, apresentadas por profissionais bem-sucedidos.",
+      "subnote": "Novas séries serão adicionadas conforme o app e seu alcance crescerem"
+    }
+  }
+}

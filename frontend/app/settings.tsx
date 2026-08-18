@@ -23,16 +23,21 @@ import axios from 'axios';
 
 import * as WebBrowser from 'expo-web-browser';
 
+import { useTranslation } from 'react-i18next';
+
 import { useAuth } from '../context/AuthContext';
-import { useTheme, shadow, Fonts } from '../context/ThemeContext';
+import { useTheme, shadow, Fonts, AppTheme } from '../context/ThemeContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useLocale } from '../context/LocaleContext';
+import { SUPPORTED_LANGUAGES } from '../lib/i18n';
+import { CURRENCIES, CURRENCY_CODES, type CurrencyCode } from '../constants/currencies';
 import { DEV_ACCOUNT_EMAIL } from '../constants/onboarding';
 import { DISCLAIMER_FULL, TERMS_URL, PRIVACY_URL } from '../constants/legal';
-import { DELETE_ACCOUNT_SUBSCRIPTION_WARNING, MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
+import { MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
 import { supabase } from '../lib/supabase';
 import {
-    IconChevronLeft, IconScripture, IconMoon, IconSun, IconTarget, IconSparkle,
+    IconChevronLeft, IconScripture, IconMoon, IconSun, IconTarget, IconSparkle, IconCheck,
 } from '../components/icons';
 import Button from '../components/ui/Button';
 import PremiumCta from '../components/premium/PremiumCta';
@@ -49,8 +54,27 @@ export default function SettingsScreen() {
     const { theme, isDark, toggleTheme } = useTheme();
     const { replay: replayOnboarding } = useOnboarding();
     const { restore: restorePremium } = useSubscription();
+    const { t } = useTranslation(['settings', 'common', 'premium']);
+    const { language, setLanguage, currency, setCurrency, formatMoney } = useLocale();
     const [restoring, setRestoring] = useState(false);
     const isDevAccount = user?.email === DEV_ACCOUNT_EMAIL;
+
+    /**
+     * Changing the symbol does NOT convert anything already recorded — amounts are
+     * stored as plain numbers with no currency dimension. Say so once, explicitly,
+     * rather than letting someone discover it by finding their history relabelled.
+     */
+    function handleSelectCurrency(next: CurrencyCode) {
+        if (next === currency) return;
+        Alert.alert(
+            t('settings:currency.confirmTitle'),
+            t('settings:currency.confirmBody'),
+            [
+                { text: t('common:action.cancel'), style: 'cancel' },
+                { text: t('settings:currency.confirmAccept'), onPress: () => setCurrency(next) },
+            ],
+        );
+    }
 
     const [budgetType, setBudgetType] = useState<BudgetTypeKey>(DEFAULT_BUDGET_TYPE);
     const [ffPrompted, setFfPrompted] = useState(false);
@@ -184,7 +208,7 @@ export default function SettingsScreen() {
                             <IconTarget size={18} color={theme.goals} />
                             <Text style={[styles.suggestText, { color: theme.ink }]}>
                                 A <Text style={{ fontFamily: 'Geist-SemiBold' }}>3-Month Emergency Fund</Text>
-                                {suggestedEmergency != null ? ` — aim for about $${suggestedEmergency.toLocaleString('en-US')}` : ''}
+                                {suggestedEmergency != null ? t('settings:firmFoundation.emergencyHint', { amount: formatMoney(suggestedEmergency) }) : ''}
                             </Text>
                         </View>
 
@@ -218,7 +242,7 @@ export default function SettingsScreen() {
                 </Pressable>
                 <View>
                     <Text style={[styles.eyebrow, { color: theme.ink3 }]}>PREFERENCES</Text>
-                    <Text style={[styles.title, { color: theme.ink }]}>Settings</Text>
+                    <Text style={[styles.title, { color: theme.ink }]}>{t('settings:title')}</Text>
                 </View>
             </View>
 
@@ -227,7 +251,7 @@ export default function SettingsScreen() {
             ) : (
                 <View style={styles.content}>
                     {/* ── Budget type section ─────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>BUDGET SPLIT</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('settings:section.budgetSplit')}</Text>
                     <Text style={[styles.sectionHint, { color: theme.ink2 }]}>
                         Pick the split that fits your situation. Changes apply to this month and
                         going forward — past months stay as they were.
@@ -260,7 +284,7 @@ export default function SettingsScreen() {
                     </Pressable>
 
                     {/* ── Tithing section ─────────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>GIVING</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>{t('settings:section.giving')}</Text>
 
                     <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                         <View style={styles.rowTop}>
@@ -268,7 +292,7 @@ export default function SettingsScreen() {
                                 <IconScripture size={22} color={theme.brand} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={[styles.rowTitle, { color: theme.ink }]}>Tithing</Text>
+                                <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:tithing.title')}</Text>
                                 <Text style={[styles.rowSub, { color: theme.ink2 }]}>
                                     Set aside {ratePct}% as a tithe before budgeting
                                 </Text>
@@ -292,7 +316,7 @@ export default function SettingsScreen() {
                     </View>
 
                     {/* ── Appearance section ──────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>APPEARANCE</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>{t('settings:section.appearance')}</Text>
 
                     <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                         <View style={styles.rowTop}>
@@ -302,7 +326,7 @@ export default function SettingsScreen() {
                                     : <IconMoon size={22} color={theme.brand} />}
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={[styles.rowTitle, { color: theme.ink }]}>Dark mode</Text>
+                                <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:appearance.darkMode')}</Text>
                                 <Text style={[styles.rowSub, { color: theme.ink2 }]}>
                                     {isDark ? 'On' : 'Off'} · system-aware by default
                                 </Text>
@@ -316,10 +340,72 @@ export default function SettingsScreen() {
                         </View>
                     </View>
 
+                    {/* ── Language & currency ─────────────────────────────── */}
+                    {/* Two INDEPENDENT settings. Language changes the words and the
+                        number separators; currency changes only the symbol. Neither
+                        constrains the other, and all four combinations are valid. */}
+                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>
+                        {t('settings:section.languageCurrency')}
+                    </Text>
+
+                    <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
+                        <View style={styles.rowTop}>
+                            <View style={[styles.iconTile, { backgroundColor: theme.brandSoft }]}>
+                                <IconScripture size={22} color={theme.brand} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.rowTitle, { color: theme.ink }]}>
+                                    {t('settings:language.title')}
+                                </Text>
+                                <Text style={[styles.rowSub, { color: theme.ink2 }]}>
+                                    {t('settings:language.subtitle')}
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={styles.optionList}>
+                            {SUPPORTED_LANGUAGES.map(tag => (
+                                <OptionRow
+                                    key={tag}
+                                    theme={theme}
+                                    label={t(`settings:language.${tag}`)}
+                                    selected={language === tag}
+                                    onPress={() => setLanguage(tag)}
+                                />
+                            ))}
+                        </View>
+                    </View>
+
+                    <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7), marginTop: 12 }]}>
+                        <View style={styles.rowTop}>
+                            <View style={[styles.iconTile, { backgroundColor: theme.harvest }]}>
+                                <IconTarget size={22} color={theme.brand} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.rowTitle, { color: theme.ink }]}>
+                                    {t('settings:currency.title')}
+                                </Text>
+                                <Text style={[styles.rowSub, { color: theme.ink2 }]}>
+                                    {t('settings:currency.subtitle')}
+                                </Text>
+                            </View>
+                        </View>
+                        <View style={styles.optionList}>
+                            {CURRENCY_CODES.map(code => (
+                                <OptionRow
+                                    key={code}
+                                    theme={theme}
+                                    label={t(CURRENCIES[code].labelKey)}
+                                    selected={currency === code}
+                                    onPress={() => handleSelectCurrency(code)}
+                                />
+                            ))}
+                        </View>
+                    </View>
+
                     {/* ── Dev tools (dev account only) ─────────────────────── */}
                     {isDevAccount && (
                         <>
-                            <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>DEV</Text>
+                            <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>{t('settings:section.dev')}</Text>
                             <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                                 <View style={styles.rowTop}>
                                     <View style={[styles.iconTile, { backgroundColor: theme.brandSoft }]}>
@@ -347,7 +433,7 @@ export default function SettingsScreen() {
                     )}
 
                     {/* ── About & legal ───────────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>ABOUT</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>{t('settings:section.about')}</Text>
 
                     <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                         <View style={styles.legalBody}>
@@ -392,12 +478,12 @@ export default function SettingsScreen() {
                             pressed && { opacity: 0.85 },
                         ]}
                     >
-                        <Text style={styles.logoutText}>Log Out</Text>
+                        <Text style={styles.logoutText}>{t('settings:logout')}</Text>
                     </Pressable>
 
                     {/* ── Danger zone: delete account (very bottom) ────────── */}
                     <View style={[styles.dangerZone, { backgroundColor: theme.dangerSoft, borderColor: theme.danger }]}>
-                        <Text style={[styles.dangerLabel, { color: theme.danger }]}>DANGER ZONE</Text>
+                        <Text style={[styles.dangerLabel, { color: theme.danger }]}>{t('settings:section.dangerZone')}</Text>
                         <Text style={[styles.dangerHint, { color: theme.ink2 }]}>
                             Permanently delete your account and every record tied to it.
                         </Text>
@@ -409,7 +495,7 @@ export default function SettingsScreen() {
                                 pressed && { opacity: 0.85 },
                             ]}
                         >
-                            <Text style={styles.deleteText}>Delete Account</Text>
+                            <Text style={styles.deleteText}>{t('settings:delete.button')}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -432,7 +518,7 @@ export default function SettingsScreen() {
                             and given the place to do it. */}
                         <View style={[styles.subWarning, { backgroundColor: theme.harvestSoft }]}>
                             <Text style={[styles.subWarningText, { color: theme.ink }]}>
-                                {DELETE_ACCOUNT_SUBSCRIPTION_WARNING}
+                                {t('premium:deleteAccountWarning')}
                             </Text>
                             <Pressable
                                 onPress={() => WebBrowser.openBrowserAsync(MANAGE_SUBSCRIPTION_URL)}
@@ -561,6 +647,43 @@ export default function SettingsScreen() {
     }
 }
 
+/**
+ * A single selectable row inside a settings card — used by both the language and the
+ * currency pickers. Deliberately plain: these are two-option lists today but the
+ * language list grows every time a locale folder is added, so it renders from data
+ * rather than being hand-written per option.
+ */
+function OptionRow({
+    theme, label, selected, onPress,
+}: {
+    theme: AppTheme;
+    label: string;
+    selected: boolean;
+    onPress: () => void;
+}) {
+    return (
+        <Pressable
+            onPress={onPress}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            style={({ pressed }) => [
+                styles.optionRow,
+                { borderColor: selected ? theme.brand : theme.border },
+                selected && { backgroundColor: theme.brandSoft },
+                pressed && { opacity: 0.7 },
+            ]}
+        >
+            <Text style={[
+                styles.optionLabel,
+                { color: selected ? theme.brand : theme.ink },
+            ]}>
+                {label}
+            </Text>
+            {selected && <IconCheck size={16} color={theme.brand} />}
+        </Pressable>
+    );
+}
+
 const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
@@ -623,6 +746,28 @@ const styles = StyleSheet.create({
     },
     modalTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: 24, textAlign: 'center', marginBottom: 6 },
     modalBody: { fontFamily: 'Geist-Regular', fontSize: 13, lineHeight: 19, textAlign: 'center', marginBottom: 14 },
+
+    // Language & currency pickers
+    optionList: {
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        gap: 8,
+    },
+    optionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        borderWidth: 1.5,
+    },
+    optionLabel: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 14,
+        flexShrink: 1,
+    },
 
     // Premium
     restoreRow: {

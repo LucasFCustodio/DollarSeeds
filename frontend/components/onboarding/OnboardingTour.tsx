@@ -14,11 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
 import { useOnboarding } from '../../context/OnboardingContext';
+import { useTranslation } from 'react-i18next';
 import { ONBOARDING_STEPS } from '../../constants/onboarding';
+import { DISCLAIMER_SHORT } from '../../constants/legal';
 import Button from '../ui/Button';
 
 export default function OnboardingTour() {
     const { active, step, stepCount, next, skip } = useOnboarding();
+    const { t } = useTranslation('onboarding');
     const { theme } = useTheme();
     const router = useRouter();
     const segments = useSegments();
@@ -70,30 +73,32 @@ export default function OnboardingTour() {
                         ))}
                     </View>
                     <Text style={[styles.stepCount, { color: theme.ink3 }]}>
-                        {step + 1} of {stepCount}
+                        {t('chrome.progress', { step: step + 1, total: stepCount })}
                     </Text>
                 </View>
 
-                <Text style={[styles.eyebrow, { color: theme.brand }]}>{current.eyebrow}</Text>
-                <Text style={[styles.title, { color: theme.ink }]}>{current.title}</Text>
-                <Text style={[styles.body, { color: theme.ink2 }]}>{current.body}</Text>
+                <Text style={[styles.eyebrow, { color: theme.brand }]}>{t(`steps.${current.key}.eyebrow`)}</Text>
+                <Text style={[styles.title, { color: theme.ink }]}>{t(`steps.${current.key}.title`)}</Text>
+                <Text style={[styles.body, { color: theme.ink2 }]}>{t(`steps.${current.key}.body`)}</Text>
 
-                {current.subnote ? (
+                {t(`steps.${current.key}.subnote`, { defaultValue: '' }) ? (
                     <View style={[styles.subnoteBox, { backgroundColor: theme.brandSoft }]}>
-                        <Text style={[styles.subnote, { color: theme.ink }]}>{current.subnote}</Text>
+                        <Text style={[styles.subnote, { color: theme.ink }]}>
+                            {t(`steps.${current.key}.subnote`)}
+                        </Text>
                     </View>
                 ) : null}
 
-                {current.footnote ? (
-                    <Text style={[styles.footnote, { color: theme.ink3 }]}>{current.footnote}</Text>
+                {current.showDisclaimer ? (
+                    <Text style={[styles.footnote, { color: theme.ink3 }]}>{DISCLAIMER_SHORT}</Text>
                 ) : null}
 
                 <View style={styles.footer}>
                     <Pressable onPress={skip} hitSlop={8} style={styles.skipBtn}>
-                        <Text style={[styles.skipText, { color: theme.ink3 }]}>Skip</Text>
+                        <Text style={[styles.skipText, { color: theme.ink3 }]}>{t('chrome.skip')}</Text>
                     </Pressable>
                     <Button
-                        label={isLast ? 'Get started' : 'Next'}
+                        label={isLast ? t('chrome.getStarted') : t('chrome.next')}
                         variant="primary"
                         size="lg"
                         color={theme.onBrand}

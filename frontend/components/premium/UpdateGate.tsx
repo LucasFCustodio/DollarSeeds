@@ -19,6 +19,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Application from 'expo-application';
 
 import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { ft } from '../../constants/responsive';
 
@@ -51,6 +52,7 @@ export function isBelowVersion(current: string | null, minimum: string | null): 
 
 export default function UpdateGate() {
     const { theme } = useTheme();
+    const { t } = useTranslation('premium');
     const { config } = useSubscription();
 
     const blocked = useMemo(() => {
@@ -64,10 +66,9 @@ export default function UpdateGate() {
         <View style={styles.overlay}>
             <View style={[styles.scrim, { backgroundColor: theme.bg }]} />
             <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(10) }]}>
-                <Text style={[styles.title, { color: theme.ink }]}>Time to update</Text>
+                <Text style={[styles.title, { color: theme.ink }]}>{t('updateGate.title')}</Text>
                 <Text style={[styles.body, { color: theme.ink2 }]}>
-                    This version of DollarSeeds is no longer supported. Update to the latest
-                    version to keep going — your data is safe and will be waiting.
+                    {t('updateGate.body')}
                 </Text>
                 {!!config.updateUrl && (
                     <Pressable
@@ -78,7 +79,7 @@ export default function UpdateGate() {
                             pressed && { opacity: 0.85 },
                         ]}
                     >
-                        <Text style={[styles.btnText, { color: theme.onBrand }]}>Update DollarSeeds</Text>
+                        <Text style={[styles.btnText, { color: theme.onBrand }]}>{t('updateGate.button')}</Text>
                     </Pressable>
                 )}
             </View>

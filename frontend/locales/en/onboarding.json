@@ -1,0 +1,32 @@
+{
+  "chrome": {
+    "skip": "Skip",
+    "next": "Next",
+    "getStarted": "Get started",
+    "progress": "{{step}} of {{total}}"
+  },
+  "steps": {
+    "dashboard": {
+      "eyebrow": "DASHBOARD",
+      "title": "Welcome to DollarSeeds",
+      "body": "Go here to see your current income, what's left to spend, and how much money you have for each spending category"
+    },
+    "transactions": {
+      "eyebrow": "TRANSACTIONS",
+      "title": "Add Your Income and Expenses",
+      "body": "Enter an amount, pick a category, name it, choose a date, and save. New income is automatically split across all categories"
+    },
+    "goals": {
+      "eyebrow": "GOALS",
+      "title": "Track Your Goals",
+      "body": "Create a personal or debt goal. Add money to it from this month's income, or from your General Savings (GS). ",
+      "subnote": "Add to GS whenever you have no specific saving goal. Money not spent will roll over into your GS at the end of the month"
+    },
+    "lessons": {
+      "eyebrow": "LESSONS",
+      "title": "Grow in wisdom",
+      "body": "Scripture-rooted video series on money, generosity, and stewardship, given by successful professionals.",
+      "subnote": "More series will be added as the app and its reach grows"
+    }
+  }
+}

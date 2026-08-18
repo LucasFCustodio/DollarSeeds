@@ -1,0 +1,63 @@
+{
+  "cta": {
+    "title": "DollarSeeds Premium",
+    "body": "Assine o premium para desbloquear recursos exclusivos e apoiar o app",
+    "manage": "Gerenciar assinatura",
+    "activeFallback": "Sua assinatura premium está ativa"
+  },
+  "paywall": {
+    "heading": "Assine o DollarSeeds Premium",
+    "description": "O DollarSeeds quer dar a todo mundo as ferramentas para se organizar financeiramente de graça. Por isso, o único recurso premium são as aulas em vídeo. Tenha acesso a séries em vídeo com empreendedores cristãos bem-sucedidos. Conheça suas lutas e conquistas, e como eles mantêm Deus em primeiro lugar na carreira",
+    "equalTiers": "Todos os níveis de assinatura oferecem <bold>exatamente os mesmos</bold> benefícios — o desbloqueio das séries em vídeo exclusivas premium. Qualquer que seja o valor com que você escolha apoiar, somos gratos por ele!",
+    "monthly": "Mensal",
+    "yearly": "Anual",
+    "yearlyNote": "Mesmo preço do mensal — só que pago uma vez por ano.",
+    "perMonth": "por mês",
+    "perYear": "por ano",
+    "current": "Atual: {{tier}}",
+    "autoRenew": "As assinaturas são renovadas automaticamente ao fim de cada período de cobrança, a não ser que sejam canceladas com pelo menos 24 horas de antecedência. Gerencie ou cancele quando quiser nas configurações da sua conta na App Store.",
+    "restore": "Restaurar compras",
+    "terms": "Termos de Serviço",
+    "privacy": "Política de Privacidade",
+    "loadFailed": "Não foi possível carregar as opções de assinatura. Tente novamente em instantes.",
+    "unavailable": "As assinaturas ainda não estão disponíveis neste dispositivo."
+  },
+  "tier": {
+    "basic": "Básico",
+    "intermediate": "Intermediário",
+    "high": "Alto",
+    "max": "Máximo"
+  },
+  "switch": {
+    "title": "Alterar seu nível de apoio?",
+    "bodyWithDate": "Seu novo nível começa em {{date}}, quando o período atual terminar. Você mantém o acesso completo até lá.",
+    "bodyNoDate": "Seu novo nível começa quando o período atual terminar. Você mantém o acesso completo até lá."
+  },
+  "purchase": {
+    "failedTitle": "Compra não concluída",
+    "unavailableBody": "As compras ainda não estão disponíveis neste dispositivo."
+  },
+  "restore": {
+    "restoredTitle": "Compras restauradas",
+    "restoredBody": "Sua assinatura está ativa novamente.",
+    "nothingTitle": "Nada a restaurar",
+    "nothingBody": "Nenhuma assinatura anterior foi encontrada para esta conta.",
+    "unavailableTitle": "Indisponível",
+    "unavailableBody": "As compras ainda não estão disponíveis neste dispositivo.",
+    "failedTitle": "Não foi possível restaurar"
+  },
+  "deleteAccountWarning": "Excluir sua conta não cancela sua assinatura. As assinaturas são cobradas pela App Store e precisam ser canceladas separadamente nas configurações da sua conta na App Store.",
+  "updateGate": {
+    "title": "Hora de atualizar",
+    "body": "Esta versão do DollarSeeds não é mais compatível. Atualize para a versão mais recente para continuar — seus dados estão seguros e estarão esperando por você.",
+    "button": "Atualizar o DollarSeeds"
+  },
+  "lock": {
+    "badge": "PREMIUM",
+    "unlock": "Desbloquear ›",
+    "explore": "Explorar ›",
+    "seriesBanner": "Assine para desbloquear esta série",
+    "playerLocked": "Esta aula faz parte do Premium.",
+    "playerCta": "Ver opções de assinatura"
+  }
+}

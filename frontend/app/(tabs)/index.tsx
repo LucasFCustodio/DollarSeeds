@@ -26,6 +26,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
+import { useLocale } from '../../context/LocaleContext';
+import { MONTHS } from '../../constants/months';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -91,21 +93,6 @@ const getDailyVerse = () => {
     return VERSES[dayOfYear % VERSES.length];
 };
 
-// ─── Helper ──────────────────────────────────────────────────────────────────
-function fmt$(n: number, decimals = 0): string {
-    return Number(n || 0).toLocaleString('en-US', {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-    });
-}
-
-// ─── Month abbreviation lookup ────────────────────────────────────────────────
-const MONTH_ABBR: Record<string, string> = {
-    January: 'Jan', February: 'Feb', March: 'Mar', April: 'Apr',
-    May: 'May', June: 'Jun', July: 'Jul', August: 'Aug',
-    September: 'Sep', October: 'Oct', November: 'Nov', December: 'Dec',
-};
-
 // ─── Real transaction type (expenses/details + savings/history) ──────────────
 interface TxItem {
     id: number | string;
@@ -121,11 +108,13 @@ export default function DashboardScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
+    const { formatMoney: fmtMoney, monthAbbr } = useLocale();
 
-    // Month state
-    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    // Month state. MONTHS is the canonical English list (constants/months.ts) — it is
+    // what gets POSTed and stored, and is never translated. Display goes through
+    // monthLabel()/monthAbbr().
     const [monthIndex, setMonthIndex] = useState(new Date().getMonth());
-    const currentMonth = months[monthIndex];
+    const currentMonth = MONTHS[monthIndex];
 
     // Data state
     const [dashboardData, setDashboardData] = useState<DashboardData>({
@@ -447,7 +436,7 @@ export default function DashboardScreen() {
                     {/* Big amount */}
                     <View style={{ marginTop: tv(10, 20) }}>
                         <Text style={styles.incomeEyebrow}>
-                            ${fmt$(total_income)} · TOTAL INCOME
+                            {fmtMoney(total_income)} · TOTAL INCOME
                         </Text>
                         <AnimatedAmount
                             value={totalLeft}
@@ -489,7 +478,7 @@ export default function DashboardScreen() {
                                     Ready to close out {currentMonth}?
                                 </Text>
                                 <Text style={[styles.rolloverSub, { color: theme.ink2 }]}>
-                                    You have ${fmt$(rollover?.target ?? 0, 2)} left to move into General Savings.
+                                    You have {fmtMoney(rollover?.target ?? 0, 2)} left to move into General Savings.
                                 </Text>
                             </View>
                             <Pressable
@@ -501,7 +490,7 @@ export default function DashboardScreen() {
                             </Pressable>
                         </View>
                         <Button
-                            label={closingMonth ? 'Closing…' : `Close out & save $${fmt$(rollover?.target ?? 0)}`}
+                            label={closingMonth ? 'Closing…' : `Close out & save ${fmtMoney(rollover?.target ?? 0)}`}
                             variant="primary"
                             size="md"
                             fullWidth
@@ -523,7 +512,7 @@ export default function DashboardScreen() {
                                 {currentMonth} is closed
                             </Text>
                             <Text style={[styles.rolloverSub, { color: theme.ink2 }]}>
-                                ${fmt$(rollover?.amount ?? 0, 2)} rolled into General Savings.
+                                {fmtMoney(rollover?.amount ?? 0, 2)} rolled into General Savings.
                             </Text>
                         </View>
                         <Pressable
@@ -596,7 +585,7 @@ export default function DashboardScreen() {
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
                             <Text style={[styles.titheAmount, { color: theme.ink }]}>
-                                ${fmt$(tithe?.amount ?? 0)}
+                                {fmtMoney(tithe?.amount ?? 0)}
                             </Text>
                             <Text style={[styles.titheAmountLabel, { color: theme.ink3 }]}>SET ASIDE</Text>
                         </View>
@@ -686,6 +675,7 @@ interface CategoryCardProps {
 }
 
 function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBalance }: CategoryCardProps) {
+    const { formatMoney: fmtMoney, monthAbbr } = useLocale();
     const pct = cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0;
     const left = cat.budget - cat.spent;
     const over = pct > 100;
@@ -718,7 +708,7 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
 
                 <View style={{ alignItems: 'flex-end' }}>
                     <Text style={[styles.catLeft, { color: over ? theme.danger : theme.ink }]}>
-                        ${fmt$(Math.abs(left))}
+                        {fmtMoney(Math.abs(left))}
                     </Text>
                     <Text style={[styles.catLeftLabel, { color: theme.ink3 }]}>
                         {over ? 'OVER' : 'LEFT'}
@@ -736,10 +726,10 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
                 />
                 <View style={styles.catMeta}>
                     <Text style={[styles.catMetaText, { color: theme.ink3 }]}>
-                        ${fmt$(cat.spent)} spent
+                        {fmtMoney(cat.spent)} spent
                     </Text>
                     <Text style={[styles.catMetaText, { color: theme.ink3 }]}>
-                        of ${fmt$(cat.budget)}
+                        of {fmtMoney(cat.budget)}
                     </Text>
                 </View>
             </View>
@@ -773,11 +763,11 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
                                     {item.title || item.sub_category}
                                 </Text>
                                 <Text style={[styles.txDate, { color: theme.ink3 }]}>
-                                    {MONTH_ABBR[item.month] ?? ''} {item.day}
+                                    {monthAbbr(item.month)} {item.day}
                                 </Text>
                             </View>
                             <Text style={[styles.txAmount, { color: theme.ink2 }]}>
-                                ${fmt$(item.amount, 2)}
+                                {fmtMoney(item.amount, 2)}
                             </Text>
                         </View>
                     ))}
@@ -788,7 +778,7 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
                             <IconSavings size={20} color={theme.brand} accent={theme.brand2} />
                             <Text style={[styles.piggyLabel, { color: theme.brand }]}>Piggy bank balance</Text>
                             <Text style={[styles.piggyAmount, { color: theme.brand }]}>
-                                ${fmt$(piggyBalance, 2)}
+                                {fmtMoney(piggyBalance, 2)}
                             </Text>
                         </View>
                     )}

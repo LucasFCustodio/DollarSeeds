@@ -1,0 +1,77 @@
+{
+  "action": {
+    "cancel": "Cancelar",
+    "save": "Salvar",
+    "delete": "Excluir",
+    "done": "Concluir",
+    "next": "Avançar",
+    "skip": "Pular",
+    "back": "Voltar",
+    "retry": "Toque para tentar novamente",
+    "close": "Fechar",
+    "confirm": "Confirmar",
+    "viewAll": "Ver todos os {{label}} →"
+  },
+  "state": {
+    "loading": "Carregando…",
+    "saving": "Salvando…",
+    "genericError": "Algo deu errado. Tente novamente."
+  },
+  "months": {
+    "January": "Janeiro",
+    "February": "Fevereiro",
+    "March": "Março",
+    "April": "Abril",
+    "May": "Maio",
+    "June": "Junho",
+    "July": "Julho",
+    "August": "Agosto",
+    "September": "Setembro",
+    "October": "Outubro",
+    "November": "Novembro",
+    "December": "Dezembro"
+  },
+  "monthsShort": {
+    "January": "jan",
+    "February": "fev",
+    "March": "mar",
+    "April": "abr",
+    "May": "mai",
+    "June": "jun",
+    "July": "jul",
+    "August": "ago",
+    "September": "set",
+    "October": "out",
+    "November": "nov",
+    "December": "dez"
+  },
+  "date": {
+    "dayMonth": "{{day}} de {{month}}",
+    "monthYear": "{{month}} de {{year}}",
+    "day": "Dia {{day}}"
+  },
+  "category": {
+    "Needs": "Necessidades",
+    "Wants": "Desejos",
+    "Goals": "Metas"
+  },
+  "tabs": {
+    "index": "Painel",
+    "transactions": "Transações",
+    "piggyBank": "Metas",
+    "lessons": "Séries"
+  },
+  "serverTitle": {
+    "General Savings": "Poupança Geral",
+    "Reconciliation": "Reconciliação",
+    "rollover": "Saldo transferido — {{month}}",
+    "rolloverRecovery": "Recuperação de saldo — {{month}}",
+    "transferToGoal": "Transferência da Poupança Geral para {{goal}}"
+  },
+  "serverError": {
+    "monthClosed": "{{month}} está fechado. Reabra o mês antes de fazer alterações.",
+    "goalNameTaken": "Já existe uma meta com esse nome.",
+    "generalSavingsLocked": "A Poupança Geral não pode ser editada.",
+    "reconciliationLocked": "A meta de Reconciliação é gerenciada automaticamente."
+  }
+}
