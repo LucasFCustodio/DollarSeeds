@@ -24,6 +24,8 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useOnboarding } from '../../context/OnboardingContext';
+import { useLocale } from '../../context/LocaleContext';
+import { MONTHS } from '../../constants/months';
 import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
 import {
     isNewAccount, startingBalanceKey, startingBalanceSkipKey, STARTING_BALANCE_SKIP_COOLDOWN_MS,
@@ -33,15 +35,12 @@ import InputField from '../ui/InputField';
 
 const BASE = 'https://dollarseeds-1.onrender.com';
 
-const MONTHS = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-];
 
 export default function StartingBalanceGate() {
     const { user, initialized } = useAuth();
     const { active } = useOnboarding();
     const { theme } = useTheme();
+    const { formatMoney: fmtMoney, parseAmount } = useLocale();
     const segments = useSegments();
 
     const currentMonth = MONTHS[new Date().getMonth()];
@@ -107,7 +106,7 @@ export default function StartingBalanceGate() {
         }
     }, [user?.id]);
 
-    const parsed = parseFloat(amount);
+    const parsed = parseAmount(amount) ?? NaN;
     const valid = !!amount && !isNaN(parsed) && parsed >= 0;
 
     const submit = useCallback(async () => {
@@ -163,7 +162,7 @@ export default function StartingBalanceGate() {
                                 Is this correct?
                             </Text>
                             <Text style={[styles.amount, { color: theme.brand }]}>
-                                ${parsed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                {fmtMoney(parsed, 2)}
                             </Text>
                             <Text style={[styles.body, { color: theme.ink2 }]}>
                                 This becomes your General Savings balance. You can add to it or

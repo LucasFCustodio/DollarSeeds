@@ -24,6 +24,9 @@ import Svg, { Path } from 'react-native-svg';
 import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
+import { useLocale } from '../../context/LocaleContext';
+import { MONTHS } from '../../constants/months';
+import { CURRENCIES } from '../../constants/currencies';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
 import { ft } from '../../constants/responsive';
 import { useAnalytics } from '../../lib/analytics';
@@ -34,11 +37,6 @@ import {
 } from '../icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const MONTHS = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December',
-];
-const MONTH_ABBRS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // Expense logging now offers only Needs and Wants. The former "Investments" (goals)
 // bucket moved to the Goals tab as Savings/Debt goals — no new 'Goals' expenses are
@@ -123,6 +121,8 @@ export default function ExpenseContainer({ embedded = false }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
+    const { parseAmount, dayMonth, currency } = useLocale();
+    const currencySymbol = CURRENCIES[currency].symbol;
     const analytics = useAnalytics();
 
     const today = new Date();
@@ -137,7 +137,7 @@ export default function ExpenseContainer({ embedded = false }) {
     const [submitted, setSubmitted] = useState(false);
 
     // Live date string shown in the amount card
-    const dateStr = `${MONTH_ABBRS[MONTHS.indexOf(month)] ?? MONTH_ABBRS[today.getMonth()]} ${day || today.getDate()}, ${today.getFullYear()}`;
+    const dateStr = `${dayMonth(MONTHS.includes(month) ? month : MONTHS[today.getMonth()], day || today.getDate())}, ${today.getFullYear()}`;
 
     const cats = [
         { key: 'needs', label: 'Needs', Icon: IconNeedsMascot, color: theme.needs, soft: theme.needsSoft },
@@ -147,7 +147,7 @@ export default function ExpenseContainer({ embedded = false }) {
 
     // ── Submit ─────────────────────────────────────────────────────────────────
     const submitExpense = async () => {
-        const parsed = parseFloat(amount);
+        const parsed = parseAmount(amount) ?? NaN;
         const parsedDay = parseInt(day, 10);
         if (!amount || isNaN(parsed) || parsed <= 0) return;
         if (!month || !MONTHS.includes(month)) return;
@@ -235,7 +235,7 @@ export default function ExpenseContainer({ embedded = false }) {
                     <View style={styles.amountInner}>
                         <Text style={styles.amountEyebrow}>AMOUNT</Text>
                         <View style={styles.amountRow}>
-                            <Text style={styles.amountDollar}>$</Text>
+                            <Text style={styles.amountDollar}>{currencySymbol}</Text>
                             <TextInput
                                 style={styles.amountInput}
                                 value={amount}

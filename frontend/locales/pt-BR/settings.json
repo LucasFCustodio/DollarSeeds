@@ -1,0 +1,74 @@
+{
+  "title": "Configurações",
+  "section": {
+    "budgetSplit": "DIVISÃO DO ORÇAMENTO",
+    "giving": "GENEROSIDADE",
+    "appearance": "APARÊNCIA",
+    "languageCurrency": "IDIOMA E MOEDA",
+    "premium": "PREMIUM",
+    "dev": "DEV",
+    "about": "SOBRE",
+    "dangerZone": "ZONA DE RISCO"
+  },
+  "budgetSplit": {
+    "hint": "Escolha a divisão que faz sentido para a sua situação. As mudanças valem para este mês em diante — os meses anteriores continuam como estavam."
+  },
+  "tithing": {
+    "title": "Dízimo",
+    "subtitle": "Separe {{percent}}% como dízimo antes de orçar",
+    "explain": "Quando ativado, {{percent}}% de cada nova entrada é separado primeiro para o Dízimo, e o seu orçamento {{split}} é calculado sobre os {{remainder}}% restantes. Os meses anteriores mantêm a divisão original."
+  },
+  "appearance": {
+    "darkMode": "Modo escuro",
+    "on": "Ativado",
+    "off": "Desativado",
+    "subtitle": "{{state}} · segue o sistema por padrão"
+  },
+  "language": {
+    "title": "Idioma",
+    "subtitle": "Escolha o idioma em que o DollarSeeds é exibido.",
+    "en": "English",
+    "pt-BR": "Português (Brasil)"
+  },
+  "currency": {
+    "title": "Símbolo da moeda",
+    "subtitle": "Altera o símbolo exibido ao lado dos valores. Não converte nenhum valor que você já registrou.",
+    "usd": "Dólar americano ($)",
+    "brl": "Real brasileiro (R$)",
+    "confirmTitle": "Alterar o símbolo da moeda?",
+    "confirmBody": "Isso altera apenas o símbolo exibido ao lado dos seus valores. Nada do que você já registrou é convertido — um valor salvo como 5.000 continua sendo 5.000.",
+    "confirmAccept": "Alterar símbolo"
+  },
+  "premium": {
+    "restore": "Restaurar compras",
+    "restoredTitle": "Compras restauradas",
+    "restoredBody": "Sua assinatura está ativa novamente.",
+    "nothingTitle": "Nada a restaurar",
+    "nothingBody": "Nenhuma assinatura anterior foi encontrada para esta conta.",
+    "unavailableTitle": "Indisponível",
+    "unavailableBody": "As compras ainda não estão disponíveis neste dispositivo.",
+    "failedTitle": "Não foi possível restaurar"
+  },
+  "dev": {
+    "onboardingTitle": "Tour de introdução",
+    "onboardingSubtitle": "Repetir o tour guiado do primeiro acesso",
+    "onboardingButton": "Repetir tour de introdução"
+  },
+  "about": {
+    "terms": "Termos de Serviço",
+    "privacy": "Política de Privacidade"
+  },
+  "logout": "Sair",
+  "delete": {
+    "hint": "Exclua permanentemente sua conta e todos os registros ligados a ela.",
+    "button": "Excluir conta",
+    "modalTitle": "Excluir conta",
+    "modalBody": "A exclusão da conta é irreversível. Você perderá todas as informações que registrou. Se quiser excluir sua conta, digite \"DELETE\" na caixa abaixo e toque em Excluir.",
+    "error": "Não confere — digite exatamente \"DELETE\" para confirmar.",
+    "manageSubscriptions": "Gerenciar assinaturas"
+  },
+  "firmFoundation": {
+    "title": "Construa sua Base Firme",
+    "emergencyHint": " — mire em cerca de {{amount}}"
+  }
+}

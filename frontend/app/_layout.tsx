@@ -11,6 +11,7 @@ import { useFonts } from 'expo-font';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
+import { LocaleProvider, useLocale } from '../context/LocaleContext';
 import { OnboardingProvider } from '../context/OnboardingContext';
 import { SubscriptionProvider } from '../context/SubscriptionContext';
 import OnboardingTour from '../components/onboarding/OnboardingTour';
@@ -43,6 +44,11 @@ function RootLayoutNav() {
     const colorScheme = useColorScheme();
     const { user, initialized } = useAuth();
     const { theme } = useTheme();
+    // Gate the first paint on the stored language too. Without this, i18next boots to
+    // the device language, the stored override lands a tick later, and any component
+    // that snapshots a display string into initial state captures the wrong-language
+    // value permanently for that mount.
+    const { ready: localeReady } = useLocale();
     const router = useRouter();
     const segments = useSegments();
 
@@ -81,7 +87,7 @@ function RootLayoutNav() {
         }
     }, [user, initialized, segments]);
 
-    if (!initialized) {
+    if (!initialized || !localeReady) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.bg }}>
                 <ActivityIndicator size="large" color={theme.brand} />
@@ -127,6 +133,9 @@ export default Sentry.wrap(function RootLayout() {
         >
             <AuthProvider>
                 <AppThemeProvider>
+                    {/* Outermost of the display providers: language is device-global and
+                        must be readable on /auth and UpdateGate, before any user exists. */}
+                    <LocaleProvider>
                     {/* Inside AuthProvider — it keys entitlement on the Supabase user
                         id. Outside OnboardingProvider so the tour can reference
                         premium state if it ever needs to. */}
@@ -135,6 +144,7 @@ export default Sentry.wrap(function RootLayout() {
                             <RootLayoutNav />
                         </OnboardingProvider>
                     </SubscriptionProvider>
+                    </LocaleProvider>
                 </AppThemeProvider>
             </AuthProvider>
         </PostHogProvider>

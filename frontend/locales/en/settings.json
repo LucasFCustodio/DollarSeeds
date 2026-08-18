@@ -1,0 +1,74 @@
+{
+  "title": "Settings",
+  "section": {
+    "budgetSplit": "BUDGET SPLIT",
+    "giving": "GIVING",
+    "appearance": "APPEARANCE",
+    "languageCurrency": "LANGUAGE & CURRENCY",
+    "premium": "PREMIUM",
+    "dev": "DEV",
+    "about": "ABOUT",
+    "dangerZone": "DANGER ZONE"
+  },
+  "budgetSplit": {
+    "hint": "Pick the split that fits your situation. Changes apply to this month and going forward — past months stay as they were."
+  },
+  "tithing": {
+    "title": "Tithing",
+    "subtitle": "Set aside {{percent}}% as a tithe before budgeting",
+    "explain": "When on, {{percent}}% of new income is carved into a Tithe envelope first, and your {{split}} budget is calculated on the remaining {{remainder}}%. Past months keep their original split."
+  },
+  "appearance": {
+    "darkMode": "Dark mode",
+    "on": "On",
+    "off": "Off",
+    "subtitle": "{{state}} · system-aware by default"
+  },
+  "language": {
+    "title": "Language",
+    "subtitle": "Choose the language DollarSeeds is displayed in.",
+    "en": "English",
+    "pt-BR": "Português (Brasil)"
+  },
+  "currency": {
+    "title": "Currency symbol",
+    "subtitle": "Changes the symbol shown next to amounts. It does not convert any value you have already recorded.",
+    "usd": "US Dollar ($)",
+    "brl": "Brazilian Real (R$)",
+    "confirmTitle": "Change the currency symbol?",
+    "confirmBody": "This changes the symbol shown beside your amounts only. Nothing you have already recorded is converted — an amount saved as 5,000 stays 5,000.",
+    "confirmAccept": "Change symbol"
+  },
+  "premium": {
+    "restore": "Restore Purchases",
+    "restoredTitle": "Purchases restored",
+    "restoredBody": "Your subscription is active again.",
+    "nothingTitle": "Nothing to restore",
+    "nothingBody": "No previous subscription was found for this account.",
+    "unavailableTitle": "Unavailable",
+    "unavailableBody": "Purchases are not available on this device yet.",
+    "failedTitle": "Could not restore"
+  },
+  "dev": {
+    "onboardingTitle": "Onboarding tour",
+    "onboardingSubtitle": "Replay the first-run guided tour",
+    "onboardingButton": "Replay Onboarding Tour"
+  },
+  "about": {
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy"
+  },
+  "logout": "Log Out",
+  "delete": {
+    "hint": "Permanently delete your account and every record tied to it.",
+    "button": "Delete Account",
+    "modalTitle": "Delete account",
+    "modalBody": "Deleting the account is irreversible. You'll lose all the information you've tracked. If you want to delete your account, type \"DELETE\" in the text box below, then click Delete.",
+    "error": "That's not right — type \"DELETE\" exactly to confirm.",
+    "manageSubscriptions": "Manage subscriptions"
+  },
+  "firmFoundation": {
+    "title": "Build your Firm Foundation",
+    "emergencyHint": " — aim for about {{amount}}"
+  }
+}

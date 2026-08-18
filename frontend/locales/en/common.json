@@ -1,0 +1,77 @@
+{
+  "action": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "done": "Done",
+    "next": "Next",
+    "skip": "Skip",
+    "back": "Back",
+    "retry": "Tap to retry",
+    "close": "Close",
+    "confirm": "Confirm",
+    "viewAll": "View all {{label}} →"
+  },
+  "state": {
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "genericError": "Something went wrong. Please try again."
+  },
+  "months": {
+    "January": "January",
+    "February": "February",
+    "March": "March",
+    "April": "April",
+    "May": "May",
+    "June": "June",
+    "July": "July",
+    "August": "August",
+    "September": "September",
+    "October": "October",
+    "November": "November",
+    "December": "December"
+  },
+  "monthsShort": {
+    "January": "Jan",
+    "February": "Feb",
+    "March": "Mar",
+    "April": "Apr",
+    "May": "May",
+    "June": "Jun",
+    "July": "Jul",
+    "August": "Aug",
+    "September": "Sep",
+    "October": "Oct",
+    "November": "Nov",
+    "December": "Dec"
+  },
+  "date": {
+    "dayMonth": "{{month}} {{day}}",
+    "monthYear": "{{month}} {{year}}",
+    "day": "Day {{day}}"
+  },
+  "category": {
+    "Needs": "Needs",
+    "Wants": "Wants",
+    "Goals": "Goals"
+  },
+  "tabs": {
+    "index": "Home",
+    "transactions": "Transactions",
+    "piggyBank": "Goals",
+    "lessons": "Lessons"
+  },
+  "serverTitle": {
+    "General Savings": "General Savings",
+    "Reconciliation": "Reconciliation",
+    "rollover": "Rollover — {{month}}",
+    "rolloverRecovery": "Rollover recovery — {{month}}",
+    "transferToGoal": "Transfer from General Savings to {{goal}}"
+  },
+  "serverError": {
+    "monthClosed": "{{month}} is closed. Reopen it before making changes.",
+    "goalNameTaken": "A goal with this name already exists.",
+    "generalSavingsLocked": "General Savings cannot be edited.",
+    "reconciliationLocked": "The Reconciliation goal is managed automatically."
+  }
+}

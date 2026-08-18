@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useLocale } from '../context/LocaleContext';
 import { useTheme } from '../context/ThemeContext';
 
 interface Expense {
@@ -33,6 +34,7 @@ export default function DetailsScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
+    const { formatMoney: fmtMoney } = useLocale();
     const { category, month, type } = useLocalSearchParams();
     const monthLabel = Array.isArray(month) ? month[0] : month;
 
@@ -163,7 +165,7 @@ export default function DetailsScreen() {
                                     {item.note ? `${item.note} · Day ${item.day}` : `Day ${item.day}`}
                                 </Text>
                             </View>
-                            <Text style={[styles.rowAmount, { color: theme.text }]}>${item.amount.toFixed(2)}</Text>
+                            <Text style={[styles.rowAmount, { color: theme.text }]}>{fmtMoney(item.amount, 2)}</Text>
                             <Pressable
                                 onPress={() => deleteExpense(item)}
                                 style={[styles.deleteBtn, { backgroundColor: theme.dangerSoft }]}
@@ -181,7 +183,7 @@ export default function DetailsScreen() {
                                 <Text style={[styles.rowTitle, { color: theme.text }]}>{item.source ?? item.jobTitle ?? 'Income'}</Text>
                                 <Text style={[styles.rowDate, { color: theme.textMuted }]}>Day {item.day}</Text>
                             </View>
-                            <Text style={[styles.rowAmount, { color: theme.text }]}>${item.amount.toFixed(2)}</Text>
+                            <Text style={[styles.rowAmount, { color: theme.text }]}>{fmtMoney(item.amount, 2)}</Text>
                             <Pressable
                                 onPress={() => deleteIncome(item.id)}
                                 style={[styles.deleteBtn, { backgroundColor: theme.dangerSoft }]}
