@@ -1,0 +1,17 @@
+{
+  "channelName": "Daily Reminders",
+  "reminders": {
+    "diligent": {
+      "title": "The Soul of the Diligent is Richly Supplied 🌱",
+      "body": "End the day with diligence! Plant a seed of careful planning now, so you can richly sow tomrrow"
+    },
+    "ant": {
+      "title": "You don't have to be strong to be prepared 🐜",
+      "body": "The ant isn't strong, but it prepares in the time of preparation. When the Winter comes, it will have enough!"
+    },
+    "widow": {
+      "title": "Trust God with All Your Money 🪙",
+      "body": "The strongest showcase of faith, is knowing how much you have, and letting God freely use it, just like the Widow."
+    }
+  }
+}

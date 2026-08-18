@@ -28,6 +28,7 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, stickerShadow, Fonts, AppTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { ft, tv } from '../../constants/responsive';
 import { DISCLAIMER_FULL } from '../../constants/legal';
@@ -57,6 +58,7 @@ export default function LessonsScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
+    const { t } = useTranslation('premium');
     const analytics = useAnalytics();
     const { premiumActive, config, openPaywall } = useSubscription();
 
@@ -173,6 +175,7 @@ export default function LessonsScreen() {
                                     theme={theme}
                                     series={s}
                                     locked={locked}
+                                    t={t}
                                     onExplore={() => {
                                         if (locked) { openPaywall(); return; }
                                         analytics.seriesExploreClicked({ series_id: s.id, title: s.title });
@@ -331,12 +334,13 @@ export default function LessonsScreen() {
  * - "Explore ›" brand button, bottom-aligned, right edge = thumbnail's right edge
  */
 function SeriesCard({
-    theme, series, locked, onExplore,
+    theme, series, locked, onExplore, t,
 }: {
     theme: AppTheme;
     series: Series;
     locked: boolean;
     onExplore: () => void;
+    t: (k: string) => string;
 }) {
     const lessonWord = series.lesson_count === 1 ? 'lesson' : 'lessons';
     return (
@@ -372,7 +376,7 @@ function SeriesCard({
                 {locked && (
                     <View style={[styles.lockBadge, { backgroundColor: theme.harvest }]}>
                         <IconLock size={12} color={theme.brand} />
-                        <Text style={[styles.lockBadgeText, { color: theme.brand }]}>PREMIUM</Text>
+                        <Text style={[styles.lockBadgeText, { color: theme.brand }]}>{t('lock.badge')}</Text>
                     </View>
                 )}
             </View>
@@ -395,7 +399,7 @@ function SeriesCard({
                     ]}
                 >
                     <Text style={[styles.exploreText, { color: theme.onBrand }]}>
-                        {locked ? 'Unlock ›' : 'Explore ›'}
+                        {locked ? t('lock.unlock') : t('lock.explore')}
                     </Text>
                 </Pressable>
             </View>

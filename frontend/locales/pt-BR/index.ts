@@ -4,5 +4,8 @@
  */
 import common from './common.json';
 import settings from './settings.json';
+import onboarding from './onboarding.json';
+import premium from './premium.json';
+import notifications from './notifications.json';
 
-export default { common, settings } as const;
+export default { common, settings, onboarding, premium, notifications } as const;

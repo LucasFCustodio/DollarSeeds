@@ -34,6 +34,7 @@ import {
 } from '../constants/currencies';
 import { formatMoney as rawFormatMoney, formatNumber as rawFormatNumber, parseAmount as rawParseAmount } from '../lib/money';
 import { MONTHS, type MonthName } from '../constants/months';
+import { rescheduleRemindersForLanguage } from '../hooks/useNotifications';
 
 const LANGUAGE_KEY = 'display_language';
 const CURRENCY_KEY = 'display_currency';
@@ -138,6 +139,11 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
         } catch {
             // Preference is applied for this session even if it can't be persisted.
         }
+        // Notifications are queued with the OS, so an already-scheduled reminder keeps
+        // its old wording until something replaces it. Driving this from the SETTER
+        // rather than a mount effect means a user who switches language and force-quits
+        // still gets Portuguese reminders tomorrow.
+        rescheduleRemindersForLanguage();
     }, []);
 
     const setCurrency = useCallback(async (next: CurrencyCode) => {

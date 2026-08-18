@@ -56,10 +56,10 @@
     "Goals": "Metas"
   },
   "tabs": {
-    "index": "Início",
+    "index": "Painel",
     "transactions": "Transações",
     "piggyBank": "Metas",
-    "lessons": "Lições"
+    "lessons": "Séries"
   },
   "serverTitle": {
     "General Savings": "Poupança Geral",

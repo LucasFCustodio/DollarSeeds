@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import axios from 'axios';
 
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useAnalytics } from '../../lib/analytics';
 import { IconChevronLeft, IconChevronRight, IconLock } from '../../components/icons';
@@ -52,6 +53,7 @@ export default function LessonSeriesScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const { theme } = useTheme();
+    const { t } = useTranslation('premium');
     const analytics = useAnalytics();
     const { premiumActive, config, openPaywall } = useSubscription();
 
@@ -154,7 +156,7 @@ export default function LessonSeriesScreen() {
                                     >
                                         <IconLock size={16} color={theme.ink} />
                                         <Text style={[styles.lockedBannerText, { color: theme.ink }]}>
-                                            Subscribe to unlock this series
+                                            {t('lock.seriesBanner')}
                                         </Text>
                                     </Pressable>
                                 )}

@@ -34,7 +34,7 @@ import { SUPPORTED_LANGUAGES } from '../lib/i18n';
 import { CURRENCIES, CURRENCY_CODES, type CurrencyCode } from '../constants/currencies';
 import { DEV_ACCOUNT_EMAIL } from '../constants/onboarding';
 import { DISCLAIMER_FULL, TERMS_URL, PRIVACY_URL } from '../constants/legal';
-import { DELETE_ACCOUNT_SUBSCRIPTION_WARNING, MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
+import { MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
 import { supabase } from '../lib/supabase';
 import {
     IconChevronLeft, IconScripture, IconMoon, IconSun, IconTarget, IconSparkle, IconCheck,
@@ -54,7 +54,7 @@ export default function SettingsScreen() {
     const { theme, isDark, toggleTheme } = useTheme();
     const { replay: replayOnboarding } = useOnboarding();
     const { restore: restorePremium } = useSubscription();
-    const { t } = useTranslation(['settings', 'common']);
+    const { t } = useTranslation(['settings', 'common', 'premium']);
     const { language, setLanguage, currency, setCurrency, formatMoney } = useLocale();
     const [restoring, setRestoring] = useState(false);
     const isDevAccount = user?.email === DEV_ACCOUNT_EMAIL;
@@ -242,7 +242,7 @@ export default function SettingsScreen() {
                 </Pressable>
                 <View>
                     <Text style={[styles.eyebrow, { color: theme.ink3 }]}>PREFERENCES</Text>
-                    <Text style={[styles.title, { color: theme.ink }]}>Settings</Text>
+                    <Text style={[styles.title, { color: theme.ink }]}>{t('settings:title')}</Text>
                 </View>
             </View>
 
@@ -251,7 +251,7 @@ export default function SettingsScreen() {
             ) : (
                 <View style={styles.content}>
                     {/* ── Budget type section ─────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>BUDGET SPLIT</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('settings:section.budgetSplit')}</Text>
                     <Text style={[styles.sectionHint, { color: theme.ink2 }]}>
                         Pick the split that fits your situation. Changes apply to this month and
                         going forward — past months stay as they were.
@@ -284,7 +284,7 @@ export default function SettingsScreen() {
                     </Pressable>
 
                     {/* ── Tithing section ─────────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>GIVING</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>{t('settings:section.giving')}</Text>
 
                     <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                         <View style={styles.rowTop}>
@@ -292,7 +292,7 @@ export default function SettingsScreen() {
                                 <IconScripture size={22} color={theme.brand} />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={[styles.rowTitle, { color: theme.ink }]}>Tithing</Text>
+                                <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:tithing.title')}</Text>
                                 <Text style={[styles.rowSub, { color: theme.ink2 }]}>
                                     Set aside {ratePct}% as a tithe before budgeting
                                 </Text>
@@ -316,7 +316,7 @@ export default function SettingsScreen() {
                     </View>
 
                     {/* ── Appearance section ──────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>APPEARANCE</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>{t('settings:section.appearance')}</Text>
 
                     <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                         <View style={styles.rowTop}>
@@ -326,7 +326,7 @@ export default function SettingsScreen() {
                                     : <IconMoon size={22} color={theme.brand} />}
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={[styles.rowTitle, { color: theme.ink }]}>Dark mode</Text>
+                                <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:appearance.darkMode')}</Text>
                                 <Text style={[styles.rowSub, { color: theme.ink2 }]}>
                                     {isDark ? 'On' : 'Off'} · system-aware by default
                                 </Text>
@@ -405,7 +405,7 @@ export default function SettingsScreen() {
                     {/* ── Dev tools (dev account only) ─────────────────────── */}
                     {isDevAccount && (
                         <>
-                            <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>DEV</Text>
+                            <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>{t('settings:section.dev')}</Text>
                             <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                                 <View style={styles.rowTop}>
                                     <View style={[styles.iconTile, { backgroundColor: theme.brandSoft }]}>
@@ -433,7 +433,7 @@ export default function SettingsScreen() {
                     )}
 
                     {/* ── About & legal ───────────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>ABOUT</Text>
+                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>{t('settings:section.about')}</Text>
 
                     <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                         <View style={styles.legalBody}>
@@ -478,12 +478,12 @@ export default function SettingsScreen() {
                             pressed && { opacity: 0.85 },
                         ]}
                     >
-                        <Text style={styles.logoutText}>Log Out</Text>
+                        <Text style={styles.logoutText}>{t('settings:logout')}</Text>
                     </Pressable>
 
                     {/* ── Danger zone: delete account (very bottom) ────────── */}
                     <View style={[styles.dangerZone, { backgroundColor: theme.dangerSoft, borderColor: theme.danger }]}>
-                        <Text style={[styles.dangerLabel, { color: theme.danger }]}>DANGER ZONE</Text>
+                        <Text style={[styles.dangerLabel, { color: theme.danger }]}>{t('settings:section.dangerZone')}</Text>
                         <Text style={[styles.dangerHint, { color: theme.ink2 }]}>
                             Permanently delete your account and every record tied to it.
                         </Text>
@@ -495,7 +495,7 @@ export default function SettingsScreen() {
                                 pressed && { opacity: 0.85 },
                             ]}
                         >
-                            <Text style={styles.deleteText}>Delete Account</Text>
+                            <Text style={styles.deleteText}>{t('settings:delete.button')}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -518,7 +518,7 @@ export default function SettingsScreen() {
                             and given the place to do it. */}
                         <View style={[styles.subWarning, { backgroundColor: theme.harvestSoft }]}>
                             <Text style={[styles.subWarningText, { color: theme.ink }]}>
-                                {DELETE_ACCOUNT_SUBSCRIPTION_WARNING}
+                                {t('premium:deleteAccountWarning')}
                             </Text>
                             <Pressable
                                 onPress={() => WebBrowser.openBrowserAsync(MANAGE_SUBSCRIPTION_URL)}

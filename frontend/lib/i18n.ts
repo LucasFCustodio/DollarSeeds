@@ -81,8 +81,14 @@ export function initI18n(language: LanguageTag) {
         lng: language,
         fallbackLng: DEFAULT_LANGUAGE,
         supportedLngs: [...SUPPORTED_LANGUAGES],
-        // A pt-PT / pt-AO device resolves to pt-BR instead of English.
-        nonExplicitSupportedLngs: true,
+        // DO NOT add `nonExplicitSupportedLngs: true` here. It sounds like what we
+        // want — "treat regional variants as supported" — but it works by STRIPPING
+        // the region from the code being resolved, so `pt-BR` is checked as `pt`,
+        // finds no `pt` entry in supportedLngs, and silently falls back to English.
+        // The symptom is a fully-populated pt-BR bundle that never renders:
+        // `hasResourceBundle('pt-BR', …)` returns true while `resolvedLanguage` is
+        // 'en'. Variant handling belongs in detectDeviceLanguage() below, which maps
+        // any pt* device to pt-BR before i18next ever sees it.
         // Without this, i18next normalises to `pt-br` and hunts for a folder that
         // doesn't exist — every Brazilian user would silently get English.
         lowerCaseLng: false,

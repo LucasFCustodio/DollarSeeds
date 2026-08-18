@@ -6,8 +6,6 @@
  * (context + overlay) reads from here so there are no magic strings elsewhere.
  */
 
-import { DISCLAIMER_SHORT } from './legal';
-
 // Per-user AsyncStorage key. The user id is appended so the "completed" flag is
 // scoped to the account, not the device — matching how the app already keys
 // per-user data.
@@ -60,43 +58,21 @@ export type OnboardingRoute =
 
 export type OnboardingStep = {
     route: OnboardingRoute;
-    eyebrow: string;
-    title: string;
-    body: string;
-    subnote?: string;
-    // Quiet muted line under the card — used for the legal disclaimer on the last
-    // step. Kept separate from `subnote`, which renders as a highlighted callout.
-    footnote?: string;
+    /**
+     * Translation key under the `onboarding:steps` namespace. The step COPY lives in
+     * locales/<lang>/onboarding.json, not here — this file keeps only the structure
+     * (which tab, in what order) so adding a language never touches it.
+     */
+    key: 'dashboard' | 'transactions' | 'goals' | 'lessons';
+    /** True on the step that also shows the legal disclaimer underneath. */
+    showDisclaimer?: boolean;
 };
 
 // Ordered, linear tour. Derived from the user's handwritten draft, condensed for
 // mobile: one short sentence per step with an optional secondary line.
 export const ONBOARDING_STEPS: OnboardingStep[] = [
-    {
-        route: '/(tabs)',
-        eyebrow: 'DASHBOARD',
-        title: 'Welcome to DollarSeeds',
-        body: "Go here to see your current income, what's left to spend, and how much money you have for each spending category",
-    },
-    {
-        route: '/(tabs)/transactions',
-        eyebrow: 'TRANSACTIONS',
-        title: 'Add Your Income and Expenses',
-        body: 'Enter an amount, pick a category, name it, choose a date, and save. New income is automatically split across all categories',
-    },
-    {
-        route: '/(tabs)/piggyBank',
-        eyebrow: 'GOALS',
-        title: 'Track Your Goals',
-        body: "Create a personal or debt goal. Add money to it from this month's income, or from your General Savings (GS). ",
-        subnote: 'Add to GS whenever you have no specific saving goal. Money not spent will roll over into your GS at the end of the month',
-    },
-    {
-        route: '/(tabs)/lessons',
-        eyebrow: 'LESSONS',
-        title: 'Grow in wisdom',
-        body: 'Scripture-rooted video series on money, generosity, and stewardship, given by successful professionals.',
-        subnote: "More series will be added as the app and its reach grows",
-        footnote: DISCLAIMER_SHORT,
-    },
+    { route: '/(tabs)',              key: 'dashboard' },
+    { route: '/(tabs)/transactions', key: 'transactions' },
+    { route: '/(tabs)/piggyBank',    key: 'goals' },
+    { route: '/(tabs)/lessons',      key: 'lessons', showDisclaimer: true },
 ];

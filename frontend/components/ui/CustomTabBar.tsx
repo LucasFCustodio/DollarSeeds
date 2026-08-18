@@ -8,6 +8,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useTranslation } from 'react-i18next';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
@@ -40,14 +41,14 @@ const TAB_ICONS: Record<string, TabIconComponent> = {
     lessons: IconLessonsMascot,
 };
 
-const TAB_LABELS: Record<string, string> = {
-    index: 'Home',
-    transactions: 'Transactions',
-    piggyBank: 'Goals',
-    lessons: 'Lessons',
-};
+// Labels come from `common:tabs.<routeName>`, keyed by the Expo Router route name.
+// The route name is the canonical identifier and is never translated — only the label
+// the user reads. Note the system tab bar is display:'none', so translating the
+// `title` options in app/(tabs)/_layout.tsx would change nothing on screen; this map
+// is the one that renders.
 
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+    const { t } = useTranslation('common');
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
 
@@ -65,7 +66,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
             {state.routes.map((route, index) => {
                 const isFocused = state.index === index;
                 const IconComp = TAB_ICONS[route.name] ?? IconHomeMascot;
-                const label = TAB_LABELS[route.name] ?? route.name;
+                const label = t(`tabs.${route.name}`, { defaultValue: route.name });
 
                 const onPress = () => {
                     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });

@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
+import { useTranslation, Trans } from 'react-i18next';
 import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useAnalytics } from '../../lib/analytics';
@@ -30,13 +31,6 @@ import { ft } from '../../constants/responsive';
 import { PRIVACY_URL, TERMS_URL } from '../../constants/legal';
 import { IconClose } from '../icons';
 import {
-    PAYWALL_AUTORENEW_DISCLOSURE,
-    PAYWALL_DESCRIPTION,
-    PAYWALL_EQUAL_TIERS_BOLD,
-    PAYWALL_EQUAL_TIERS_PREFIX,
-    PAYWALL_EQUAL_TIERS_SUFFIX,
-    PAYWALL_HEADING,
-    PAYWALL_YEARLY_NOTE,
     describeProduct,
     type BillingPeriod,
 } from '../../constants/premium';
@@ -52,6 +46,7 @@ function formatDate(iso?: string | null): string | null {
 
 export default function PaywallSheet() {
     const { theme } = useTheme();
+    const { t } = useTranslation(['premium', 'common']);
     const analytics = useAnalytics();
     const {
         paywallVisible, closePaywall, options, optionsLoading, canPurchase,
@@ -85,13 +80,13 @@ export default function PaywallSheet() {
         // prorated, never immediate. Saying so is the difference between "working as
         // designed" and "I paid and nothing happened".
         Alert.alert(
-            'Change your support tier?',
+            t('premium:switch.title'),
             on
-                ? `Your new tier starts on ${on}, when your current period ends. You keep full access until then.`
-                : 'Your new tier starts when your current period ends. You keep full access until then.',
+                ? t('premium:switch.bodyWithDate', { date: on })
+                : t('premium:switch.bodyNoDate'),
             [
-                { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-                { text: 'Confirm', onPress: () => resolve(true) },
+                { text: t('common:action.cancel'), style: 'cancel', onPress: () => resolve(false) },
+                { text: t('common:action.confirm'), onPress: () => resolve(true) },
             ],
         );
     });
@@ -116,9 +111,9 @@ export default function PaywallSheet() {
         // Cancelling is a normal outcome, not an error — no alert for it.
         if (result.status === 'cancelled') return;
         Alert.alert(
-            'Purchase not completed',
+            t('premium:purchase.failedTitle'),
             result.status === 'unavailable'
-                ? 'Purchases are not available on this device yet.'
+                ? t('premium:purchase.unavailableBody')
                 : result.message,
         );
     };
@@ -130,14 +125,14 @@ export default function PaywallSheet() {
 
         if (result.status === 'restored') {
             analytics.restoreCompleted();
-            Alert.alert('Purchases restored', 'Your subscription is active again.');
+            Alert.alert(t('premium:restore.restoredTitle'), t('premium:restore.restoredBody'));
             closePaywall();
         } else if (result.status === 'nothing') {
-            Alert.alert('Nothing to restore', 'No previous subscription was found for this account.');
+            Alert.alert(t('premium:restore.nothingTitle'), t('premium:restore.nothingBody'));
         } else if (result.status === 'unavailable') {
-            Alert.alert('Unavailable', 'Purchases are not available on this device yet.');
+            Alert.alert(t('premium:restore.unavailableTitle'), t('premium:restore.unavailableBody'));
         } else {
-            Alert.alert('Could not restore', result.message);
+            Alert.alert(t('premium:restore.failedTitle'), result.message);
         }
     };
 
@@ -168,11 +163,11 @@ export default function PaywallSheet() {
                         showsVerticalScrollIndicator={false}
                     >
                         <Text style={[styles.heading, { color: theme.ink }]}>
-                            {PAYWALL_HEADING}
+                            {t('premium:paywall.heading')}
                         </Text>
 
                         <Text style={[styles.description, { color: theme.ink2 }]}>
-                            {PAYWALL_DESCRIPTION}
+                            {t('premium:paywall.description')}
                         </Text>
 
                         {/* Equal-tiers callout. Harvest, NOT danger: red means overspending
@@ -180,9 +175,10 @@ export default function PaywallSheet() {
                             message on the screen. */}
                         <View style={[styles.callout, { backgroundColor: theme.harvestSoft }]}>
                             <Text style={[styles.calloutText, { color: theme.ink }]}>
-                                {PAYWALL_EQUAL_TIERS_PREFIX}
-                                <Text style={styles.calloutBold}>{PAYWALL_EQUAL_TIERS_BOLD}</Text>
-                                {PAYWALL_EQUAL_TIERS_SUFFIX}
+                                <Trans
+                                    i18nKey="premium:paywall.equalTiers"
+                                    components={{ bold: <Text style={styles.calloutBold} /> }}
+                                />
                             </Text>
                         </View>
 
@@ -190,7 +186,7 @@ export default function PaywallSheet() {
                         {premiumActive && currentTier && (
                             <View style={[styles.currentRow, { backgroundColor: theme.brandSoft }]}>
                                 <Text style={[styles.currentText, { color: theme.brand }]}>
-                                    Current: {currentTier}
+                                    {t('premium:paywall.current', { tier: currentTier })}
                                 </Text>
                             </View>
                         )}
@@ -212,7 +208,7 @@ export default function PaywallSheet() {
                                             styles.segmentText,
                                             { color: active ? theme.onBrand : theme.ink2 },
                                         ]}>
-                                            {p === 'monthly' ? 'Monthly' : 'Yearly'}
+                                            {p === 'monthly' ? t('premium:paywall.monthly') : t('premium:paywall.yearly')}
                                         </Text>
                                     </Pressable>
                                 );
@@ -223,7 +219,7 @@ export default function PaywallSheet() {
                             no-discount annual reads as a mistake or a trap. */}
                         {period === 'yearly' && (
                             <Text style={[styles.yearlyNote, { color: theme.ink2 }]}>
-                                {PAYWALL_YEARLY_NOTE}
+                                {t('premium:paywall.yearlyNote')}
                             </Text>
                         )}
 
@@ -235,8 +231,8 @@ export default function PaywallSheet() {
                         ) : shown.length === 0 ? (
                             <Text style={[styles.unavailable, { color: theme.ink3 }]}>
                                 {canPurchase
-                                    ? 'Subscription options couldn’t be loaded. Please try again shortly.'
-                                    : 'Subscriptions aren’t available on this device yet.'}
+                                    ? t('premium:paywall.loadFailed')
+                                    : t('premium:paywall.unavailable')}
                             </Text>
                         ) : (
                             <View style={styles.tierGrid}>
@@ -264,13 +260,13 @@ export default function PaywallSheet() {
                                             ) : (
                                                 <>
                                                     <Text style={[styles.tierName, { color: theme.ink }]}>
-                                                        {option.label}
+                                                        {t(`premium:tier.${option.tier ?? 'basic'}`, { defaultValue: option.label })}
                                                     </Text>
                                                     <Text style={[styles.tierPrice, { color: theme.brand }]}>
                                                         {option.priceString}
                                                     </Text>
                                                     <Text style={[styles.tierPeriod, { color: theme.ink3 }]}>
-                                                        {option.period === 'monthly' ? 'per month' : 'per year'}
+                                                        {option.period === 'monthly' ? t('premium:paywall.perMonth') : t('premium:paywall.perYear')}
                                                     </Text>
                                                 </>
                                             )}
@@ -282,7 +278,7 @@ export default function PaywallSheet() {
 
                         {/* App Review: auto-renewal disclosure */}
                         <Text style={[styles.disclosure, { color: theme.ink3 }]}>
-                            {PAYWALL_AUTORENEW_DISCLOSURE}
+                            {t('premium:paywall.autoRenew')}
                         </Text>
 
                         {/* App Review: Restore Purchases */}
@@ -299,7 +295,7 @@ export default function PaywallSheet() {
                                 <ActivityIndicator color={theme.brand} />
                             ) : (
                                 <Text style={[styles.restoreText, { color: theme.brand }]}>
-                                    Restore Purchases
+                                    {t('premium:paywall.restore')}
                                 </Text>
                             )}
                         </Pressable>
@@ -307,11 +303,11 @@ export default function PaywallSheet() {
                         {/* App Review: policy links */}
                         <View style={styles.legalRow}>
                             <Pressable onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)} hitSlop={8}>
-                                <Text style={[styles.legalLink, { color: theme.ink2 }]}>Terms of Service</Text>
+                                <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.terms')}</Text>
                             </Pressable>
                             <Text style={[styles.legalDot, { color: theme.ink3 }]}>·</Text>
                             <Pressable onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)} hitSlop={8}>
-                                <Text style={[styles.legalLink, { color: theme.ink2 }]}>Privacy Policy</Text>
+                                <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.privacy')}</Text>
                             </Pressable>
                         </View>
                     </ScrollView>
