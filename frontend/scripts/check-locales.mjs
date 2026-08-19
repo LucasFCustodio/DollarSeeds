@@ -203,6 +203,54 @@ for (const { file, slug, text } of sources) {
 }
 problems.push(...leaked);
 
+// ── 4: keys nothing references ────────────────────────────────────────────────
+
+/**
+ * The blind spot in check 3: it can only match values with no `{{placeholder}}`,
+ * because an interpolated string never appears verbatim in source. So an INTERPOLATED
+ * key can be fully translated, sit in both catalogues, and still have a call site
+ * rendering the English by hand — check 3 sees nothing.
+ *
+ * `settings:tithing.explain` was exactly that. The catalogue held both languages
+ * while settings.tsx still assembled the sentence inline with `{ratePct}%`.
+ *
+ * Approaching it from the other end catches it: a key that appears in NO source file
+ * is either dead or unwired. Both are worth knowing about.
+ *
+ * The match is on the key's last two segments, because call sites are written as
+ * `t('tithing.explain')` or `t('settings:tithing.explain')` or with a template
+ * literal like t(`verse.${id}.text`) — so a leaf-only match would be too loose and a
+ * full-path match too strict.
+ */
+const allSource = sources.map(s => s.text).join('\n');
+
+/**
+ * Prefixes looked up DYNAMICALLY, harvested from the source rather than hand-listed.
+ *
+ * Whole groups are addressed by computed key — t(`months.${month}`),
+ * t(`verse.${id}.text`), t(`budgetType.${key}.name`) — and a literal search finds
+ * none of them. Scanning for the static part before `${` recovers exactly those
+ * prefixes, so the groups count as referenced without an allowlist that would go
+ * stale the moment a group is renamed.
+ */
+const dynamicPrefixes = [...allSource.matchAll(/[`'"]([A-Za-z0-9_.:]*?)\$\{/g)]
+    .map(m => m[1].replace(/^[a-z]+:/, ''))   // drop any `ns:` qualifier
+    .filter(Boolean);
+
+for (const ns of namespaces) {
+    for (const key of Object.keys(baseFlat[ns])) {
+        if (dynamicPrefixes.some(p => key.startsWith(p))) continue;
+        const parts = key.split('.');
+        // A single-segment key is too short to search for loosely, so require it
+        // quoted or namespace-prefixed. Deeper keys match on a 2- or 3-segment tail.
+        const tails = parts.length === 1
+            ? [`'${key}'`, `:${key}'`, '`' + key + '`']
+            : [parts.slice(-3).join('.'), parts.slice(-2).join('.')];
+        if (tails.some(tail => allSource.includes(tail))) continue;
+        problems.push(`[unreferenced] ${ns}:${key} — translated but no call site found`);
+    }
+}
+
 // ── report ────────────────────────────────────────────────────────────────────
 
 const total = Object.values(baseFlat).reduce((n, f) => n + Object.keys(f).length, 0);

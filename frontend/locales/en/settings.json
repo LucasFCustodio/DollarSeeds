@@ -5,7 +5,6 @@
     "giving": "GIVING",
     "appearance": "APPEARANCE",
     "languageCurrency": "LANGUAGE & CURRENCY",
-    "premium": "PREMIUM",
     "dev": "DEV",
     "about": "ABOUT",
     "dangerZone": "DANGER ZONE"
@@ -69,6 +68,12 @@
   },
   "firmFoundation": {
     "title": "Build your Firm Foundation",
-    "emergencyHint": " — aim for about {{amount}}"
+    "emergencyHint": " — aim for about {{amount}}",
+    "modalTitle": "Let's build your foundation",
+    "modalBody": "Firm Foundation is about stability. Two goals make a big difference — and every dollar toward them is real progress:",
+    "debtRow": "A <bold>Debt</bold> goal to pay down what you owe",
+    "emergencyRow": "A <bold>3-Month Emergency Fund</bold>",
+    "setUp": "Set these up",
+    "later": "Maybe later"
   }
 }

@@ -110,5 +110,19 @@
       "Gifts": "Gifts",
       "Other": "Other"
     }
+  },
+  "budgetType": {
+    "balanced": {
+      "name": "Balanced",
+      "tagline": "A steady, even split."
+    },
+    "wealth_builder": {
+      "name": "Wealth Builder",
+      "tagline": "Low expenses or high income — save aggressively."
+    },
+    "firm_foundation": {
+      "name": "Firm Foundation",
+      "tagline": "High essential costs — build stability and a safety net."
+    }
   }
 }

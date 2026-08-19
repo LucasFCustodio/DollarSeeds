@@ -23,7 +23,7 @@ import axios from 'axios';
 
 import * as WebBrowser from 'expo-web-browser';
 
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
 import { useTheme, shadow, Fonts, AppTheme } from '../context/ThemeContext';
@@ -191,30 +191,35 @@ export default function SettingsScreen() {
                             <IconSparkle size={26} color={theme.brand} />
                         </View>
                         <Text style={[styles.modalTitle, { color: theme.ink }]}>
-                            Let's build your foundation
+                            {t('settings:firmFoundation.modalTitle')}
                         </Text>
                         <Text style={[styles.modalBody, { color: theme.ink2 }]}>
-                            Firm Foundation is about stability. Two goals make a big difference — and
-                            every dollar toward them is real progress:
+                            {t('settings:firmFoundation.modalBody')}
                         </Text>
 
                         <View style={[styles.suggestRow, { backgroundColor: theme.dangerSoft }]}>
                             <IconTarget size={18} color={theme.danger} />
                             <Text style={[styles.suggestText, { color: theme.ink }]}>
-                                A <Text style={{ fontFamily: 'Geist-SemiBold' }}>Debt</Text> goal to pay down what you owe
+                                <Trans
+                                    i18nKey="settings:firmFoundation.debtRow"
+                                    components={{ bold: <Text style={{ fontFamily: 'Geist-SemiBold' }} /> }}
+                                />
                             </Text>
                         </View>
                         <View style={[styles.suggestRow, { backgroundColor: theme.goalsSoft }]}>
                             <IconTarget size={18} color={theme.goals} />
                             <Text style={[styles.suggestText, { color: theme.ink }]}>
-                                A <Text style={{ fontFamily: 'Geist-SemiBold' }}>3-Month Emergency Fund</Text>
+                                <Trans
+                                    i18nKey="settings:firmFoundation.emergencyRow"
+                                    components={{ bold: <Text style={{ fontFamily: 'Geist-SemiBold' }} /> }}
+                                />
                                 {suggestedEmergency != null ? t('settings:firmFoundation.emergencyHint', { amount: formatMoney(suggestedEmergency) }) : ''}
                             </Text>
                         </View>
 
                         <View style={{ height: 8 }} />
                         <Button
-                            label="Set these up"
+                            label={t('settings:firmFoundation.setUp')}
                             variant="primary"
                             size="lg"
                             fullWidth
@@ -222,7 +227,7 @@ export default function SettingsScreen() {
                             onPress={() => resolveFirmPrompt(true)}
                         />
                         <Pressable onPress={() => resolveFirmPrompt(false)} style={styles.laterBtn}>
-                            <Text style={[styles.laterText, { color: theme.ink3 }]}>Maybe later</Text>
+                            <Text style={[styles.laterText, { color: theme.ink3 }]}>{t('settings:firmFoundation.later')}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -293,7 +298,7 @@ export default function SettingsScreen() {
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:tithing.title')}</Text>
                                 <Text style={[styles.rowSub, { color: theme.ink2 }]}>
-                                    Set aside {ratePct}% as a tithe before budgeting
+                                    {t('settings:tithing.subtitle', { percent: ratePct })}
                                 </Text>
                             </View>
                             <Switch
@@ -307,9 +312,11 @@ export default function SettingsScreen() {
 
                         <View style={[styles.explainBox, { backgroundColor: theme.surfaceSoft, borderTopColor: theme.borderSoft }]}>
                             <Text style={[styles.explainText, { color: theme.ink2 }]}>
-                                When on, {ratePct}% of new income is carved into a Tithe envelope first,
-                                and your {splitLabel(activeType)} budget is calculated on the remaining {100 - ratePct}%.
-                                Past months keep their original split.
+                                {t('settings:tithing.explain', {
+                                    percent: ratePct,
+                                    split: splitLabel(activeType),
+                                    remainder: 100 - ratePct,
+                                })}
                             </Text>
                         </View>
                     </View>
@@ -327,7 +334,9 @@ export default function SettingsScreen() {
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:appearance.darkMode')}</Text>
                                 <Text style={[styles.rowSub, { color: theme.ink2 }]}>
-                                    {isDark ? 'On' : 'Off'} · system-aware by default
+                                    {t('settings:appearance.subtitle', {
+                                        state: isDark ? t('settings:appearance.on') : t('settings:appearance.off'),
+                                    })}
                                 </Text>
                             </View>
                             <Switch

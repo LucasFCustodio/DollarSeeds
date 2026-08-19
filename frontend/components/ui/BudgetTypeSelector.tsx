@@ -7,6 +7,7 @@
  */
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { IconCheck } from '../icons';
 import {
@@ -21,11 +22,14 @@ interface Props {
 
 export default function BudgetTypeSelector({ value, onSelect, disabled }: Props) {
     const { theme } = useTheme();
+    // Names and taglines live in `common:budgetType` rather than a screen namespace
+    // because the dashboard renders the same name in its split row.
+    const { t } = useTranslation('common');
 
     return (
         <View style={{ gap: 10 }}>
             {BUDGET_TYPE_ORDER.map(key => {
-                const t = BUDGET_TYPES[key];
+                const def = BUDGET_TYPES[key];
                 const selected = key === value;
                 return (
                     <Pressable
@@ -42,18 +46,22 @@ export default function BudgetTypeSelector({ value, onSelect, disabled }: Props)
                     >
                         <View style={{ flex: 1 }}>
                             <View style={styles.titleRow}>
-                                <Text style={[styles.name, { color: theme.ink }]}>{t.name}</Text>
+                                <Text style={[styles.name, { color: theme.ink }]}>
+                                    {t(`budgetType.${key}.name`)}
+                                </Text>
                                 <Text style={[styles.split, { color: selected ? theme.brand : theme.ink3 }]}>
-                                    {splitLabel(t)}
+                                    {splitLabel(def)}
                                 </Text>
                             </View>
-                            <Text style={[styles.tagline, { color: theme.ink2 }]}>{t.tagline}</Text>
+                            <Text style={[styles.tagline, { color: theme.ink2 }]}>
+                                {t(`budgetType.${key}.tagline`)}
+                            </Text>
 
                             {/* Mini split bar for an at-a-glance feel of the proportions */}
                             <View style={[styles.bar, { backgroundColor: theme.borderSoft }]}>
-                                <View style={{ flex: t.needs, backgroundColor: theme.needs }} />
-                                <View style={{ flex: t.wants, backgroundColor: theme.wants }} />
-                                <View style={{ flex: t.savings, backgroundColor: theme.goals }} />
+                                <View style={{ flex: def.needs, backgroundColor: theme.needs }} />
+                                <View style={{ flex: def.wants, backgroundColor: theme.wants }} />
+                                <View style={{ flex: def.savings, backgroundColor: theme.goals }} />
                             </View>
                         </View>
 

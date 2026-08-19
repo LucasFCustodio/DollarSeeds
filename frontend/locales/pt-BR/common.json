@@ -110,5 +110,19 @@
       "Gifts": "Presentes",
       "Other": "Outro"
     }
+  },
+  "budgetType": {
+    "balanced": {
+      "name": "Equilibrado",
+      "tagline": "Uma divisão firme e equilibrada."
+    },
+    "wealth_builder": {
+      "name": "Construtor de Patrimônio",
+      "tagline": "Gastos baixos ou renda alta — guarde com força."
+    },
+    "firm_foundation": {
+      "name": "Base Firme",
+      "tagline": "Custos essenciais altos — construa estabilidade e uma reserva."
+    }
   }
 }
