@@ -286,10 +286,15 @@ export default function ExpenseContainer({ embedded = false }) {
                                 ]}>
                                     <c.Icon size={26} accent={c.color} paper={active ? c.soft : theme.surfaceSoft} />
                                 </View>
-                                <Text style={[
-                                    styles.catLabel,
-                                    { color: active ? c.color : theme.ink2 },
-                                ]}>
+                                <Text
+                                    style={[
+                                        styles.catLabel,
+                                        { color: active ? c.color : theme.ink2 },
+                                    ]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.75}
+                                >
                                     {c.label}
                                 </Text>
                             </Pressable>

@@ -161,7 +161,8 @@ export default function AuthScreen() {
         });
 
         if (!credential.identityToken) {
-            throw new Error('No identity token returned from Apple.');
+            // Thrown, then surfaced to the user via `e?.message` in the catch below.
+            throw new Error(t('error.appleNoToken'));
         }
 
         const { error } = await supabase.auth.signInWithIdToken({

@@ -271,21 +271,36 @@ export default function IncomeContainer({ embedded = false }) {
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.needs }]} />
-                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{t('income.splitRow', { percent: pct(bt.needs), category: tc('category.Needs') })}</Text>
+                                <Text
+                                    style={[styles.splitPctLabel, { color: theme.ink3 }]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.7}
+                                >{t('income.splitRow', { percent: pct(bt.needs), category: tc('category.Needs') })}</Text>
                             </View>
                             <Text style={[styles.splitAmt, { color: theme.ink }]}>{fmtMoney(needsAmt)}</Text>
                         </View>
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.wants }]} />
-                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{t('income.splitRow', { percent: pct(bt.wants), category: tc('category.Wants') })}</Text>
+                                <Text
+                                    style={[styles.splitPctLabel, { color: theme.ink3 }]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.7}
+                                >{t('income.splitRow', { percent: pct(bt.wants), category: tc('category.Wants') })}</Text>
                             </View>
                             <Text style={[styles.splitAmt, { color: theme.ink }]}>{fmtMoney(wantsAmt)}</Text>
                         </View>
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.goals }]} />
-                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{t('income.splitRow', { percent: pct(bt.savings), category: tc('category.Goals') })}</Text>
+                                <Text
+                                    style={[styles.splitPctLabel, { color: theme.ink3 }]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.7}
+                                >{t('income.splitRow', { percent: pct(bt.savings), category: tc('category.Goals') })}</Text>
                             </View>
                             <Text style={[styles.splitAmt, { color: theme.ink }]}>{fmtMoney(goalsAmt)}</Text>
                         </View>

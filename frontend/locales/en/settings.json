@@ -64,7 +64,8 @@
     "modalTitle": "Delete account",
     "modalBody": "Deleting the account is irreversible. You'll lose all the information you've tracked. If you want to delete your account, type \"DELETE\" in the text box below, then click Delete.",
     "error": "That's not right — type \"DELETE\" exactly to confirm.",
-    "manageSubscriptions": "Manage subscriptions"
+    "manageSubscriptions": "Manage subscriptions",
+    "confirm": "Delete"
   },
   "firmFoundation": {
     "emergencyHint": " — aim for about {{amount}}",
@@ -74,5 +75,6 @@
     "emergencyRow": "A <bold>3-Month Emergency Fund</bold>",
     "setUp": "Set these up",
     "later": "Maybe later"
-  }
+  },
+  "eyebrow": "PREFERENCES"
 }

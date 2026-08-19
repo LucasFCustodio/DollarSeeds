@@ -64,7 +64,8 @@
     "modalTitle": "Excluir conta",
     "modalBody": "A exclusão da conta é irreversível. Você perderá todas as informações que registrou. Se quiser excluir sua conta, digite \"DELETE\" na caixa abaixo e toque em Excluir.",
     "error": "Não confere — digite exatamente \"DELETE\" para confirmar.",
-    "manageSubscriptions": "Gerenciar assinaturas"
+    "manageSubscriptions": "Gerenciar assinaturas",
+    "confirm": "Excluir"
   },
   "firmFoundation": {
     "emergencyHint": " — mire em cerca de {{amount}}",
@@ -74,5 +75,6 @@
     "emergencyRow": "Uma <bold>Reserva de Emergência de 3 meses</bold>",
     "setUp": "Criar essas metas",
     "later": "Talvez depois"
-  }
+  },
+  "eyebrow": "PREFERÊNCIAS"
 }

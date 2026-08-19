@@ -246,7 +246,7 @@ export default function SettingsScreen() {
                     <IconChevronLeft size={18} color={theme.ink} />
                 </Pressable>
                 <View>
-                    <Text style={[styles.eyebrow, { color: theme.ink3 }]}>PREFERENCES</Text>
+                    <Text style={[styles.eyebrow, { color: theme.ink3 }]}>{t('settings:eyebrow')}</Text>
                     <Text style={[styles.title, { color: theme.ink }]}>{t('settings:title')}</Text>
                 </View>
             </View>
@@ -545,7 +545,7 @@ export default function SettingsScreen() {
                         <TextInput
                             value={deleteConfirm}
                             onChangeText={(t) => { setDeleteConfirm(t); if (deleteError) setDeleteError(false); }}
-                            placeholder="DELETE"
+                            placeholder="DELETE" /* i18n-canonical: the backend matches this exact string */
                             placeholderTextColor={theme.ink3}
                             autoCapitalize="characters"
                             autoCorrect={false}
@@ -569,14 +569,14 @@ export default function SettingsScreen() {
                         >
                             {deleting
                                 ? <ActivityIndicator color="#fff" />
-                                : <Text style={styles.deleteText}>Delete</Text>}
+                                : <Text style={styles.deleteText}>{t('settings:delete.confirm')}</Text>}
                         </Pressable>
                         <Pressable
                             onPress={() => setShowDeleteModal(false)}
                             disabled={deleting}
                             style={styles.laterBtn}
                         >
-                            <Text style={[styles.laterText, { color: theme.ink3 }]}>Cancel</Text>
+                            <Text style={[styles.laterText, { color: theme.ink3 }]}>{t('common:action.cancel')}</Text>
                         </Pressable>
                     </View>
                 </View>
