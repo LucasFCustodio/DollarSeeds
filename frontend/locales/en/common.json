@@ -115,5 +115,9 @@
       "name": "Firm Foundation",
       "tagline": "High essential costs — build stability and a safety net."
     }
+  },
+  "legal": {
+    "disclaimerFull": "DollarSeeds provides budgeting tools and educational content for general informational purposes only. It is not financial, investment, or tax advice. Consult a qualified professional before making financial decisions.",
+    "disclaimerShort": "For education and budgeting only — not financial, investment, or tax advice."
   }
 }

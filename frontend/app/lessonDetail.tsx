@@ -12,11 +12,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 
+import i18n from '../lib/i18n';
+
 import { useTheme, shadow } from '../context/ThemeContext';
 import { useAnalytics } from '../lib/analytics';
 import { IconChevronLeft, IconCheck, IconScripture } from '../components/icons';
 import Card from '../components/ui/Card';
-import { LESSONS } from '../constants/lessons';
+import { findLesson } from '../constants/lessons';
 
 const STORAGE_KEY = 'completed_lessons';
 
@@ -27,7 +29,9 @@ export default function LessonDetailScreen() {
     const { t } = useTranslation('lessons');
     const analytics = useAnalytics();
 
-    const lesson = LESSONS.find(l => l.id === Number(id));
+    const lesson = findLesson(id);
+    // Every string below is keyed off the lesson's catalogue path.
+    const lk = (path: string) => t(`written.${lesson?.key}.${path}`);
 
     const handleComplete = async () => {
         if (!lesson) return;
@@ -37,7 +41,12 @@ export default function LessonDetailScreen() {
             if (!ids.includes(lesson.id)) {
                 await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...ids, lesson.id]));
             }
-            analytics.writtenLessonCompleted({ lesson_id: lesson.id, title: lesson.title });
+            analytics.writtenLessonCompleted({
+                lesson_id: lesson.id,
+                // English title on purpose: an event split by translated title reads
+                // as two different lessons in the analytics dashboard.
+                title: i18n.getFixedT('en', 'lessons')(`written.${lesson.key}.title`),
+            });
         } catch (e) {
             console.error('Error saving completion:', e);
         }
@@ -71,34 +80,34 @@ export default function LessonDetailScreen() {
             </Pressable>
 
             {/* ── Title ───────────────────────────────────────────── */}
-            <Text style={[styles.title, { color: theme.ink }]}>{lesson.title}</Text>
+            <Text style={[styles.title, { color: theme.ink }]}>{lk('title')}</Text>
 
             {/* ── Scripture card ──────────────────────────────────── */}
             <Card theme={theme} depth={4} padding={24} style={styles.passageCard}>
                 {/* Quote mark flourish */}
-                <Text style={[styles.quoteMarkTop, { color: theme.brand }]}>"</Text>
+                <Text style={[styles.quoteMarkTop, { color: theme.brand }]}>{'“'}</Text>
 
                 <Text style={[styles.passageText, { color: theme.ink }]}>
-                    {lesson.passage.replace(/^"|"$/g, '')}
+                    {lk('passage')}
                 </Text>
 
                 {/* Reference badge */}
                 <View style={[styles.refBadge, { backgroundColor: theme.surfaceSoft }]}>
                     <IconScripture size={13} color={theme.brand} />
                     <Text style={[styles.refText, { color: theme.brand }]}>
-                        {lesson.passageRef}
+                        {lk('passageRef')}
                     </Text>
                 </View>
             </Card>
 
             {/* ── Sections ────────────────────────────────────────── */}
-            {lesson.sections.map((section, i) => (
+            {Array.from({ length: lesson.sectionCount }, (_, i) => i).map(i => (
                 <View key={i} style={styles.section}>
                     <Text style={[styles.sectionHeading, { color: theme.ink }]}>
-                        {section.heading}
+                        {lk(`sections.${i}.heading`)}
                     </Text>
                     <Text style={[styles.sectionBody, { color: theme.ink2 }]}>
-                        {section.body.trim()}
+                        {lk(`sections.${i}.body`)}
                     </Text>
                 </View>
             ))}
@@ -107,7 +116,7 @@ export default function LessonDetailScreen() {
             <Card theme={theme} depth={3} padding={22} style={styles.prayerCard}>
                 <Text style={[styles.prayerHeading, { color: theme.ink3 }]}>{t('detail.prayer')}</Text>
                 <Text style={[styles.prayerText, { color: theme.ink }]}>
-                    {lesson.prayer}
+                    {lk('prayer')}
                 </Text>
             </Card>
 

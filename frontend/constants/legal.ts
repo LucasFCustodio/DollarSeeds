@@ -5,13 +5,15 @@
  * (Lessons footer, Settings > About, the last onboarding step).
  */
 
-export const DISCLAIMER_FULL =
-    'DollarSeeds provides budgeting tools and educational content for general informational ' +
-    'purposes only. It is not financial, investment, or tax advice. Consult a qualified ' +
-    'professional before making financial decisions.';
+/**
+ * The disclaimer wording lives in `common:legal.disclaimerFull` /
+ * `.disclaimerShort` — it is compliance copy shown in three places (Lessons footer,
+ * Settings > About, the last onboarding step) and has to appear in the user's
+ * language. Read it via useTranslation, not from here.
+ */
 
-export const DISCLAIMER_SHORT =
-    'For education and budgeting only — not financial, investment, or tax advice.';
-
+// TODO(i18n): these pages are English-only, and the pt-BR paywall links to them.
+// A Portuguese terms/privacy page needs a locale-aware URL here before pt-BR is
+// promoted in the Brazilian App Store listing.
 export const TERMS_URL = 'https://dollarseeds.netlify.app/terms';
 export const PRIVACY_URL = 'https://dollarseeds.netlify.app/privacy';

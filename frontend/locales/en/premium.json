@@ -3,7 +3,8 @@
     "title": "DollarSeeds Premium",
     "body": "Subscribe to premium to unlock exclusive features and support the app",
     "manage": "Manage Subscription",
-    "activeFallback": "Your premium subscription is active"
+    "activeFallback": "Your premium subscription is active",
+    "sectionLabel": "PREMIUM"
   },
   "paywall": {
     "heading": "Subscribe to DollarSeeds Premium",
@@ -59,5 +60,6 @@
     "seriesBanner": "Subscribe to unlock this series",
     "playerLocked": "This lesson is part of Premium.",
     "playerCta": "View subscription options"
-  }
+  },
+  "tierPeriod": "{{tier}} {{period}}"
 }

@@ -122,7 +122,7 @@ export default function DashboardScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
-    const { formatMoney: fmtMoney, monthAbbr, monthLabel, serverTitle } = useLocale();
+    const { formatMoney: fmtMoney, monthAbbr, monthLabel } = useLocale();
     const { t } = useTranslation('dashboard');
     const { t: tc } = useTranslation('common');
 
@@ -382,7 +382,7 @@ export default function DashboardScreen() {
                             {t('scripture.modalTitle')}
                         </Text>
                         <Text style={[styles.modalVerse, { color: theme.ink2 }]}>
-                            "{t(`verse.${currentVerse}.text`)}"
+                            {t('scripture.quoted', { text: t(`verse.${currentVerse}.text`) })}
                         </Text>
                         <Text style={[styles.modalRef, { color: theme.ink3 }]}>
                             — {t(`verse.${currentVerse}.ref`)}
@@ -561,7 +561,7 @@ export default function DashboardScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.scriptureVerse, { color: theme.ink }]}>
-                                "{t(`verse.${dailyVerse}.text`)}"
+                                {t('scripture.quoted', { text: t(`verse.${dailyVerse}.text`) })}
                             </Text>
                             <Text style={[styles.scriptureRef, { color: theme.ink3 }]}>
                                 {t(`verse.${dailyVerse}.ref`)}

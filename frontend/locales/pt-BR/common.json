@@ -115,5 +115,9 @@
       "name": "Base Firme",
       "tagline": "Custos essenciais altos — construa estabilidade e uma reserva."
     }
+  },
+  "legal": {
+    "disclaimerFull": "O DollarSeeds oferece ferramentas de orçamento e conteúdo educativo com finalidade exclusivamente informativa. Não constitui consultoria financeira, de investimentos ou tributária. Consulte um profissional qualificado antes de tomar decisões financeiras.",
+    "disclaimerShort": "Apenas para fins educativos e de orçamento — não é consultoria financeira, de investimentos ou tributária."
   }
 }

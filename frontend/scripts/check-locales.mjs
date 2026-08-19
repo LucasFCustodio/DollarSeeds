@@ -128,12 +128,13 @@ const SKIP_SHORT = 12;
  */
 const ALLOW_ENGLISH = new Set([
     'lib/serverStrings.ts',
-    // ── still to translate (tracked, not forgotten) ──
-    'constants/premium.ts',
-    'constants/onboarding.ts',
-    'constants/lessons.ts',
-    'constants/legal.ts',
+    // constants/budgetTypes.ts keeps its English name/tagline as the canonical
+    // fallback behind common:budgetType — same rationale as serverStrings.
     'constants/budgetTypes.ts',
+    // ── still to translate (tracked, not forgotten) ──
+    // The two written lessons: ~820 words of prose that riffs on specific NLT wording,
+    // so it is a rewrite against Almeida rather than a translation.
+    'constants/lessons.ts',
 ]);
 
 const sources = SOURCE_DIRS.flatMap(d => {
@@ -248,9 +249,12 @@ for (const ns of namespaces) {
     for (const key of Object.keys(baseFlat[ns])) {
         if (dynamicPrefixes.some(p => key.startsWith(p))) continue;
         // i18next appends the plural category to the key it looks up, so
-        // `series.lessonCount` in source resolves `series.lessonCount_one` /
-        // `_other` in the catalogue. Strip the suffix before searching.
-        const parts = key.replace(/_(zero|one|two|few|many|other)$/, '').split('.');
+        // `series.lessonCount` in source resolves `series.lessonCount_plural` in the
+        // catalogue. `_plural` is the v3 spelling (see compatibilityJSON in lib/i18n.ts);
+        // the CLDR categories are listed too so this keeps working if that pin is lifted.
+        const parts = key
+            .replace(/_(plural|zero|one|two|few|many|other)$/, '')
+            .split('.');
         // A single-segment key is too short to search for loosely, so require it
         // quoted or namespace-prefixed. Deeper keys match on a 2- or 3-segment tail.
         const tails = parts.length === 1

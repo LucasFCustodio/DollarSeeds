@@ -33,7 +33,7 @@ import { useLocale } from '../context/LocaleContext';
 import { SUPPORTED_LANGUAGES } from '../lib/i18n';
 import { CURRENCIES, CURRENCY_CODES, type CurrencyCode } from '../constants/currencies';
 import { DEV_ACCOUNT_EMAIL } from '../constants/onboarding';
-import { DISCLAIMER_FULL, TERMS_URL, PRIVACY_URL } from '../constants/legal';
+import { TERMS_URL, PRIVACY_URL } from '../constants/legal';
 import { MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
 import { supabase } from '../lib/supabase';
 import {
@@ -446,7 +446,7 @@ export default function SettingsScreen() {
                     <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                         <View style={styles.legalBody}>
                             <Text style={[styles.legalText, { color: theme.ink3 }]}>
-                                {DISCLAIMER_FULL}
+                                {t('common:legal.disclaimerFull')}
                             </Text>
                         </View>
 

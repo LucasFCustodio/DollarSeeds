@@ -28,7 +28,8 @@
   },
   "scripture": {
     "modalTitle": "Well done, faithful steward!",
-    "amen": "Amen!"
+    "amen": "Amen!",
+    "quoted": "“{{text}}”"
   },
   "category": {
     "needsSub": "Rent, groceries, bills",

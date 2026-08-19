@@ -6,8 +6,8 @@
     "loadFailed": "Não foi possível carregar as séries em vídeo.",
     "empty": "Nenhuma série em vídeo ainda — volte em breve.",
     "detailLoadFailed": "Não foi possível carregar esta série.",
-    "lessonCount_one": "{{count}} AULA",
-    "lessonCount_other": "{{count}} AULAS"
+    "lessonCount": "{{count}} AULA",
+    "lessonCount_plural": "{{count}} AULAS"
   },
   "progress": "{{done}} de {{total}} lições concluídas",
   "minutes": "{{count}} min",
@@ -26,5 +26,47 @@
     "notFound": "Lição não encontrada.",
     "prayer": "ORAÇÃO",
     "complete": "Marcar como concluída"
+  },
+  "written": {
+    "ants": {
+      "title": "Guardar para o inesperado",
+      "description": "Descubra o que as formigas têm a nos ensinar sobre trabalho duro e sobre ter o suficiente para cada estação.",
+      "verse": "Provérbios 6:6-8",
+      "passage": "Vai-te à formiga, ó preguiçoso; olha para os seus caminhos e sê sábio. Não tendo chefe, nem superintendente, nem governador, prepara no verão o seu pão; no tempo da ceifa ajunta o seu mantimento.",
+      "passageRef": "Provérbios 6:6-8 (ARC)",
+      "sections": {
+        "0": {
+          "heading": "Trabalhar no verão",
+          "body": "Um dos pontos centrais desta passagem é como a formiga trabalha no verão, ajuntando alimento para o inverno. Antes de tudo, vale entender o que verão e inverno representam aqui. O verão é normalmente associado a tempos de calor e abundância, e o inverno a tempos de dificuldade. E, como se percebe, verão e inverno representam estações diferentes da vida.\n\nA formiga trabalha no tempo em que o trabalho deve ser feito. Em Israel, o verão era uma grande época de colheita; o inverno, não. Isso nos leva a refletir que existem estações de trabalho na vida — estações em que é certo ajuntar alimento. E mais: traz à tona a realidade de que, em algum momento, o tempo de ajuntar vai terminar. Nesse ponto, o que conseguimos no tempo de trabalho terá de ser suficiente para nos levar através do inverno."
+        },
+        "1": {
+          "heading": "A disciplina é a chave",
+          "body": "A passagem também menciona uma característica interessante da formiga: sua autodisciplina. Sim, quase toda colônia de formigas tem uma rainha. Mas as formigas não são microgerenciadas. Elas mostram independência no trabalho que fazem. Assumem responsabilidade e fazem o que precisa ser feito.\n\nVocê pode pensar nisso em relação à sua própria vida. Sim, temos líderes que nos governam, mas eles não têm ideia se estamos trabalhando ou não. Se queremos ter bom senso de trabalho e ser pessoas diligentes, precisamos ter a disciplina de fazer isso por conta própria. Assim como as formigas, devemos buscar essa qualidade — uma disposição alimentada de fazer o trabalho que precisa ser feito."
+        },
+        "2": {
+          "heading": "Considerações finais",
+          "body": "Ao terminar esta lição, medite no que o Autor deste Provérbio disse. Medite em como as formigas lidam com o trabalho. Busque fazer as coisas no tempo em que precisam ser feitas, em vez de empurrá-las para depois. E faça a sua parte para garantir que você terá o suficiente quando chegar uma estação de escassez financeira."
+        }
+      },
+      "prayer": "Amado Senhor, eu te agradeço por compartilhar a tua sabedoria comigo hoje. Obrigado por me ajudar a entender os teus caminhos, que são mais altos. Tu és sábio. Peço que me ajudes a trabalhar quando o trabalho precisa ser feito. Ajuda-me a guardar recursos com sabedoria, para que eu tenha em abundância, mesmo quando chegarem os invernos da minha vida. Por fim, peço que me guies nas minhas finanças. Em nome de Jesus, amém!"
+    },
+    "widow": {
+      "title": "Entregar tudo a Deus",
+      "description": "Descubra o que uma viúva pobre tem a nos ensinar sobre fazer de Deus a nossa segurança e entregar tudo a ele.",
+      "verse": "Lucas 21:2-4",
+      "passage": "Então, uma pobre viúva chegou e lançou ali duas pequenas moedas. Jesus chamou os seus discípulos e disse: “Em verdade vos digo que esta pobre viúva lançou mais do que todos os que estão fazendo ofertas. Porque todos aqueles deram uma pequena parte do que lhes sobrava; mas ela, sendo pobre, deu tudo o que tinha para viver.”",
+      "passageRef": "Lucas 21:2-4 (ARC)",
+      "sections": {
+        "0": {
+          "heading": "A sua fonte de segurança",
+          "body": "É fácil imaginar o dinheiro como nossa fonte de segurança. Afinal, é normal e é sábio nos planejarmos para ter o suficiente caso as coisas dêem errado. Deus mesmo nos instrui a fazer isso.\n\nO que se mostra aqui, no entanto, aponta para outra coisa. Mostra uma viúva que entendeu ser mais sábio colocar a sua segurança nas mãos do Deus vivo do que na quantidade de dinheiro que ela tinha."
+        },
+        "1": {
+          "heading": "Uma vida com sentido",
+          "body": "A decisão da viúva também revela o entendimento de que é mais importante ser sustentado pelas mãos de Deus do que ter muito dinheiro.\n\nQuando Deus é o centro da nossa vida — e não o dinheiro — ele nos dá uma vida rica de maneiras que o dinheiro nunca poderia comprar. E quando eu sei disso, o dinheiro deixa de ter tanto poder sobre mim. Seja o que vier à sua mente ao ler esta passagem, pense nos planos maravilhosos que Deus tem para você, e que não dependem de dinheiro."
+        }
+      },
+      "prayer": "Amado Deus, eu te agradeço por ser um Senhor que verdadeiramente me guia. Peço que me ajudes a confiar em ti como minha fonte de segurança, e não no meu dinheiro. Ajuda-me a colocar a minha mente em ti, para que eu possa ver todas as coisas maravilhosas que tens para a minha vida, e que não dependem de quanto dinheiro eu tenho. Em nome de Jesus, amém!"
+    }
   }
 }

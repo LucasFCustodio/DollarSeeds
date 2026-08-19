@@ -47,12 +47,6 @@ export type TierKey = 'basic' | 'intermediate' | 'high' | 'max';
 /** Display order on the paywall: Basic → Intermediate → High → Max. */
 export const TIER_ORDER: TierKey[] = ['basic', 'intermediate', 'high', 'max'];
 
-export const TIER_LABELS: Record<TierKey, string> = {
-    basic: 'Basic',
-    intermediate: 'Intermediate',
-    high: 'High',
-    max: 'Max',
-};
 
 /**
  * RevenueCat package identifier → tier + period.
@@ -89,61 +83,35 @@ export const PRODUCT_MAP: Record<string, { tier: TierKey; period: BillingPeriod 
     'com.dollarseeds.support.yearly.480': { tier: 'max', period: 'yearly' },
 };
 
-/** "Intermediate Monthly" from a product id, or null if we don't recognise it. */
-export function describeProduct(productId?: string | null): string | null {
+/**
+ * The tier and period behind a product id, or null if we don't recognise it.
+ *
+ * Returns STRUCTURE, not prose. It used to build "Intermediate Monthly" here, which
+ * meant the one string a paying subscriber sees most — "Current: …" on the paywall and
+ * the Settings row — stayed English in every language. Both names are in
+ * `premium:tier.*` / `premium:paywall.monthly|yearly`, so the caller composes with
+ * `premium:tierPeriod` and gets a translated label plus the freedom to reorder it.
+ */
+export function describeProduct(
+    productId?: string | null,
+): { tier: TierKey; period: BillingPeriod } | null {
     if (!productId) return null;
-    const entry = PRODUCT_MAP[productId];
-    if (!entry) return null;
-    return `${TIER_LABELS[entry.tier]} ${entry.period === 'monthly' ? 'Monthly' : 'Yearly'}`;
+    return PRODUCT_MAP[productId] ?? null;
 }
 
 // ─── Copy ─────────────────────────────────────────────────────────────────────
-// Every user-facing premium string lives here so the App Review-facing wording can
-// never drift between screens.
+// The user-facing premium strings moved to locales/<lang>/premium.json. The WORDING
+// RULES that governed them did not, and they are not stylistic:
 //
-// WORDING RULES, which are not stylistic:
 //  - "exclusive video lessons" / "premium exclusive video series". Never "premium
 //    videos" — the App Store product descriptions say "exclusive video lessons" and
-//    the two must match.
-//  - Never "donate", "donation", or "give" as a noun. Apple's guidelines prohibit
-//    collecting donations through IAP; this is legitimately IAP because it unlocks
-//    content, and the copy has to keep making that obvious. "Support tier" only.
-
-export const PREMIUM_CTA_BODY =
-    'Subscribe to premium to unlock exclusive features and support the app';
-
-export const PAYWALL_HEADING = 'Subscribe to DollarSeeds Premium';
-
-export const PAYWALL_DESCRIPTION =
-    'DollarSeeds aims to provide everyone with the resources to budget effectively for ' +
-    'free. That is why the only premium feature are the video lessons. Gain access to ' +
-    'video series from successful Christian Entrepreneurs. Learn about their struggles ' +
-    'and successes, and how they keep God first in their career';
-
-/** Rendered with "exact same" bold — see PaywallSheet. */
-export const PAYWALL_EQUAL_TIERS_PREFIX = 'Every subscription level offers the ';
-export const PAYWALL_EQUAL_TIERS_BOLD = 'exact same';
-export const PAYWALL_EQUAL_TIERS_SUFFIX =
-    ' benefits — unlocking premium exclusive video series. Whatever amount you choose ' +
-    'to support with, we’re thankful for it!';
-
-/**
- * Shown only when Yearly is selected. Yearly is deliberately exactly 12x monthly with
- * no discount; without this line a no-discount annual reads as a mistake or a trap.
- */
-export const PAYWALL_YEARLY_NOTE = 'Same price as monthly — just paid once a year.';
-
-/** App Review requires an auto-renewal disclosure on the purchase screen. */
-export const PAYWALL_AUTORENEW_DISCLOSURE =
-    'Subscriptions renew automatically at the end of each billing period unless ' +
-    'cancelled at least 24 hours beforehand. Manage or cancel any time in your App ' +
-    'Store account settings.';
+//    the two must match. In pt-BR: "séries em vídeo exclusivas premium".
+//  - Never "donate", "donation", or "give" as a noun — and never "doar", "doação" or
+//    "dar" in Portuguese. Apple prohibits collecting donations through IAP; this is
+//    legitimately IAP because it unlocks content, and the copy has to keep making that
+//    obvious in every language. "Support tier" / "nível de apoio" only.
+//  - premium:paywall.autoRenew is an App Review requirement and must appear in the
+//    language the purchase screen is presented in.
 
 /** Where a user actually cancels. Deleting the DollarSeeds account does NOT cancel. */
 export const MANAGE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
-
-/** App Review 5.1.1(v): account deletion must say the subscription keeps billing. */
-export const DELETE_ACCOUNT_SUBSCRIPTION_WARNING =
-    'Deleting your account does not cancel your subscription. Subscriptions are billed ' +
-    'by the App Store and must be cancelled separately in your App Store account ' +
-    'settings.';

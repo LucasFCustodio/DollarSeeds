@@ -3,7 +3,8 @@
     "title": "DollarSeeds Premium",
     "body": "Assine o premium para desbloquear recursos exclusivos e apoiar o app",
     "manage": "Gerenciar assinatura",
-    "activeFallback": "Sua assinatura premium está ativa"
+    "activeFallback": "Sua assinatura premium está ativa",
+    "sectionLabel": "PREMIUM"
   },
   "paywall": {
     "heading": "Assine o DollarSeeds Premium",
@@ -59,5 +60,6 @@
     "seriesBanner": "Assine para desbloquear esta série",
     "playerLocked": "Esta aula faz parte do Premium.",
     "playerCta": "Ver opções de assinatura"
-  }
+  },
+  "tierPeriod": "{{tier}} · {{period}}"
 }

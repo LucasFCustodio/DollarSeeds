@@ -28,7 +28,8 @@
   },
   "scripture": {
     "modalTitle": "Muito bem, servo fiel!",
-    "amen": "Amém!"
+    "amen": "Amém!",
+    "quoted": "“{{text}}”"
   },
   "category": {
     "needsSub": "Aluguel, mercado, contas",
