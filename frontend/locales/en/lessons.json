@@ -1,0 +1,30 @@
+{
+  "title": "Lessons\nfrom the field",
+  "subtitle": "Scripture-rooted reflections on money, generosity, and stewardship.",
+  "watchAndLearn": "WATCH & LEARN",
+  "series": {
+    "loadFailed": "Couldn't load video series.",
+    "empty": "No video series yet — check back soon.",
+    "detailLoadFailed": "Couldn't load this series.",
+    "lessonCount_one": "{{count}} LESSON",
+    "lessonCount_other": "{{count}} LESSONS"
+  },
+  "progress": "{{done}} of {{total}} lessons completed",
+  "minutes": "{{count}} min",
+  "rating": {
+    "title": "Share Your Rating?",
+    "body": "Would you like to share this rating with us to help improve the app?",
+    "no": "No",
+    "yes": "Yes"
+  },
+  "player": {
+    "loadFailed": "Couldn't load this video.",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "detail": {
+    "notFound": "Lesson not found.",
+    "prayer": "PRAYER",
+    "complete": "Mark as Complete"
+  }
+}

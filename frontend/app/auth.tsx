@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase'; // Adjust this path if you put it in a different folder!
 import { useTheme, Fonts, shadow } from '../context/ThemeContext';
 const logo = require('../assets/images/dollar-seeds-logo.png');
@@ -46,6 +47,7 @@ function AuthButton({
 
 export default function AuthScreen() {
   const { theme } = useTheme();
+  const { t } = useTranslation('auth');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -59,8 +61,9 @@ export default function AuthScreen() {
         password: password,
       });
 
-      if (error) Alert.alert("Error signing up", error.message);
-      else Alert.alert("Success!", "Check your email for the confirmation link!");
+      // `error.message` comes from Supabase and is not localised by us.
+      if (error) Alert.alert(t('error.signUpTitle'), error.message);
+      else Alert.alert(t('signUpSuccess.title'), t('signUpSuccess.body'));
     } finally {
       // Always re-enable the button, even if the request throws or the network hangs.
       setLoading(false);
@@ -76,7 +79,7 @@ export default function AuthScreen() {
         password: password,
       });
 
-      if (error) Alert.alert("Error logging in", error.message);
+      if (error) Alert.alert(t('error.signInTitle'), error.message);
     } finally {
       // Always re-enable the button, even if the request throws or the network hangs.
       setLoading(false);
@@ -102,7 +105,7 @@ export default function AuthScreen() {
 
         if (error || !data?.url) {
             console.error("OAuth Error:", error);
-            Alert.alert('Error signing in with Google', error?.message ?? 'Please try again.');
+            Alert.alert(t('error.googleTitle'), error?.message ?? t('error.tryAgain'));
             return;
         }
 
@@ -127,8 +130,8 @@ export default function AuthScreen() {
         if (!access_token || !refresh_token) {
             const errDesc = getParam('error_description');
             Alert.alert(
-                'Error signing in with Google',
-                errDesc ? decodeURIComponent(errDesc.replace(/\+/g, ' ')) : 'No session was returned from Google.',
+                t('error.googleTitle'),
+                errDesc ? decodeURIComponent(errDesc.replace(/\+/g, ' ')) : t('error.googleNoSession'),
             );
             return;
         }
@@ -136,7 +139,7 @@ export default function AuthScreen() {
         const { error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
         if (sessionError) {
             console.error('Set session error:', sessionError);
-            Alert.alert('Error signing in with Google', sessionError.message);
+            Alert.alert(t('error.googleTitle'), sessionError.message);
         }
     } finally {
         setLoading(false);
@@ -168,7 +171,7 @@ export default function AuthScreen() {
 
         if (error) {
             console.error('Apple sign-in error:', error);
-            Alert.alert('Error signing in with Apple', error.message);
+            Alert.alert(t('error.appleTitle'), error.message);
             return;
         }
 
@@ -184,7 +187,7 @@ export default function AuthScreen() {
         // User tapped "Cancel" in the Apple sheet — not an error, just no session.
         if (e?.code === 'ERR_REQUEST_CANCELED') return;
         console.error('Apple sign-in exception:', e);
-        Alert.alert('Apple sign-in failed', e?.message ?? 'Please try again.');
+        Alert.alert(t('error.appleFailedTitle'), e?.message ?? t('error.tryAgain'));
     } finally {
         setLoading(false);
     }
@@ -203,13 +206,13 @@ export default function AuthScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.header}>Welcome to DollarSeeds</Text>
+        <Text style={styles.header}>{t('header')}</Text>
 
         <TextInput
           style={styles.input}
           onChangeText={(text) => setEmail(text)}
           value={email}
-          placeholder="Email"
+          placeholder={t('emailPlaceholder')}
           placeholderTextColor="rgba(255,255,255,0.55)"
           autoCapitalize={'none'}
         />
@@ -218,15 +221,15 @@ export default function AuthScreen() {
           onChangeText={(text) => setPassword(text)}
           value={password}
           secureTextEntry={true}
-          placeholder="Password"
+          placeholder={t('passwordPlaceholder')}
           placeholderTextColor="rgba(255,255,255,0.55)"
           autoCapitalize={'none'}
         />
 
         <View style={styles.buttonContainer}>
-          <AuthButton label="Create Account" onPress={signUpWithEmail} disabled={loading} />
-          <AuthButton label={loading ? "Loading..." : "Sign In"} onPress={signInWithEmail} disabled={loading} />
-          <AuthButton label="Sign in/up with Google" onPress={signInWithGoogle} disabled={loading} />
+          <AuthButton label={t('createAccount')} onPress={signUpWithEmail} disabled={loading} />
+          <AuthButton label={loading ? t('loading') : t('signIn')} onPress={signInWithEmail} disabled={loading} />
+          <AuthButton label={t('google')} onPress={signInWithGoogle} disabled={loading} />
           {/* Sign in with Apple — iOS only. Uses Apple's own button component (a
               custom-styled one risks a design rejection). Note: Apple's HIG suggests
               placing this at least as prominently as other providers. */}

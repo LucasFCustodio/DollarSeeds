@@ -54,6 +54,8 @@ export default function LessonSeriesScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { theme } = useTheme();
     const { t } = useTranslation('premium');
+    const { t: tl } = useTranslation('lessons');
+    const { t: tc } = useTranslation('common');
     const analytics = useAnalytics();
     const { premiumActive, config, openPaywall } = useSubscription();
 
@@ -99,10 +101,10 @@ export default function LessonSeriesScreen() {
             ) : error || !detail ? (
                 <View style={styles.stateBox}>
                     <Text style={[styles.stateText, { color: theme.ink3 }]}>
-                        Couldn&apos;t load this series.
+                        {tl('series.detailLoadFailed')}
                     </Text>
                     <Pressable onPress={load} hitSlop={8}>
-                        <Text style={[styles.retryText, { color: theme.brand }]}>Tap to retry</Text>
+                        <Text style={[styles.retryText, { color: theme.brand }]}>{tc('action.retry')}</Text>
                     </Pressable>
                 </View>
             ) : (
@@ -142,7 +144,7 @@ export default function LessonSeriesScreen() {
                         return (
                             <>
                                 <Text style={[styles.sectionEyebrow, { color: theme.ink3 }]}>
-                                    {lessons.length} {lessons.length === 1 ? 'LESSON' : 'LESSONS'}
+                                    {tl('series.lessonCount', { count: lessons.length })}
                                 </Text>
 
                                 {locked && (

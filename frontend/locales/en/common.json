@@ -1,20 +1,11 @@
 {
   "action": {
     "cancel": "Cancel",
-    "save": "Save",
-    "delete": "Delete",
-    "done": "Done",
-    "next": "Next",
-    "skip": "Skip",
-    "back": "Back",
     "retry": "Tap to retry",
-    "close": "Close",
     "confirm": "Confirm",
     "viewAll": "View all {{label}} →"
   },
   "state": {
-    "loading": "Loading…",
-    "saving": "Saving…",
     "genericError": "Something went wrong. Please try again."
   },
   "months": {

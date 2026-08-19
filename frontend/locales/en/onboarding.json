@@ -28,5 +28,24 @@
       "body": "Scripture-rooted video series on money, generosity, and stewardship, given by successful professionals.",
       "subnote": "More series will be added as the app and its reach grows"
     }
+  },
+  "startingBalance": {
+    "eyebrow": "ONE LAST THING",
+    "title": "Your starting balance",
+    "body": "DollarSeeds tracks your money month by month. Enter the savings you had BEFORE {{month}} — everything you'd already put away.",
+    "note": "Don't include any {{month}} income or expenses. You'll log those normally in the Transactions tab.",
+    "inputLabel": "Starting balance",
+    "add": "+ Add",
+    "done": "Done",
+    "skip": "Skip for now",
+    "confirmTitle": "Is this correct?",
+    "confirmBody": "This becomes your General Savings balance. You can add to it or move it into a goal any time.",
+    "no": "No",
+    "yes": "Yes",
+    "retry": "Retry",
+    "error": {
+      "timeout": "That's taking too long. Check your connection and try again.",
+      "generic": "Couldn't save your starting balance. Please try again."
+    }
   }
 }

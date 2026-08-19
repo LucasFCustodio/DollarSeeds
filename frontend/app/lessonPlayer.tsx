@@ -37,6 +37,8 @@ export default function LessonPlayerScreen() {
     const router = useRouter();
     const { theme } = useTheme();
     const { t } = useTranslation('premium');
+    const { t: tl } = useTranslation('lessons');
+    const { t: tc } = useTranslation('common');
     const analytics = useAnalytics();
     const { openPaywall, refresh: refreshSubscription } = useSubscription();
     const params = useLocalSearchParams<{ seriesId: string; lessonId: string }>();
@@ -196,7 +198,7 @@ export default function LessonPlayerScreen() {
                 )}
                 {error && !locked && !loading && (
                     <View style={styles.videoOverlay}>
-                        <Text style={styles.errorText}>Couldn&apos;t load this video.</Text>
+                        <Text style={styles.errorText}>{tl('player.loadFailed')}</Text>
                         <Pressable
                             onPress={() => {
                                 // Re-check entitlement too: the usual reason someone
@@ -206,7 +208,7 @@ export default function LessonPlayerScreen() {
                             }}
                             hitSlop={8}
                         >
-                            <Text style={[styles.retryText, { color: theme.brand2 }]}>Tap to retry</Text>
+                            <Text style={[styles.retryText, { color: theme.brand2 }]}>{tc('action.retry')}</Text>
                         </Pressable>
                     </View>
                 )}
@@ -233,7 +235,7 @@ export default function LessonPlayerScreen() {
                     ]}
                 >
                     <IconChevronLeft size={16} color={theme.ink} />
-                    <Text style={[styles.navText, { color: theme.ink }]}>Previous</Text>
+                    <Text style={[styles.navText, { color: theme.ink }]}>{tl('player.previous')}</Text>
                 </Pressable>
 
                 <Pressable
@@ -246,7 +248,7 @@ export default function LessonPlayerScreen() {
                         pressed && hasNext && { transform: [{ scale: 0.97 }] },
                     ]}
                 >
-                    <Text style={[styles.navText, { color: theme.onBrand }]}>Next</Text>
+                    <Text style={[styles.navText, { color: theme.onBrand }]}>{tl('player.next')}</Text>
                     <IconChevronRight size={16} color={theme.onBrand} />
                 </Pressable>
             </View>

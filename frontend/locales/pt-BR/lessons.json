@@ -1,0 +1,30 @@
+{
+  "title": "Séries\ndo campo",
+  "subtitle": "Reflexões fundamentadas nas Escrituras sobre dinheiro, generosidade e mordomia.",
+  "watchAndLearn": "ASSISTA E APRENDA",
+  "series": {
+    "loadFailed": "Não foi possível carregar as séries em vídeo.",
+    "empty": "Nenhuma série em vídeo ainda — volte em breve.",
+    "detailLoadFailed": "Não foi possível carregar esta série.",
+    "lessonCount_one": "{{count}} AULA",
+    "lessonCount_other": "{{count}} AULAS"
+  },
+  "progress": "{{done}} de {{total}} lições concluídas",
+  "minutes": "{{count}} min",
+  "rating": {
+    "title": "Compartilhar sua avaliação?",
+    "body": "Você gostaria de compartilhar esta avaliação com a gente para ajudar a melhorar o app?",
+    "no": "Não",
+    "yes": "Sim"
+  },
+  "player": {
+    "loadFailed": "Não foi possível carregar este vídeo.",
+    "previous": "Anterior",
+    "next": "Próxima"
+  },
+  "detail": {
+    "notFound": "Lição não encontrada.",
+    "prayer": "ORAÇÃO",
+    "complete": "Marcar como concluída"
+  }
+}

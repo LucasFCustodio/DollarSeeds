@@ -1,8 +1,8 @@
 /**
  * check-locales — the safety net for a hand-maintained catalogue.
  *
- * There is no test runner in the frontend, so this script is the gate. It runs three
- * checks that each caught a real bug during the pt-BR work:
+ * There is no test runner in the frontend, so this script is the gate. It runs four
+ * checks, and each one caught a real live bug during the pt-BR work:
  *
  *  1. KEY PARITY. Every locale must expose exactly the same key set. A key present
  *     in `en` but missing in `pt-BR` silently falls back to English, which looks like
@@ -12,12 +12,19 @@
  *     the literal braces on screen. Comparing the SET of placeholders per key catches
  *     typos, omissions, and additions.
  *
- *  3. NO CATALOGUE VALUE LEFT HARDCODED. This is the one that matters most. An earlier
- *     pass replaced JSX text nodes with a single-line `>Text</Text>` pattern, which
- *     silently no-oped on every multi-line node — so eight strings had translations
- *     sitting in the catalogue while the call site still rendered the English literal.
- *     Nothing failed; the app just stayed in English. So: any English value that still
- *     appears as a bare quoted literal in source is reported.
+ *  3. NO CATALOGUE VALUE LEFT HARDCODED — text is in the catalogue but the screen
+ *     still renders the English literal. An earlier pass replaced JSX text nodes with
+ *     a single-line `>Text</Text>` pattern, which silently no-oped on every multi-line
+ *     node, leaving eight strings translated-but-English. Nothing failed; the app just
+ *     stayed in English. Matching whitespace-flexibly is what finds these.
+ *
+ *  4. NO UNREFERENCED KEY. Check 3 cannot see an INTERPOLATED string, because one
+ *     never appears verbatim in source — so a call site assembling `{ratePct}%` by
+ *     hand is invisible to it. Coming at it from the other end (a key with no call
+ *     site anywhere) closes that gap, and found four more.
+ *
+ * Checks 3 and 4 are complements: 3 works value-first and misses interpolated keys,
+ * 4 works key-first and misses nothing but needs to understand dynamic lookups.
  *
  * Run: node scripts/check-locales.mjs
  */
@@ -240,7 +247,10 @@ const dynamicPrefixes = [...allSource.matchAll(/[`'"]([A-Za-z0-9_.:]*?)\$\{/g)]
 for (const ns of namespaces) {
     for (const key of Object.keys(baseFlat[ns])) {
         if (dynamicPrefixes.some(p => key.startsWith(p))) continue;
-        const parts = key.split('.');
+        // i18next appends the plural category to the key it looks up, so
+        // `series.lessonCount` in source resolves `series.lessonCount_one` /
+        // `_other` in the catalogue. Strip the suffix before searching.
+        const parts = key.replace(/_(zero|one|two|few|many|other)$/, '').split('.');
         // A single-segment key is too short to search for loosely, so require it
         // quoted or namespace-prefixed. Deeper keys match on a 2- or 3-segment tail.
         const tails = parts.length === 1

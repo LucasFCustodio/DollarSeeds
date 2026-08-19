@@ -1,20 +1,11 @@
 {
   "action": {
     "cancel": "Cancelar",
-    "save": "Salvar",
-    "delete": "Excluir",
-    "done": "Concluir",
-    "next": "Avançar",
-    "skip": "Pular",
-    "back": "Voltar",
     "retry": "Toque para tentar novamente",
-    "close": "Fechar",
     "confirm": "Confirmar",
     "viewAll": "Ver todos os {{label}} →"
   },
   "state": {
-    "loading": "Carregando…",
-    "saving": "Salvando…",
     "genericError": "Algo deu errado. Tente novamente."
   },
   "months": {

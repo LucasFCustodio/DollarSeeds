@@ -1,0 +1,23 @@
+{
+  "back": "← Back",
+  "titleCategory": "{{month}} {{category}} Breakdown",
+  "titleIncome": "{{month}} Income Breakdown",
+  "empty": {
+    "expense": "No expenses logged yet.",
+    "income": "No income logged yet."
+  },
+  "row": {
+    "day": "Day {{day}}",
+    "noteAndDay": "{{note}} · Day {{day}}"
+  },
+  "fallback": {
+    "goalExpense": "Goal expense",
+    "savingsDeposit": "Savings deposit",
+    "setAside": "Set aside",
+    "income": "Income"
+  },
+  "monthClosed": {
+    "title": "Month closed",
+    "body": "Cannot delete from closed month. Reopen {{month}} to edit"
+  }
+}

@@ -10,6 +10,7 @@ import React from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 
 import { useTheme, shadow } from '../context/ThemeContext';
 import { useAnalytics } from '../lib/analytics';
@@ -23,6 +24,7 @@ export default function LessonDetailScreen() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
     const { theme } = useTheme();
+    const { t } = useTranslation('lessons');
     const analytics = useAnalytics();
 
     const lesson = LESSONS.find(l => l.id === Number(id));
@@ -45,7 +47,7 @@ export default function LessonDetailScreen() {
     if (!lesson) {
         return (
             <View style={[styles.errorWrap, { backgroundColor: theme.bg }]}>
-                <Text style={[styles.errorText, { color: theme.ink }]}>Lesson not found.</Text>
+                <Text style={[styles.errorText, { color: theme.ink }]}>{t('detail.notFound')}</Text>
             </View>
         );
     }
@@ -103,7 +105,7 @@ export default function LessonDetailScreen() {
 
             {/* ── Prayer ──────────────────────────────────────────── */}
             <Card theme={theme} depth={3} padding={22} style={styles.prayerCard}>
-                <Text style={[styles.prayerHeading, { color: theme.ink3 }]}>PRAYER</Text>
+                <Text style={[styles.prayerHeading, { color: theme.ink3 }]}>{t('detail.prayer')}</Text>
                 <Text style={[styles.prayerText, { color: theme.ink }]}>
                     {lesson.prayer}
                 </Text>
@@ -119,7 +121,7 @@ export default function LessonDetailScreen() {
                 ]}
             >
                 <IconCheck size={16} color="#fff" />
-                <Text style={styles.completeBtnText}>Mark as Complete</Text>
+                <Text style={styles.completeBtnText}>{t('detail.complete')}</Text>
             </Pressable>
         </ScrollView>
     );

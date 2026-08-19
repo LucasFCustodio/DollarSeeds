@@ -24,6 +24,8 @@ import axios from 'axios';
 
 import { useAuth } from '../../context/AuthContext';
 import { useOnboarding } from '../../context/OnboardingContext';
+import { useTranslation } from 'react-i18next';
+
 import { useLocale } from '../../context/LocaleContext';
 import { MONTHS } from '../../constants/months';
 import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
@@ -40,7 +42,8 @@ export default function StartingBalanceGate() {
     const { user, initialized } = useAuth();
     const { active } = useOnboarding();
     const { theme } = useTheme();
-    const { formatMoney: fmtMoney, parseAmount } = useLocale();
+    const { formatMoney: fmtMoney, parseAmount, monthLabel } = useLocale();
+    const { t } = useTranslation('onboarding');
     const segments = useSegments();
 
     const currentMonth = MONTHS[new Date().getMonth()];
@@ -127,8 +130,8 @@ export default function StartingBalanceGate() {
             console.error('Starting balance save error:', err);
             setError(
                 err?.code === 'ECONNABORTED'
-                    ? "That's taking too long. Check your connection and try again."
-                    : "Couldn't save your starting balance. Please try again.",
+                    ? t('startingBalance.error.timeout')
+                    : t('startingBalance.error.generic'),
             );
         } finally {
             setSaving(false);
@@ -154,19 +157,18 @@ export default function StartingBalanceGate() {
                         { backgroundColor: theme.surface, borderColor: theme.ink, ...shadow(10) },
                     ]}
                 >
-                    <Text style={[styles.eyebrow, { color: theme.brand }]}>ONE LAST THING</Text>
+                    <Text style={[styles.eyebrow, { color: theme.brand }]}>{t('startingBalance.eyebrow')}</Text>
 
                     {confirming ? (
                         <>
                             <Text style={[styles.title, { color: theme.ink }]}>
-                                Is this correct?
+                                {t('startingBalance.confirmTitle')}
                             </Text>
                             <Text style={[styles.amount, { color: theme.brand }]}>
                                 {fmtMoney(parsed, 2)}
                             </Text>
                             <Text style={[styles.body, { color: theme.ink2 }]}>
-                                This becomes your General Savings balance. You can add to it or
-                                move it into a goal any time.
+                                {t('startingBalance.confirmBody')}
                             </Text>
 
                             {error ? (
@@ -175,7 +177,7 @@ export default function StartingBalanceGate() {
 
                             <View style={styles.confirmRow}>
                                 <Button
-                                    label="No"
+                                    label={t('startingBalance.no')}
                                     variant="outline"
                                     size="lg"
                                     color={theme.ink}
@@ -186,7 +188,7 @@ export default function StartingBalanceGate() {
                                     <ActivityIndicator color={theme.brand} />
                                 ) : (
                                     <Button
-                                        label={error ? 'Retry' : 'Yes'}
+                                        label={error ? t('startingBalance.retry') : t('startingBalance.yes')}
                                         variant="primary"
                                         size="lg"
                                         color={theme.onBrand}
@@ -198,21 +200,19 @@ export default function StartingBalanceGate() {
                     ) : (
                         <>
                             <Text style={[styles.title, { color: theme.ink }]}>
-                                Your starting balance
+                                {t('startingBalance.title')}
                             </Text>
                             <Text style={[styles.body, { color: theme.ink2 }]}>
-                                DollarSeeds tracks your money month by month. Enter the savings you
-                                had BEFORE {currentMonth} — everything you'd already put away.
+                                {t('startingBalance.body', { month: monthLabel(currentMonth) })}
                             </Text>
                             <View style={[styles.noteBox, { backgroundColor: theme.brandSoft }]}>
                                 <Text style={[styles.note, { color: theme.ink }]}>
-                                    Don't include any {currentMonth} income or expenses. You'll log
-                                    those normally in the Transactions tab.
+                                    {t('startingBalance.note', { month: monthLabel(currentMonth) })}
                                 </Text>
                             </View>
 
                             <InputField
-                                label="Starting balance"
+                                label={t('startingBalance.inputLabel')}
                                 icon="💰"
                                 placeholder="0.00"
                                 isNumeric
@@ -229,13 +229,13 @@ export default function StartingBalanceGate() {
                                     hitSlop={8}
                                     style={styles.doneBtn}
                                 >
-                                    <Text style={[styles.doneText, { color: theme.brand }]}>Done</Text>
+                                    <Text style={[styles.doneText, { color: theme.brand }]}>{t('startingBalance.done')}</Text>
                                 </Pressable>
                             ) : null}
 
                             <View style={styles.addRow}>
                                 <Button
-                                    label="+ Add"
+                                    label={t('startingBalance.add')}
                                     variant="primary"
                                     size="lg"
                                     color={theme.onBrand}
@@ -254,7 +254,7 @@ export default function StartingBalanceGate() {
                                 style={styles.skipBtn}
                             >
                                 <Text style={[styles.skipText, { color: theme.ink2 }]}>
-                                    Skip for now
+                                    {t('startingBalance.skip')}
                                 </Text>
                             </Pressable>
                         </>

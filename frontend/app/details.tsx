@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useLocale } from '../context/LocaleContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 interface Expense {
     id: number; title: string; amount: number; day: number; category: string; month: string;
@@ -34,7 +35,11 @@ export default function DetailsScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
-    const { formatMoney: fmtMoney } = useLocale();
+    const {
+        formatMoney: fmtMoney, monthLabel: displayMonth, sourceLabel, serverTitle,
+    } = useLocale();
+    const { t } = useTranslation('details');
+    const { t: tc } = useTranslation('common');
     const { category, month, type } = useLocalSearchParams();
     const monthLabel = Array.isArray(month) ? month[0] : month;
 
@@ -44,7 +49,10 @@ export default function DetailsScreen() {
     // A 409 means the month is closed (rollover feature) and is read-only until reopened.
     const isClosedMonthError = (e: any) => e?.response?.status === 409;
     const showClosedMonthAlert = () =>
-        Alert.alert('Month closed', `Cannot delete from closed month. Reopen ${monthLabel} to edit`);
+        Alert.alert(
+            t('monthClosed.title'),
+            t('monthClosed.body', { month: displayMonth(monthLabel) }),
+        );
 
     useEffect(() => {
         if (type === 'expense') fetchDetailedExpenses();
@@ -70,7 +78,7 @@ export default function DetailsScreen() {
                     axios.get(`${BASE}/savings/history/`, { params: { user_id: user?.id, month } }),
                 ]);
                 const expItems: Expense[] = (expRes.data.data ?? []).map((i: any) => ({
-                    id: i.id, title: i.title || i.sub_category || 'Goal expense',
+                    id: i.id, title: i.title || i.sub_category || t('fallback.goalExpense'),
                     amount: i.amount, day: i.day, month: i.month, category: 'Goals', kind: 'expense',
                 }));
                 // Only income-sourced deposits count toward the Goals budget; transfers
@@ -79,9 +87,9 @@ export default function DetailsScreen() {
                 const savItems: Expense[] = (savRes.data.data ?? [])
                     .filter((i: any) => i.type === 'deposit' && i.source === 'income')
                     .map((i: any) => ({
-                        id: i.id, title: i.title || 'Savings deposit',
+                        id: i.id, title: i.title || t('fallback.savingsDeposit'),
                         amount: i.amount, day: i.day, month: i.month, category: 'Goals',
-                        kind: 'savings', note: 'Set aside',
+                        kind: 'savings', note: t('fallback.setAside'),
                     }));
                 setExpenses([...expItems, ...savItems].sort((a, b) => b.day - a.day));
             } else {
@@ -141,28 +149,35 @@ export default function DetailsScreen() {
                     onPress={() => router.back()}
                     style={[styles.backBtn, { backgroundColor: theme.inputBg }]}
                 >
-                    <Text style={[styles.backBtnText, { color: theme.textSecondary }]}>← Back</Text>
+                    <Text style={[styles.backBtnText, { color: theme.textSecondary }]}>{t('back')}</Text>
                 </Pressable>
 
                 <View style={[styles.titleAccent, { backgroundColor: accentColor }]} />
                 <Text style={[styles.title, { color: theme.text }]}>
-                    {month} {category ? String(category) : 'Income'} Breakdown
+                    {category
+                        ? t('titleCategory', {
+                            month: displayMonth(monthLabel),
+                            category: tc(`category.${String(category)}`, { defaultValue: String(category) }),
+                        })
+                        : t('titleIncome', { month: displayMonth(monthLabel) })}
                 </Text>
             </View>
 
             <View style={styles.listContainer}>
                 {isEmpty ? (
                     <Text style={[styles.emptyText, { color: theme.textMuted }]}>
-                        {type === 'expense' ? 'No expenses logged yet.' : 'No income logged yet.'}
+                        {type === 'expense' ? t('empty.expense') : t('empty.income')}
                     </Text>
                 ) : type === 'expense' ? (
                     expenses.map((item, index) => (
                         <View key={index} style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                             <View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
                             <View style={styles.rowInfo}>
-                                <Text style={[styles.rowTitle, { color: theme.text }]}>{item.title}</Text>
+                                <Text style={[styles.rowTitle, { color: theme.text }]}>{serverTitle(item.title)}</Text>
                                 <Text style={[styles.rowDate, { color: theme.textMuted }]}>
-                                    {item.note ? `${item.note} · Day ${item.day}` : `Day ${item.day}`}
+                                    {item.note
+                                        ? t('row.noteAndDay', { note: item.note, day: item.day })
+                                        : t('row.day', { day: item.day })}
                                 </Text>
                             </View>
                             <Text style={[styles.rowAmount, { color: theme.text }]}>{fmtMoney(item.amount, 2)}</Text>
@@ -180,8 +195,14 @@ export default function DetailsScreen() {
                         <View key={index} style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                             <View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
                             <View style={styles.rowInfo}>
-                                <Text style={[styles.rowTitle, { color: theme.text }]}>{item.source ?? item.jobTitle ?? 'Income'}</Text>
-                                <Text style={[styles.rowDate, { color: theme.textMuted }]}>Day {item.day}</Text>
+                                <Text style={[styles.rowTitle, { color: theme.text }]}>
+                                    {item.source
+                                        ? sourceLabel(item.source)
+                                        : item.jobTitle ?? t('fallback.income')}
+                                </Text>
+                                <Text style={[styles.rowDate, { color: theme.textMuted }]}>
+                                    {t('row.day', { day: item.day })}
+                                </Text>
                             </View>
                             <Text style={[styles.rowAmount, { color: theme.text }]}>{fmtMoney(item.amount, 2)}</Text>
                             <Pressable
