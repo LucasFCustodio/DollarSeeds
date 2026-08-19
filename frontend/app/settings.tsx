@@ -253,8 +253,7 @@ export default function SettingsScreen() {
                     {/* ── Budget type section ─────────────────────────────── */}
                     <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('settings:section.budgetSplit')}</Text>
                     <Text style={[styles.sectionHint, { color: theme.ink2 }]}>
-                        Pick the split that fits your situation. Changes apply to this month and
-                        going forward — past months stay as they were.
+                        {t('settings:budgetSplit.hint')}
                     </Text>
                     <BudgetTypeSelector value={budgetType} onSelect={handleSelectBudgetType} disabled={saving} />
 
@@ -412,7 +411,7 @@ export default function SettingsScreen() {
                                         <IconSparkle size={22} color={theme.brand} />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={[styles.rowTitle, { color: theme.ink }]}>Onboarding tour</Text>
+                                        <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:dev.onboardingTitle')}</Text>
                                         <Text style={[styles.rowSub, { color: theme.ink2 }]}>
                                             {t('settings:dev.onboardingSubtitle')}
                                         </Text>
@@ -420,7 +419,7 @@ export default function SettingsScreen() {
                                 </View>
                                 <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
                                     <Button
-                                        label="Replay Onboarding Tour"
+                                        label={t('settings:dev.onboardingButton')}
                                         variant="secondary"
                                         size="lg"
                                         fullWidth
@@ -505,11 +504,9 @@ export default function SettingsScreen() {
             <Modal visible={showDeleteModal} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalCard, { backgroundColor: theme.surface, ...shadow(9) }]}>
-                        <Text style={[styles.modalTitle, { color: theme.danger }]}>Delete account</Text>
+                        <Text style={[styles.modalTitle, { color: theme.danger }]}>{t('settings:delete.modalTitle')}</Text>
                         <Text style={[styles.modalBody, { color: theme.ink2 }]}>
-                            Deleting the account is irreversible. You'll lose all the information you've
-                            tracked. If you want to delete your account, type "DELETE" in the text box
-                            below, then click Delete.
+                            {t('settings:delete.modalBody')}
                         </Text>
 
                         {/* App Review 5.1.1(v): deleting the account does NOT cancel an
@@ -591,16 +588,17 @@ export default function SettingsScreen() {
         setRestoring(false);
 
         if (result.status === 'restored') {
-            Alert.alert('Purchases restored', 'Your subscription is active again.');
+            Alert.alert(t('settings:premium.restoredTitle'), t('settings:premium.restoredBody'));
         } else if (result.status === 'nothing') {
             Alert.alert(
-                'Nothing to restore',
-                'No previous subscription was found for this account.',
+                t('settings:premium.nothingTitle'),
+                t('settings:premium.nothingBody'),
             );
         } else if (result.status === 'unavailable') {
-            Alert.alert('Unavailable', 'Purchases are not available on this device yet.');
+            Alert.alert(t('settings:premium.unavailableTitle'), t('settings:premium.unavailableBody'));
         } else {
-            Alert.alert('Could not restore', result.message);
+            // `result.message` comes from RevenueCat and is localised by the store SDK.
+            Alert.alert(t('settings:premium.failedTitle'), result.message);
         }
     }
 

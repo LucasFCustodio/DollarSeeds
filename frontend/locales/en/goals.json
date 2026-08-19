@@ -1,0 +1,99 @@
+{
+  "hero": {
+    "eyebrow": "SAVINGS",
+    "balanceLabel": "SEEDS PLANTED",
+    "tagline": "Little by little, it grows",
+    "setAside": "Set aside"
+  },
+  "depositForm": {
+    "title": "Set aside money",
+    "amountLabel": "AMOUNT",
+    "whichGoal": "WHICH GOAL",
+    "fundingSource": "FUNDING SOURCE",
+    "transfer": "Transfer",
+    "plantSeed": "Plant Seed"
+  },
+  "funding": {
+    "thisMonth": "This month's income",
+    "pastMonth": "{{month}} income ({{amount}})",
+    "fromGeneral": "From General Savings ({{amount}})"
+  },
+  "tabs": {
+    "active": "Active goals",
+    "completed": "Completed",
+    "completedCount": "Completed ({{count}})"
+  },
+  "section": {
+    "savings": "SAVINGS",
+    "debt": "DEBT",
+    "recentActivity": "RECENT ACTIVITY"
+  },
+  "empty": {
+    "completed": "No completed goals yet. Keep saving!",
+    "savings": "No savings goals yet. Plant your first one!",
+    "debt": "No debts tracked. Add one to start paying it down!",
+    "history": "No transactions yet. Start saving!"
+  },
+  "general": {
+    "meta": "ALWAYS ON · No target",
+    "available": " available"
+  },
+  "recon": {
+    "badge": "AUTO",
+    "explain": "Money you'd already saved but later spent — repay to restore your savings.",
+    "progress": " left to repay · {{repaid}} of {{owed}}"
+  },
+  "card": {
+    "debtCleared": "Debt cleared! 🎉",
+    "goalAchieved": "Goal achieved! 🎉",
+    "paceDebt": "Pay {{amount}}/week · {{months}}mo left",
+    "paceSaving": "Save {{amount}}/week · {{months}}mo left",
+    "ofTargetDebt": " of {{target}} paid",
+    "ofTargetSaving": " of {{target}}",
+    "completeDebtA11y": "Mark debt as paid off",
+    "completeGoalA11y": "Move goal to completed",
+    "completedMetaDebt": "{{amount}} paid of {{target}} · {{month}} {{year}}",
+    "completedMetaSaving": "{{amount}} saved of {{target}} · {{month}} {{year}}"
+  },
+  "newGoal": {
+    "button": "Plant a new goal",
+    "titleDebt": "New debt to pay off",
+    "titleSaving": "New savings goal",
+    "typeLabel": "GOAL TYPE",
+    "typeSaving": "Savings",
+    "typeDebt": "Debt",
+    "nameLabelDebt": "DEBT NAME",
+    "nameLabelSaving": "GOAL NAME",
+    "namePlaceholderDebt": "Credit card, Car loan…",
+    "namePlaceholderSaving": "Emergency fund, New laptop…",
+    "amountLabelDebt": "TOTAL TO PAY OFF",
+    "amountLabelSaving": "TARGET AMOUNT",
+    "monthLabel": "TARGET MONTH",
+    "yearLabel": "TARGET YEAR",
+    "save": "Save Goal"
+  },
+  "editGoal": {
+    "titleDebt": "Edit debt",
+    "titleSaving": "Edit goal",
+    "save": "Save changes"
+  },
+  "alert": {
+    "missingInfoTitle": "Missing info",
+    "missingInfoBody": "Please enter a goal name and a valid target amount.",
+    "editValidation": "Enter a name and a target amount greater than zero.",
+    "removeDebtTitle": "Remove this debt?",
+    "removeGoalTitle": "Remove this goal?",
+    "removeBody": "\"{{title}}\" will be removed. Money you put in during earlier months goes back to General Savings, and anything you added this month is returned to this month's Goals budget.",
+    "remove": "Remove",
+    "completeDebtTitle": "Mark this debt as paid off?",
+    "completeGoalTitle": "Move this goal to completed?",
+    "completeMoved": "{{amount}} will come out of your savings and \"{{title}}\" moves to Completed.",
+    "completeShortDebt": "You've only paid {{saved}} of your {{target}} debt. {{moved}}\n\nComplete anyway?",
+    "completeShortSaving": "You've only saved {{saved}} of your {{target}} goal. {{moved}}\n\nComplete anyway?",
+    "completeConfirm": "Yes, complete",
+    "completeFailedTitle": "Couldn't complete goal",
+    "monthClosedTitle": "Month closed",
+    "cannotDelete": "Cannot delete from closed month. Reopen {{month}} to edit",
+    "cannotComplete": "Cannot complete a goal in a closed month. Reopen {{month}} to edit"
+  }
+}

@@ -64,14 +64,51 @@
   "serverTitle": {
     "General Savings": "Poupança Geral",
     "Reconciliation": "Reconciliação",
-    "rollover": "Saldo transferido — {{month}}",
-    "rolloverRecovery": "Recuperação de saldo — {{month}}",
+    "Starting balance": "Saldo inicial",
+    "Returned from deleted goal": "Devolvido de meta excluída",
+    "Deposit": "Depósito",
+    "Savings goal": "Meta de poupança",
+    "rollover": "Sobra de {{month}}",
+    "rolloverRecovery": "Recuperação da sobra de {{month}}",
+    "spentAfterClose": "Gasto após o fechamento de {{month}}",
     "transferToGoal": "Transferência da Poupança Geral para {{goal}}"
   },
   "serverError": {
     "monthClosed": "{{month}} está fechado. Reabra o mês antes de fazer alterações.",
     "goalNameTaken": "Já existe uma meta com esse nome.",
     "generalSavingsLocked": "A Poupança Geral não pode ser editada.",
-    "reconciliationLocked": "A meta de Reconciliação é gerenciada automaticamente."
+    "generalSavingsUndeletable": "A Poupança Geral não pode ser excluída.",
+    "reconciliationLocked": "A meta de Reconciliação é gerenciada automaticamente.",
+    "reconciliationUndeletable": "A meta de Reconciliação é gerenciada automaticamente e não pode ser excluída.",
+    "targetTooSmall": "O valor da meta precisa ser maior que zero.",
+    "alreadyCompleted": "Essa meta já foi concluída."
+  },
+  "source": {
+    "Paycheck": "Salário",
+    "Side gig": "Trabalho extra",
+    "Gift": "Presente",
+    "Refund": "Reembolso",
+    "Bonus": "Bônus",
+    "Other": "Outra"
+  },
+  "subcategory": {
+    "needs": {
+      "Rent": "Aluguel",
+      "Groceries": "Mercado",
+      "Utilities": "Contas de casa",
+      "Transit": "Transporte",
+      "Insurance": "Seguro",
+      "Healthcare": "Saúde",
+      "Other": "Outro"
+    },
+    "wants": {
+      "Dining": "Restaurantes",
+      "Coffee": "Café",
+      "Streaming": "Streaming",
+      "Shopping": "Compras",
+      "Travel": "Viagens",
+      "Gifts": "Presentes",
+      "Other": "Outro"
+    }
   }
 }

@@ -23,8 +23,11 @@ import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import axios from 'axios';
 
+import { useTranslation } from 'react-i18next';
+
 import { useAuth } from '../../context/AuthContext';
 import { useLocale } from '../../context/LocaleContext';
+import { CAT_API, SUBCATS } from '../../constants/txCategories';
 import { MONTHS } from '../../constants/months';
 import { CURRENCIES } from '../../constants/currencies';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
@@ -41,13 +44,9 @@ import {
 // Expense logging now offers only Needs and Wants. The former "Investments" (goals)
 // bucket moved to the Goals tab as Savings/Debt goals — no new 'Goals' expenses are
 // created here anymore (historical 'Goals' rows remain readable for past months).
-const SUBCATS = {
-    needs: ['Rent', 'Groceries', 'Utilities', 'Transit', 'Insurance', 'Healthcare', 'Other'],
-    wants: ['Dining', 'Coffee', 'Streaming', 'Shopping', 'Travel', 'Gifts', 'Other'],
-};
-
-// Maps UI keys → backend category strings (aligns with /expenses/details/ params)
-const CAT_API = { needs: 'Needs', wants: 'Wants' };
+//
+// SUBCATS and CAT_API now live in constants/txCategories.ts, which documents why the
+// values stay English in every language: they are written to the database.
 
 // ─── Month picker ─────────────────────────────────────────────────────────────
 const ITEM_H = 46;
@@ -121,7 +120,11 @@ export default function ExpenseContainer({ embedded = false }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
-    const { parseAmount, dayMonth, currency } = useLocale();
+    const { parseAmount, dayMonth, currency, monthLabel, subcatLabel } = useLocale();
+    const { t } = useTranslation('transactions');
+    // Category names live in `common` because the dashboard and details screens need
+    // the same three labels — hence a second bound `t`.
+    const { t: tc } = useTranslation('common');
     const currencySymbol = CURRENCIES[currency].symbol;
     const analytics = useAnalytics();
 
@@ -139,9 +142,11 @@ export default function ExpenseContainer({ embedded = false }) {
     // Live date string shown in the amount card
     const dateStr = `${dayMonth(MONTHS.includes(month) ? month : MONTHS[today.getMonth()], day || today.getDate())}, ${today.getFullYear()}`;
 
+    // `key` is what drives CAT_API and therefore the stored value; `label` is display
+    // only and comes from the common:category catalogue.
     const cats = [
-        { key: 'needs', label: 'Needs', Icon: IconNeedsMascot, color: theme.needs, soft: theme.needsSoft },
-        { key: 'wants', label: 'Wants', Icon: IconWantsMascot, color: theme.wants, soft: theme.wantsSoft },
+        { key: 'needs', label: tc('category.Needs'), Icon: IconNeedsMascot, color: theme.needs, soft: theme.needsSoft },
+        { key: 'wants', label: tc('category.Wants'), Icon: IconWantsMascot, color: theme.wants, soft: theme.wantsSoft },
     ];
     const selected = cats.find(c => c.key === category);
 
@@ -174,7 +179,7 @@ export default function ExpenseContainer({ embedded = false }) {
         } catch (err) {
             // A 409 means the target month is closed (rollover feature) and read-only.
             if (err?.response?.status === 409) {
-                Alert.alert('Month closed', `Cannot add to closed month. Reopen ${month} to edit`);
+                Alert.alert(t('monthClosed.title'), t('monthClosed.body', { month: monthLabel(month) }));
             } else {
                 console.error('Expense submit error:', err?.message ?? err);
             }
@@ -203,8 +208,8 @@ export default function ExpenseContainer({ embedded = false }) {
                         <IconChevronLeft size={18} color={theme.ink} />
                     </Pressable>
                     <View style={{ flex: 1 }}>
-                        <Text style={[styles.screenTitle, { color: theme.ink }]}>New Expense</Text>
-                        <Text style={[styles.screenSubtitle, { color: theme.ink3 }]}>Plant where it counts</Text>
+                        <Text style={[styles.screenTitle, { color: theme.ink }]}>{t('expense.screenTitle')}</Text>
+                        <Text style={[styles.screenSubtitle, { color: theme.ink3 }]}>{t('expense.screenSubtitle')}</Text>
                     </View>
                 </View>
             )}
@@ -233,7 +238,7 @@ export default function ExpenseContainer({ embedded = false }) {
                     </View>
 
                     <View style={styles.amountInner}>
-                        <Text style={styles.amountEyebrow}>AMOUNT</Text>
+                        <Text style={styles.amountEyebrow}>{t('expense.amountEyebrow')}</Text>
                         <View style={styles.amountRow}>
                             <Text style={styles.amountDollar}>{currencySymbol}</Text>
                             <TextInput
@@ -253,7 +258,7 @@ export default function ExpenseContainer({ embedded = false }) {
                 </View>
 
                 {/* ── Category ────────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>CATEGORY</Text>
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('expense.categoryLabel')}</Text>
                 <View style={styles.catGrid}>
                     {cats.map(c => {
                         const active = category === c.key;
@@ -293,7 +298,7 @@ export default function ExpenseContainer({ embedded = false }) {
                 </View>
 
                 {/* ── Sub-category chips ───────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>SUB-CATEGORY</Text>
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('expense.subcategoryLabel')}</Text>
                 <View style={styles.chipsWrap}>
                     {SUBCATS[category].map(s => {
                         const active = subcat === s;
@@ -314,7 +319,7 @@ export default function ExpenseContainer({ embedded = false }) {
                                     styles.chipText,
                                     { color: active ? '#fff' : theme.ink2 },
                                 ]}>
-                                    {s}
+                                    {subcatLabel(s, category)}
                                 </Text>
                             </Pressable>
                         );
@@ -322,7 +327,7 @@ export default function ExpenseContainer({ embedded = false }) {
                 </View>
 
                 {/* ── Title ───────────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>TITLE (OPTIONAL)</Text>
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('expense.titleLabel')}</Text>
                 <TextInput
                     style={[
                         styles.fieldInput,
@@ -332,7 +337,7 @@ export default function ExpenseContainer({ embedded = false }) {
                             color: theme.ink,
                         },
                     ]}
-                    placeholder="Trader Joe's haul"
+                    placeholder={t('expense.titlePlaceholder')}
                     placeholderTextColor={theme.ink3}
                     value={title}
                     onChangeText={setTitle}
@@ -340,14 +345,14 @@ export default function ExpenseContainer({ embedded = false }) {
                 />
 
                 {/* ── Month & Day ──────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>DATE</Text>
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('date.label')}</Text>
                 <View style={styles.dateRow}>
                     <View style={{ flex: 2 }}>
-                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>Month</Text>
+                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>{t('date.month')}</Text>
                         <MonthPicker value={month} onChange={setMonth} theme={theme} />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>Day</Text>
+                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>{t('date.day')}</Text>
                         <TextInput
                             style={[
                                 styles.fieldInput,
@@ -358,7 +363,7 @@ export default function ExpenseContainer({ embedded = false }) {
                                     fontFamily: 'Geist-SemiBold',
                                 },
                             ]}
-                            placeholder="25"
+                            placeholder={t('date.dayPlaceholder')}
                             placeholderTextColor={theme.ink3}
                             value={day}
                             onChangeText={setDay}
@@ -381,7 +386,7 @@ export default function ExpenseContainer({ embedded = false }) {
                     ]}
                 >
                     <Text style={styles.submitText}>
-                        {submitted ? 'Planted!' : 'Plant Expense'}
+                        {submitted ? t('expense.submitted') : t('expense.submit')}
                     </Text>
                     <IconCheck size={16} color="#fff" />
                 </Pressable>

@@ -64,14 +64,51 @@
   "serverTitle": {
     "General Savings": "General Savings",
     "Reconciliation": "Reconciliation",
+    "Starting balance": "Starting balance",
+    "Returned from deleted goal": "Returned from deleted goal",
+    "Deposit": "Deposit",
+    "Savings goal": "Savings goal",
     "rollover": "Rollover — {{month}}",
     "rolloverRecovery": "Rollover recovery — {{month}}",
+    "spentAfterClose": "Spent after close — {{month}}",
     "transferToGoal": "Transfer from General Savings to {{goal}}"
   },
   "serverError": {
     "monthClosed": "{{month}} is closed. Reopen it before making changes.",
     "goalNameTaken": "A goal with this name already exists.",
     "generalSavingsLocked": "General Savings cannot be edited.",
-    "reconciliationLocked": "The Reconciliation goal is managed automatically."
+    "generalSavingsUndeletable": "General Savings cannot be deleted.",
+    "reconciliationLocked": "The Reconciliation goal is managed automatically.",
+    "reconciliationUndeletable": "The Reconciliation goal is managed automatically and cannot be deleted.",
+    "targetTooSmall": "Target amount must be greater than zero.",
+    "alreadyCompleted": "Goal is already completed."
+  },
+  "source": {
+    "Paycheck": "Paycheck",
+    "Side gig": "Side gig",
+    "Gift": "Gift",
+    "Refund": "Refund",
+    "Bonus": "Bonus",
+    "Other": "Other"
+  },
+  "subcategory": {
+    "needs": {
+      "Rent": "Rent",
+      "Groceries": "Groceries",
+      "Utilities": "Utilities",
+      "Transit": "Transit",
+      "Insurance": "Insurance",
+      "Healthcare": "Healthcare",
+      "Other": "Other"
+    },
+    "wants": {
+      "Dining": "Dining",
+      "Coffee": "Coffee",
+      "Streaming": "Streaming",
+      "Shopping": "Shopping",
+      "Travel": "Travel",
+      "Gifts": "Gifts",
+      "Other": "Other"
+    }
   }
 }

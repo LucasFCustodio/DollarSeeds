@@ -26,6 +26,8 @@ import {
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import axios from 'axios';
 
+import { useTranslation } from 'react-i18next';
+
 import { useAuth } from '../../context/AuthContext';
 import { useLocale } from '../../context/LocaleContext';
 import { MONTHS, monthEndDate } from '../../constants/months';
@@ -176,8 +178,11 @@ export default function PiggyBankScreen() {
     const { theme } = useTheme();
     const analytics = useAnalytics();
     const {
-        formatMoney: fmtMoney, parseAmount, monthAbbr, currency,
+        formatMoney: fmtMoney, formatNumber, parseAmount, monthAbbr, monthLabel,
+        currency, serverTitle, serverError,
     } = useLocale();
+    const { t } = useTranslation('goals');
+    const { t: tc } = useTranslation('common');
     const currencySymbol = CURRENCIES[currency].symbol;
     const today = new Date();
     const currentMonth: string = MONTHS[today.getMonth()];
@@ -305,10 +310,15 @@ export default function PiggyBankScreen() {
     //  • General Savings, when it holds money to draw from
     const generalHasMoney = (generalGoal?.allocated_amount ?? 0) > 0;
     const fundingOptions: { key: string; label: string }[] = [
-        { key: 'income', label: "This month's income" },
-        ...fundingMonths.map(m => ({ key: m.month, label: `${m.month} income (${fmtMoney(m.income)})` })),
+        { key: 'income', label: t('funding.thisMonth') },
+        // `m.month` is a canonical English month name and stays that way in `key` —
+        // it is posted back to the API. Only the label is translated.
+        ...fundingMonths.map(m => ({
+            key: m.month,
+            label: t('funding.pastMonth', { month: monthLabel(m.month), amount: fmtMoney(m.income) }),
+        })),
         ...(generalHasMoney
-            ? [{ key: 'general', label: `From General Savings (${fmtMoney(generalGoal?.allocated_amount ?? 0)})` }]
+            ? [{ key: 'general', label: t('funding.fromGeneral', { amount: fmtMoney(generalGoal?.allocated_amount ?? 0) }) }]
             : []),
     ];
 
@@ -356,7 +366,9 @@ export default function PiggyBankScreen() {
                     general_goal_id: generalGoal.id,
                     day: today.getDate(),
                     month: currentMonth,
-                    to_goal_title: selectedGoal?.title ?? 'Savings goal',
+                    // Goes into savings_transactions.title, which the backend and older
+                    // binaries read as English; serverTitle() maps it at render.
+                    to_goal_title: selectedGoal?.title ?? 'Savings goal', // i18n-canonical
                 });
                 // Funding a specific goal via transfer (goal_id only, never the amount).
                 if (selectedGoal?.goal_type === 'debt') {
@@ -401,7 +413,7 @@ export default function PiggyBankScreen() {
     const submitGoal = async () => {
         const amount = parseAmount(goalAmount) ?? NaN;
         if (!goalTitle.trim() || isNaN(amount) || amount <= 0) {
-            Alert.alert('Missing info', 'Please enter a goal name and a valid target amount.');
+            Alert.alert(t('alert.missingInfoTitle'), t('alert.missingInfoBody'));
             return;
         }
         setGoalError('');
@@ -417,7 +429,10 @@ export default function PiggyBankScreen() {
             setShowGoalForm(false); setGoalTitle(''); setGoalAmount(''); setGoalType('saving');
             fetchData();
         } catch (error: any) {
-            if (error?.response?.status === 400) setGoalError('A goal with this name already exists.');
+            if (error?.response?.status === 400) {
+                // The server's own wording when it sent one, our catalogue otherwise.
+                setGoalError(serverError(error.response.data?.detail ?? tc('serverError.goalNameTaken')));
+            }
             else console.error('Goal create error:', error);
         }
     };
@@ -435,7 +450,7 @@ export default function PiggyBankScreen() {
             setBalance(balRes.data.balance);
         } catch (e: any) {
             if (e?.response?.status === 409) {
-                Alert.alert('Month closed', `Cannot delete from closed month. Reopen ${tx.month} to edit`);
+                Alert.alert(t('alert.monthClosedTitle'), t('alert.cannotDelete', { month: monthLabel(tx.month) }));
             } else { console.error('Delete transaction error:', e); }
         }
     };
@@ -449,7 +464,7 @@ export default function PiggyBankScreen() {
             fetchData();
         } catch (e: any) {
             if (e?.response?.status === 409) {
-                Alert.alert('Month closed', `Cannot delete from closed month. Reopen ${currentMonth} to edit`);
+                Alert.alert(t('alert.monthClosedTitle'), t('alert.cannotDelete', { month: monthLabel(currentMonth) }));
             } else { console.error('Delete goal error:', e); }
         }
     };
@@ -457,12 +472,13 @@ export default function PiggyBankScreen() {
     const deleteGoal = (g: Goal) => {
         const isDebt = g.goal_type === 'debt';
         Alert.alert(
-            isDebt ? 'Remove this debt?' : 'Remove this goal?',
-            `"${g.title}" will be removed. Money you put in during earlier months goes back ` +
-            `to General Savings, and anything you added this month is returned to this month's Goals budget.`,
+            isDebt ? t('alert.removeDebtTitle') : t('alert.removeGoalTitle'),
+            // One whole interpolated sentence, not concatenated fragments — the clause
+            // order differs in Portuguese and a split body cannot be reordered.
+            t('alert.removeBody', { title: serverTitle(g.title) }),
             [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Remove', style: 'destructive', onPress: () => doDeleteGoal(g.id) },
+                { text: tc('action.cancel'), style: 'cancel' },
+                { text: t('alert.remove'), style: 'destructive', onPress: () => doDeleteGoal(g.id) },
             ],
         );
     };
@@ -482,14 +498,15 @@ export default function PiggyBankScreen() {
             fetchData();
         } catch (e: any) {
             if (e?.response?.status === 409) {
-                Alert.alert('Month closed', `Cannot complete a goal in a closed month. Reopen ${currentMonth} to edit`);
+                Alert.alert(t('alert.monthClosedTitle'), t('alert.cannotComplete', { month: monthLabel(currentMonth) }));
             } else {
                 // Don't fail silently — a swallowed error here looks like the button did
                 // nothing, or worse, like it half-worked.
                 console.error('Complete goal error:', e);
                 Alert.alert(
-                    "Couldn't complete goal",
-                    e?.response?.data?.detail ?? 'Something went wrong. Please try again.',
+                    t('alert.completeFailedTitle'),
+                    // `detail` is English prose from the backend — map it, don't print it.
+                    serverError(e?.response?.data?.detail ?? tc('state.genericError')),
                 );
             }
         }
@@ -501,15 +518,22 @@ export default function PiggyBankScreen() {
         const target = g.target_amount ?? 0;
         const short  = target > 0 && saved < target;
 
-        const moved = `${fmtMoney(saved)} will come out of your savings and "${g.title}" moves to Completed.`;
+        const moved = t('alert.completeMoved', {
+            amount: fmtMoney(saved), title: serverTitle(g.title),
+        });
+        // Two whole sentences rather than one with a swapped verb and noun: in
+        // Portuguese "pagou … da sua dívida" and "guardou … da sua meta" differ in
+        // verb AND in the gender of the following article, so they cannot share a
+        // template with substituted words.
+        const shortBody = isDebt
+            ? t('alert.completeShortDebt', { saved: fmtMoney(saved), target: fmtMoney(target), moved })
+            : t('alert.completeShortSaving', { saved: fmtMoney(saved), target: fmtMoney(target), moved });
         Alert.alert(
-            isDebt ? 'Mark this debt as paid off?' : 'Move this goal to completed?',
-            short
-                ? `You've only ${isDebt ? 'paid' : 'saved'} ${fmtMoney(saved)} of your ${fmtMoney(target)} ${isDebt ? 'debt' : 'goal'}. ${moved}\n\nComplete anyway?`
-                : moved,
+            isDebt ? t('alert.completeDebtTitle') : t('alert.completeGoalTitle'),
+            short ? shortBody : moved,
             [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Yes, complete', style: 'destructive', onPress: () => doCompleteGoal(g) },
+                { text: tc('action.cancel'), style: 'cancel' },
+                { text: t('alert.completeConfirm'), style: 'destructive', onPress: () => doCompleteGoal(g) },
             ],
         );
     };
@@ -528,7 +552,7 @@ export default function PiggyBankScreen() {
         if (!editingGoal) return;
         const amount = parseAmount(editAmount) ?? NaN;
         if (!editTitle.trim() || isNaN(amount) || amount <= 0) {
-            setEditError('Enter a name and a target amount greater than zero.');
+            setEditError(t('alert.editValidation'));
             return;
         }
         try {
@@ -543,10 +567,10 @@ export default function PiggyBankScreen() {
             fetchData();
         } catch (e: any) {
             if (e?.response?.status === 400) {
-                setEditError(e.response.data?.detail ?? 'A goal with this name already exists.');
+                setEditError(serverError(e.response.data?.detail ?? tc('serverError.goalNameTaken')));
             } else {
                 console.error('Edit goal error:', e);
-                setEditError(e?.response?.data?.detail ?? 'Something went wrong. Please try again.');
+                setEditError(serverError(e?.response?.data?.detail ?? tc('state.genericError')));
             }
         }
     };
@@ -619,14 +643,16 @@ export default function PiggyBankScreen() {
                         )}
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={[styles.goalTitle, { color: theme.ink }]}>{g.title}</Text>
+                        <Text style={[styles.goalTitle, { color: theme.ink }]}>{serverTitle(g.title)}</Text>
                         {achieved ? (
                             <Text style={[styles.goalMeta, { color: theme.success }]}>
-                                {isDebt ? 'Debt cleared! 🎉' : 'Goal achieved! 🎉'}
+                                {isDebt ? t('card.debtCleared') : t('card.goalAchieved')}
                             </Text>
                         ) : (
                             <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
-                                {isDebt ? 'Pay' : 'Save'} {fmtMoney(weekly)}/week · {monthsLeft}mo left
+                                {isDebt
+                                    ? t('card.paceDebt', { amount: fmtMoney(weekly), months: monthsLeft })
+                                    : t('card.paceSaving', { amount: fmtMoney(weekly), months: monthsLeft })}
                             </Text>
                         )}
                     </View>
@@ -646,13 +672,15 @@ export default function PiggyBankScreen() {
                         {fmtMoney(g.allocated_amount)}
                     </Text>
                     <Text style={[styles.goalOf, { color: theme.ink3 }]}>
-                        {' '}of {fmtMoney(target)}{isDebt ? ' paid' : ''}
+                        {isDebt
+                            ? t('card.ofTargetDebt', { target: fmtMoney(target) })
+                            : t('card.ofTargetSaving', { target: fmtMoney(target) })}
                     </Text>
                     <View style={{ flex: 1 }} />
                     <Pressable
                         onPress={() => completeGoal(g)}
                         hitSlop={8}
-                        accessibilityLabel={isDebt ? 'Mark debt as paid off' : 'Move goal to completed'}
+                        accessibilityLabel={isDebt ? t('card.completeDebtA11y') : t('card.completeGoalA11y')}
                         style={({ pressed }) => [
                             styles.completeBtn,
                             { backgroundColor: accentSoft, borderColor: accent },
@@ -688,7 +716,7 @@ export default function PiggyBankScreen() {
 
                     {/* Top row: label + plus btn */}
                     <View style={styles.heroTopRow}>
-                        <Text style={styles.heroEyebrow}>SAVINGS</Text>
+                        <Text style={styles.heroEyebrow}>{t('hero.eyebrow')}</Text>
                         <Pressable
                             onPress={() => {
                                 setShowGoalForm(true);
@@ -704,9 +732,9 @@ export default function PiggyBankScreen() {
                     <View style={styles.jarRow}>
                         <SavingsJar fill={jarFill} size={92} />
                         <View style={{ flex: 1 }}>
-                            <Text style={styles.heroBalanceLabel}>SEEDS PLANTED</Text>
+                            <Text style={styles.heroBalanceLabel}>{t('hero.balanceLabel')}</Text>
                             <AnimatedAmount value={balance} size={tv(48, 68)} color="#fff" decimals={2} />
-                            <Text style={styles.heroTagline}>Little by little, it grows</Text>
+                            <Text style={styles.heroTagline}>{t('hero.tagline')}</Text>
                         </View>
                     </View>
 
@@ -726,7 +754,7 @@ export default function PiggyBankScreen() {
                             ]}
                         >
                             <IconPlus size={15} color="#fff" />
-                            <Text style={styles.actionBtnText}>Set aside</Text>
+                            <Text style={styles.actionBtnText}>{t('hero.setAside')}</Text>
                         </Pressable>
                     </View>
 
@@ -739,11 +767,11 @@ export default function PiggyBankScreen() {
                 {showTxForm && (
                     <Card theme={theme} depth={5} padding={20} style={styles.txForm}>
                         <Text style={[styles.formTitle, { color: theme.ink }]}>
-                            Set aside money
+                            {t('depositForm.title')}
                         </Text>
 
                         {/* Amount */}
-                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>AMOUNT</Text>
+                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>{t('depositForm.amountLabel')}</Text>
                         <View style={[styles.amountInputRow, {
                             backgroundColor: theme.surfaceSoft, borderColor: theme.border,
                         }]}>
@@ -764,7 +792,7 @@ export default function PiggyBankScreen() {
                         {goalChips.length > 0 && (
                             <>
                                 <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
-                                    WHICH GOAL
+                                    {t('depositForm.whichGoal')}
                                 </Text>
                                 <View style={styles.chipWrap}>
                                     {goalChips.map(g => {
@@ -791,7 +819,7 @@ export default function PiggyBankScreen() {
                                                     styles.chipText,
                                                     { color: active ? '#fff' : (g.is_general ? theme.brand : theme.ink2) },
                                                 ]}>
-                                                    {g.title}
+                                                    {serverTitle(g.title)}
                                                 </Text>
                                             </Pressable>
                                         );
@@ -804,7 +832,7 @@ export default function PiggyBankScreen() {
                         {showFundingSource && (
                             <>
                                 <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
-                                    FUNDING SOURCE
+                                    {t('depositForm.fundingSource')}
                                 </Text>
                                 <View style={[styles.chipWrap, { marginBottom: 16 }]}>
                                     {fundingOptions.map(opt => {
@@ -847,7 +875,7 @@ export default function PiggyBankScreen() {
                             >
                                 <IconCheck size={15} color="#fff" />
                                 <Text style={styles.submitBtnText}>
-                                    {fundingSource === 'general' ? 'Transfer' : 'Plant Seed'}
+                                    {fundingSource === 'general' ? t('depositForm.transfer') : t('depositForm.plantSeed')}
                                 </Text>
                             </Pressable>
                             <Pressable
@@ -857,7 +885,7 @@ export default function PiggyBankScreen() {
                                     pressed && { opacity: 0.7 },
                                 ]}
                             >
-                                <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>Cancel</Text>
+                                <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>{tc('action.cancel')}</Text>
                             </Pressable>
                         </View>
                     </Card>
@@ -868,13 +896,13 @@ export default function PiggyBankScreen() {
                     backgroundColor: theme.surfaceSoft,
                     borderColor: theme.borderSoft,
                 }]}>
-                    {(['active', 'completed'] as const).map(t => (
+                    {(['active', 'completed'] as const).map(tab => (
                         <Pressable
-                            key={t}
-                            onPress={() => setActiveTab(t)}
+                            key={tab}
+                            onPress={() => setActiveTab(tab)}
                             style={[
                                 styles.tabItem,
-                                activeTab === t && [
+                                activeTab === tab && [
                                     styles.tabItemActive,
                                     { backgroundColor: theme.surface, ...(shadow(2) as object) },
                                 ],
@@ -882,11 +910,13 @@ export default function PiggyBankScreen() {
                         >
                             <Text style={[
                                 styles.tabText,
-                                { color: activeTab === t ? theme.ink : theme.ink3 },
+                                { color: activeTab === tab ? theme.ink : theme.ink3 },
                             ]}>
-                                {t === 'active'
-                                    ? 'Active goals'
-                                    : `Completed${completedGoals.length > 0 ? ` (${completedGoals.length})` : ''}`}
+                                {tab === 'active'
+                                    ? t('tabs.active')
+                                    : completedGoals.length > 0
+                                        ? t('tabs.completedCount', { count: completedGoals.length })
+                                        : t('tabs.completed')}
                             </Text>
                         </Pressable>
                     ))}
@@ -898,7 +928,7 @@ export default function PiggyBankScreen() {
                     <View style={{ marginTop: 16 }}>
                         {completedGoals.length === 0 ? (
                             <Text style={[styles.emptyText, { color: theme.ink3 }]}>
-                                No completed goals yet. Keep saving!
+                                {t('empty.completed')}
                             </Text>
                         ) : completedGoals.map(g => (
                             <Card key={g.id} theme={theme} depth={4} padding={16} style={{ marginBottom: 12 }}>
@@ -907,11 +937,21 @@ export default function PiggyBankScreen() {
                                         <IconCheck size={18} color={theme.goals} />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={[styles.goalTitle, { color: theme.goals }]}>{g.title}</Text>
+                                        <Text style={[styles.goalTitle, { color: theme.goals }]}>{serverTitle(g.title)}</Text>
                                         <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
                                             {/* completed_amount is the snapshot taken at completion; older
                                                 goals predate the column, so fall back to the computed value. */}
-                                            {fmtMoney(g.completed_amount ?? g.allocated_amount ?? 0)} {g.goal_type === 'debt' ? 'paid' : 'saved'} of {fmtMoney(g.target_amount ?? 0)} · {g.target_month} {g.target_year}
+                                            {g.goal_type === 'debt'
+                                                ? t('card.completedMetaDebt', {
+                                                    amount: fmtMoney(g.completed_amount ?? g.allocated_amount ?? 0),
+                                                    target: fmtMoney(g.target_amount ?? 0),
+                                                    month: monthLabel(g.target_month ?? ''), year: g.target_year,
+                                                })
+                                                : t('card.completedMetaSaving', {
+                                                    amount: fmtMoney(g.completed_amount ?? g.allocated_amount ?? 0),
+                                                    target: fmtMoney(g.target_amount ?? 0),
+                                                    month: monthLabel(g.target_month ?? ''), year: g.target_year,
+                                                })}
                                         </Text>
                                     </View>
                                 </View>
@@ -925,7 +965,7 @@ export default function PiggyBankScreen() {
                     <>
                         {/* ── Savings section ─────────────────────── */}
                         <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 18 }]}>
-                            SAVINGS
+                            {t('section.savings')}
                         </Text>
 
                         {/* ── General Savings pinned card ────────── */}
@@ -942,10 +982,10 @@ export default function PiggyBankScreen() {
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={[styles.goalTitle, { color: theme.brand }]}>
-                                            General Savings
+                                            {tc('serverTitle.General Savings')}
                                         </Text>
                                         <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
-                                            ALWAYS ON · No target
+                                            {t('general.meta')}
                                         </Text>
                                     </View>
                                     {/* No delete button for General Savings */}
@@ -955,7 +995,7 @@ export default function PiggyBankScreen() {
                                         {fmtMoney(generalGoal.allocated_amount)}
                                     </Text>
                                     <Text style={[styles.goalOf, { color: theme.ink3 }]}>
-                                        {' '}available
+                                        {t('general.available')}
                                     </Text>
                                 </View>
                             </Card>
@@ -963,7 +1003,7 @@ export default function PiggyBankScreen() {
 
                         {savingsGoals.length === 0 && !showGoalForm && (
                             <Text style={[styles.emptyText, { color: theme.ink3 }]}>
-                                No savings goals yet. Plant your first one!
+                                {t('empty.savings')}
                             </Text>
                         )}
 
@@ -971,7 +1011,7 @@ export default function PiggyBankScreen() {
 
                         {/* ── Debt section ────────────────────────── */}
                         <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 24 }]}>
-                            DEBT
+                            {t('section.debt')}
                         </Text>
 
                         {/* Auto-managed Reconciliation goal — shown only while a balance
@@ -988,13 +1028,13 @@ export default function PiggyBankScreen() {
                                         </View>
                                         <View style={{ flex: 1 }}>
                                             <View style={styles.reconTitleRow}>
-                                                <Text style={[styles.goalTitle, { color: theme.ink }]}>Reconciliation</Text>
+                                                <Text style={[styles.goalTitle, { color: theme.ink }]}>{tc('serverTitle.Reconciliation')}</Text>
                                                 <View style={[styles.autoBadge, { backgroundColor: theme.harvest }]}>
-                                                    <Text style={[styles.autoBadgeText, { color: theme.brand }]}>AUTO</Text>
+                                                    <Text style={[styles.autoBadgeText, { color: theme.brand }]}>{t('recon.badge')}</Text>
                                                 </View>
                                             </View>
                                             <Text style={[styles.reconExplain, { color: theme.ink2 }]}>
-                                                Money you'd already saved but later spent — repay to restore your savings.
+                                                {t('recon.explain')}
                                             </Text>
                                         </View>
                                     </View>
@@ -1003,7 +1043,7 @@ export default function PiggyBankScreen() {
                                             {fmtMoney(reconOutstanding)}
                                         </Text>
                                         <Text style={[styles.goalOf, { color: theme.ink3 }]}>
-                                            {' '}left to repay · {fmtMoney(repaid)} of {fmtMoney(owed)}
+                                            {t('recon.progress', { repaid: fmtMoney(repaid), owed: fmtMoney(owed) })}
                                         </Text>
                                     </View>
                                     <AnimatedProgressBar
@@ -1018,7 +1058,7 @@ export default function PiggyBankScreen() {
 
                         {debtGoals.length === 0 && !reconActive ? (
                             <Text style={[styles.emptyText, { color: theme.ink3 }]}>
-                                No debts tracked. Add one to start paying it down!
+                                {t('empty.debt')}
                             </Text>
                         ) : debtGoals.map(renderGoalCard)}
 
@@ -1032,7 +1072,7 @@ export default function PiggyBankScreen() {
                         >
                             <IconPlus size={16} color={theme.brand} />
                             <Text style={[styles.plantBtnText, { color: theme.brand }]}>
-                                Plant a new goal
+                                {t('newGoal.button')}
                             </Text>
                         </Pressable>
 
@@ -1040,15 +1080,16 @@ export default function PiggyBankScreen() {
                         {showGoalForm && (
                             <Card theme={theme} depth={4} padding={18} style={{ marginBottom: 16 }}>
                                 <Text style={[styles.formTitle, { color: theme.ink }]}>
-                                    {goalType === 'debt' ? 'New debt to pay off' : 'New savings goal'}
+                                    {goalType === 'debt' ? t('newGoal.titleDebt') : t('newGoal.titleSaving')}
                                 </Text>
 
                                 {/* Goal type selector */}
-                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>GOAL TYPE</Text>
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>{t('newGoal.typeLabel')}</Text>
                                 <View style={[styles.chipWrap, { marginBottom: 16 }]}>
                                     {([
-                                        { key: 'saving', label: 'Savings', accent: theme.goals },
-                                        { key: 'debt',   label: 'Debt',    accent: theme.danger },
+                                        // `key` is the stored `goal_type`; `label` is display only.
+                                        { key: 'saving', label: t('newGoal.typeSaving'), accent: theme.goals },
+                                        { key: 'debt',   label: t('newGoal.typeDebt'),   accent: theme.danger },
                                     ] as const).map(opt => {
                                         const active = goalType === opt.key;
                                         return (
@@ -1072,7 +1113,7 @@ export default function PiggyBankScreen() {
                                 </View>
 
                                 <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
-                                    {goalType === 'debt' ? 'DEBT NAME' : 'GOAL NAME'}
+                                    {goalType === 'debt' ? t('newGoal.nameLabelDebt') : t('newGoal.nameLabelSaving')}
                                 </Text>
                                 <TextInput
                                     style={[styles.textInput, {
@@ -1080,10 +1121,10 @@ export default function PiggyBankScreen() {
                                         borderColor: theme.border,
                                         color: theme.ink,
                                     }]}
-                                    placeholder={goalType === 'debt' ? 'Credit card, Car loan…' : 'Emergency fund, New laptop…'}
+                                    placeholder={goalType === 'debt' ? t('newGoal.namePlaceholderDebt') : t('newGoal.namePlaceholderSaving')}
                                     placeholderTextColor={theme.ink3}
                                     value={goalTitle}
-                                    onChangeText={t => { setGoalTitle(t); setGoalError(''); }}
+                                    onChangeText={next => { setGoalTitle(next); setGoalError(''); }}
                                     maxLength={30}
                                 />
                                 {goalError !== '' && (
@@ -1091,7 +1132,7 @@ export default function PiggyBankScreen() {
                                 )}
 
                                 <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
-                                    {goalType === 'debt' ? 'TOTAL TO PAY OFF' : 'TARGET AMOUNT'}
+                                    {goalType === 'debt' ? t('newGoal.amountLabelDebt') : t('newGoal.amountLabelSaving')}
                                 </Text>
                                 <TextInput
                                     style={[styles.textInput, {
@@ -1099,7 +1140,7 @@ export default function PiggyBankScreen() {
                                         borderColor: theme.border,
                                         color: theme.ink,
                                     }]}
-                                    placeholder="5,000"
+                                    placeholder={formatNumber(5000)}
                                     placeholderTextColor={theme.ink3}
                                     value={goalAmount}
                                     onChangeText={setGoalAmount}
@@ -1107,10 +1148,10 @@ export default function PiggyBankScreen() {
                                     maxLength={10}
                                 />
 
-                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET MONTH</Text>
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>{t('newGoal.monthLabel')}</Text>
                                 {renderMonthChips(goalMonth, setGoalMonth)}
 
-                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET YEAR</Text>
+                                <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>{t('newGoal.yearLabel')}</Text>
                                 {renderYearChips(goalYear, setGoalYear)}
 
                                 <View style={styles.formBtnRow}>
@@ -1122,7 +1163,7 @@ export default function PiggyBankScreen() {
                                         ]}
                                     >
                                         <IconCheck size={15} color="#fff" />
-                                        <Text style={styles.submitBtnText}>Save Goal</Text>
+                                        <Text style={styles.submitBtnText}>{t('newGoal.save')}</Text>
                                     </Pressable>
                                     <Pressable
                                         onPress={() => { setShowGoalForm(false); setGoalError(''); }}
@@ -1131,7 +1172,7 @@ export default function PiggyBankScreen() {
                                             pressed && { opacity: 0.7 },
                                         ]}
                                     >
-                                        <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>Cancel</Text>
+                                        <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>{tc('action.cancel')}</Text>
                                     </Pressable>
                                 </View>
                             </Card>
@@ -1141,12 +1182,12 @@ export default function PiggyBankScreen() {
 
                 {/* ── Recent activity ──────────────────────────────── */}
                 <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 24 }]}>
-                    RECENT ACTIVITY
+                    {t('section.recentActivity')}
                 </Text>
 
                 {history.length === 0 && (
                     <Text style={[styles.emptyText, { color: theme.ink3 }]}>
-                        No transactions yet. Start saving!
+                        {t('empty.history')}
                     </Text>
                 )}
 
@@ -1175,7 +1216,7 @@ export default function PiggyBankScreen() {
                                 />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={[styles.txTitle, { color: theme.ink }]}>{tx.title}</Text>
+                                <Text style={[styles.txTitle, { color: theme.ink }]}>{serverTitle(tx.title)}</Text>
                                 <Text style={[styles.txDate, { color: theme.ink3 }]}>
                                     {monthAbbr(tx.month)} {tx.day}
                                 </Text>
@@ -1210,12 +1251,12 @@ export default function PiggyBankScreen() {
             <View style={styles.modalOverlay}>
                 <View style={[styles.modalCard, { backgroundColor: theme.surface, ...(shadow(9) as object) }]}>
                     <Text style={[styles.modalTitle, { color: theme.ink }]}>
-                        {editingGoal?.goal_type === 'debt' ? 'Edit debt' : 'Edit goal'}
+                        {editingGoal?.goal_type === 'debt' ? t('editGoal.titleDebt') : t('editGoal.titleSaving')}
                     </Text>
 
                     <ScrollView keyboardShouldPersistTaps="handled">
                         <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
-                            {editingGoal?.goal_type === 'debt' ? 'DEBT NAME' : 'GOAL NAME'}
+                            {editingGoal?.goal_type === 'debt' ? t('newGoal.nameLabelDebt') : t('newGoal.nameLabelSaving')}
                         </Text>
                         <TextInput
                             style={[styles.textInput, {
@@ -1225,7 +1266,7 @@ export default function PiggyBankScreen() {
                             }]}
                             placeholderTextColor={theme.ink3}
                             value={editTitle}
-                            onChangeText={t => { setEditTitle(t); setEditError(''); }}
+                            onChangeText={next => { setEditTitle(next); setEditError(''); }}
                             maxLength={30}
                         />
                         {editError !== '' && (
@@ -1233,7 +1274,7 @@ export default function PiggyBankScreen() {
                         )}
 
                         <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>
-                            {editingGoal?.goal_type === 'debt' ? 'TOTAL TO PAY OFF' : 'TARGET AMOUNT'}
+                            {editingGoal?.goal_type === 'debt' ? t('newGoal.amountLabelDebt') : t('newGoal.amountLabelSaving')}
                         </Text>
                         <TextInput
                             style={[styles.textInput, {
@@ -1241,18 +1282,18 @@ export default function PiggyBankScreen() {
                                 borderColor: theme.border,
                                 color: theme.ink,
                             }]}
-                            placeholder="5,000"
+                            placeholder={formatNumber(5000)}
                             placeholderTextColor={theme.ink3}
                             value={editAmount}
-                            onChangeText={t => { setEditAmount(t); setEditError(''); }}
+                            onChangeText={next => { setEditAmount(next); setEditError(''); }}
                             keyboardType="decimal-pad"
                             maxLength={10}
                         />
 
-                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET MONTH</Text>
+                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>{t('newGoal.monthLabel')}</Text>
                         {renderMonthChips(editMonth, setEditMonth)}
 
-                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>TARGET YEAR</Text>
+                        <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>{t('newGoal.yearLabel')}</Text>
                         {renderYearChips(editYear, setEditYear)}
                     </ScrollView>
 
@@ -1265,7 +1306,7 @@ export default function PiggyBankScreen() {
                             ]}
                         >
                             <IconCheck size={15} color="#fff" />
-                            <Text style={styles.submitBtnText}>Save changes</Text>
+                            <Text style={styles.submitBtnText}>{t('editGoal.save')}</Text>
                         </Pressable>
                         <Pressable
                             onPress={() => setEditingGoal(null)}
@@ -1274,7 +1315,7 @@ export default function PiggyBankScreen() {
                                 pressed && { opacity: 0.7 },
                             ]}
                         >
-                            <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>Cancel</Text>
+                            <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>{tc('action.cancel')}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -1474,7 +1515,9 @@ const styles = StyleSheet.create({
     tabText: {
         fontFamily: 'Geist-SemiBold',
         fontSize: ft(13, 1.2),
-        textTransform: 'capitalize',
+        // No textTransform: 'capitalize' — the labels now come from the catalogue
+        // already cased, and on Android capitalize title-cases every word, which is
+        // wrong for "Metas ativas".
     },
 
     // Section label

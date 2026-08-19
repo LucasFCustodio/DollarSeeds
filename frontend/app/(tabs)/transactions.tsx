@@ -9,6 +9,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import { ft } from '../../constants/responsive';
 import ExpenseContainer from '../../components/expense/ExpenseContainer';
@@ -18,6 +19,7 @@ type TxType = 'expense' | 'income';
 
 export default function TransactionsScreen() {
     const { theme } = useTheme();
+    const { t } = useTranslation('transactions');
     const { type } = useLocalSearchParams<{ type?: string }>();
     const [active, setActive] = useState<TxType>(type === 'income' ? 'income' : 'expense');
 
@@ -34,24 +36,24 @@ export default function TransactionsScreen() {
         <View style={{ flex: 1, backgroundColor: theme.bg }}>
             {/* ── Header + segmented toggle ─────────────────────────────── */}
             <View style={styles.header}>
-                <Text style={[styles.title, { color: theme.ink }]}>Transactions</Text>
-                <Text style={[styles.subtitle, { color: theme.ink3 }]}>Log what comes in and goes out</Text>
+                <Text style={[styles.title, { color: theme.ink }]}>{t('tab.title')}</Text>
+                <Text style={[styles.subtitle, { color: theme.ink3 }]}>{t('tab.subtitle')}</Text>
 
                 <View style={[styles.tabPill, { backgroundColor: theme.surfaceSoft, borderColor: theme.borderSoft }]}>
-                    {(['expense', 'income'] as const).map(t => (
+                    {(['expense', 'income'] as const).map(kind => (
                         <Pressable
-                            key={t}
-                            onPress={() => setActive(t)}
+                            key={kind}
+                            onPress={() => setActive(kind)}
                             style={[
                                 styles.tabItem,
-                                active === t && [
+                                active === kind && [
                                     styles.tabItemActive,
                                     { backgroundColor: theme.surface, ...(shadow(2) as object) },
                                 ],
                             ]}
                         >
-                            <Text style={[styles.tabText, { color: active === t ? theme.ink : theme.ink3 }]}>
-                                {t}
+                            <Text style={[styles.tabText, { color: active === kind ? theme.ink : theme.ink3 }]}>
+                                {kind === 'expense' ? t('tab.toggleExpense') : t('tab.toggleIncome')}
                             </Text>
                         </Pressable>
                     ))}
@@ -98,6 +100,9 @@ const styles = StyleSheet.create({
     tabText: {
         fontFamily: 'Geist-SemiBold',
         fontSize: ft(13, 1.2),
-        textTransform: 'capitalize',
+        // No textTransform: 'capitalize'. It existed to title-case the raw route keys
+        // ('expense' -> 'Expense'), which the catalogue now supplies already cased. On
+        // Android capitalize also upper-cases EVERY word, which is wrong for any
+        // multi-word label in a language that doesn't title-case.
     },
 });

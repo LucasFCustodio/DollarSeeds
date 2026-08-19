@@ -1,0 +1,43 @@
+{
+  "tab": {
+    "title": "Transações",
+    "subtitle": "Registre o que entra e o que sai",
+    "toggleExpense": "Gasto",
+    "toggleIncome": "Renda"
+  },
+  "expense": {
+    "screenTitle": "Novo gasto",
+    "screenSubtitle": "Plante onde faz diferença",
+    "amountEyebrow": "VALOR",
+    "categoryLabel": "CATEGORIA",
+    "subcategoryLabel": "SUBCATEGORIA",
+    "titleLabel": "TÍTULO (OPCIONAL)",
+    "titlePlaceholder": "Compras do mercado",
+    "submit": "Plantar gasto",
+    "submitted": "Plantado!"
+  },
+  "income": {
+    "screenTitle": "Registrar renda",
+    "screenSubtitle": "Toda colheita conta",
+    "amountEyebrow": "VALOR RECEBIDO",
+    "scripture": "\"Toda boa dádiva e todo dom perfeito vêm do alto\"",
+    "scriptureRef": "— Tiago 1:17",
+    "splitsLabel": "COMO SE DIVIDE",
+    "splitRow": "{{percent}}% {{category}}",
+    "sourceLabel": "ORIGEM",
+    "titleLabel": "TÍTULO (OPCIONAL)",
+    "titlePlaceholder": "Salário de janeiro",
+    "submit": "Somar à colheita",
+    "submitted": "Colhido!"
+  },
+  "date": {
+    "label": "DATA",
+    "month": "Mês",
+    "day": "Dia",
+    "dayPlaceholder": "25"
+  },
+  "monthClosed": {
+    "title": "Mês fechado",
+    "body": "Não é possível adicionar a um mês fechado. Reabra {{month}} para editar"
+  }
+}
