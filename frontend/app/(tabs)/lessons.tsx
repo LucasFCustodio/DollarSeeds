@@ -29,9 +29,10 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, stickerShadow, Fonts, AppTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+
+import i18n from '../../lib/i18n';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { ft, tv } from '../../constants/responsive';
-import { DISCLAIMER_FULL } from '../../constants/legal';
 import { useAnalytics } from '../../lib/analytics';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
@@ -59,6 +60,8 @@ export default function LessonsScreen() {
     const { user } = useAuth();
     const { theme } = useTheme();
     const { t } = useTranslation('premium');
+    const { t: tl } = useTranslation('lessons');
+    const { t: tc } = useTranslation('common');
     const analytics = useAnalytics();
     const { premiumActive, config, openPaywall } = useSubscription();
 
@@ -100,12 +103,12 @@ export default function LessonsScreen() {
     const handleStarPress = (lessonId: number, star: number) => {
         setRatings(prev => ({ ...prev, [lessonId]: star }));
         Alert.alert(
-            'Share Your Rating?',
-            'Would you like to share this rating with us to help improve the app?',
+            tl('rating.title'),
+            tl('rating.body'),
             [
-                { text: 'No', style: 'cancel' },
+                { text: tl('rating.no'), style: 'cancel' },
                 {
-                    text: 'Yes',
+                    text: tl('rating.yes'),
                     onPress: () => {
                         axios.post(`${BASE}/lesson-ratings/`, {
                             user_id: user?.id,
@@ -127,10 +130,10 @@ export default function LessonsScreen() {
             {/* ── Header ──────────────────────────────────────────── */}
             <View style={styles.header}>
                 <Text style={[styles.title, { color: theme.ink }]}>
-                    {'Lessons\nfrom the field'}
+                    {tl('title')}
                 </Text>
                 <Text style={[styles.subtitle, { color: theme.ink2 }]}>
-                    Scripture-rooted reflections on money, generosity, and stewardship.
+                    {tl('subtitle')}
                 </Text>
             </View>
 
@@ -140,7 +143,7 @@ export default function LessonsScreen() {
             {/* ── Video series (NEW) ──────────────────────────────── */}
             <View style={styles.seriesSection}>
                 <Text style={[styles.sectionEyebrow, { color: theme.ink3 }]}>
-                    WATCH & LEARN
+                    {tl('watchAndLearn')}
                 </Text>
 
                 {seriesLoading ? (
@@ -150,16 +153,16 @@ export default function LessonsScreen() {
                 ) : seriesError ? (
                     <View style={styles.seriesStateBox}>
                         <Text style={[styles.seriesStateText, { color: theme.ink3 }]}>
-                            Couldn&apos;t load video series.
+                            {tl('series.loadFailed')}
                         </Text>
                         <Pressable onPress={loadSeries} hitSlop={8}>
-                            <Text style={[styles.retryText, { color: theme.brand }]}>Tap to retry</Text>
+                            <Text style={[styles.retryText, { color: theme.brand }]}>{tc('action.retry')}</Text>
                         </Pressable>
                     </View>
                 ) : series.length === 0 ? (
                     <View style={styles.seriesStateBox}>
                         <Text style={[styles.seriesStateText, { color: theme.ink3 }]}>
-                            No video series yet — check back soon.
+                            {tl('series.empty')}
                         </Text>
                     </View>
                 ) : (
@@ -202,7 +205,7 @@ export default function LessonsScreen() {
                             height={6}
                         />
                         <Text style={[styles.progressLabel, { color: theme.ink3 }]}>
-                            {completedCount} of {totalCount} lessons completed
+                            {tl('progress', { done: completedCount, total: totalCount })}
                         </Text>
                     </View>
                     <View style={[styles.progressBadge, { backgroundColor: theme.surfaceSoft }]}>
@@ -227,7 +230,12 @@ export default function LessonsScreen() {
                             padding={18}
                             style={styles.lessonCard}
                             onPress={() => {
-                                analytics.writtenLessonOpened({ lesson_id: lesson.id, title: lesson.title });
+                                analytics.writtenLessonOpened({
+                                    lesson_id: lesson.id,
+                                    // English title on purpose: an event split by
+                                    // translated title reads as two different lessons.
+                                    title: i18n.getFixedT('en', 'lessons')(`written.${lesson.key}.title`),
+                                });
                                 router.push({
                                     pathname: '/lessonDetail',
                                     params: { id: lesson.id },
@@ -263,16 +271,16 @@ export default function LessonsScreen() {
                                     {/* Title + minutes */}
                                     <View style={styles.titleRow}>
                                         <Text style={[styles.lessonTitle, { color: theme.ink }]}>
-                                            {lesson.title}
+                                            {tl(`written.${lesson.key}.title`)}
                                         </Text>
                                         <Text style={[styles.minutesLabel, { color: theme.ink3 }]}>
-                                            {lesson.minutes} min
+                                            {tl('minutes', { count: lesson.minutes })}
                                         </Text>
                                     </View>
 
                                     {/* Description */}
                                     <Text style={[styles.lessonDesc, { color: theme.ink2 }]}>
-                                        {lesson.description}
+                                        {tl(`written.${lesson.key}.description`)}
                                     </Text>
 
                                     {/* Bottom row: verse badge + stars */}
@@ -284,7 +292,7 @@ export default function LessonsScreen() {
                                         ]}>
                                             <IconScripture size={12} color={theme.brand} />
                                             <Text style={[styles.verseText, { color: theme.brand }]}>
-                                                {lesson.verse}
+                                                {tl(`written.${lesson.key}.verse`)}
                                             </Text>
                                         </View>
 
@@ -318,7 +326,7 @@ export default function LessonsScreen() {
             {/* ── Disclaimer (page footer) ────────────────────────── */}
             <View style={[styles.disclaimer, { borderTopColor: theme.borderSoft }]}>
                 <Text style={[styles.disclaimerText, { color: theme.ink3 }]}>
-                    {DISCLAIMER_FULL}
+                    {tc('legal.disclaimerFull')}
                 </Text>
             </View>
         </ScrollView>

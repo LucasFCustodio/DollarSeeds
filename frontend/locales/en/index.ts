@@ -7,9 +7,15 @@
  * the values.
  */
 import common from './common.json';
+import auth from './auth.json';
 import settings from './settings.json';
 import onboarding from './onboarding.json';
 import premium from './premium.json';
 import notifications from './notifications.json';
+import transactions from './transactions.json';
+import goals from './goals.json';
+import dashboard from './dashboard.json';
+import details from './details.json';
+import lessons from './lessons.json';
 
-export default { common, settings, onboarding, premium, notifications } as const;
+export default { common, auth, settings, onboarding, premium, notifications, transactions, goals, dashboard, details, lessons } as const;

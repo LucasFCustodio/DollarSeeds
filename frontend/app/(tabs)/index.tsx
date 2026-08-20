@@ -25,8 +25,11 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
 
+import { useTranslation } from 'react-i18next';
+
 import { useAuth } from '../../context/AuthContext';
 import { useLocale } from '../../context/LocaleContext';
+import { CAT_API } from '../../constants/txCategories';
 import { MONTHS } from '../../constants/months';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
 import Button from '../../components/ui/Button';
@@ -65,32 +68,43 @@ interface DashboardData {
 }
 
 // ─── Scripture verse pool ─────────────────────────────────────────────────────
-const VERSES = [
-    { text: "The wise have wealth and luxury, but fools spend whatever they get.", ref: "Proverbs 21:20" },
-    { text: "Whoever can be trusted with very little can also be trusted with much.", ref: "Luke 16:10" },
-    { text: "Dishonest money dwindles away, but whoever gathers money little by little makes it grow.", ref: "Proverbs 13:11" },
-    { text: "Honor the Lord with your wealth, with the firstfruits of all your crops; then your barns will be filled to overflowing, and your vats will brim over with new wine.", ref: "Proverbs 3:9-10" },
-    { text: "Remember the Lord your God, for it is he who gives you the ability to produce wealth.", ref: "Deuteronomy 8:18" },
-    { text: "Seek first the kingdom of God and his righteousness, and all these things will be given to you.", ref: "Matthew 6:33" },
-    { text: "And my God will meet all your needs according to the riches of his glory in Christ Jesus.", ref: "Philippians 4:19" },
-    { text: "The rich rule over the poor, and the borrower is slave to the lender.", ref: "Proverbs 22:7" },
-    { text: "A tithe of everything from the land, whether grain from the soil or fruit from the trees, belongs to the Lord; it is holy to the Lord.", ref: "Leviticus 27:30" },
-    { text: "Each of you must bring a gift in proportion to the way the Lord your God has blessed you.", ref: "Deuteronomy 16:17" },
-    { text: "One person gives freely, yet gains even more; another withholds unduly, but comes to poverty. A generous person will prosper; whoever refreshes others will be refreshed.", ref: "Proverbs 11:24-25" },
-    { text: "And do not forget to do good and to share with others, for with such sacrifices God is pleased.", ref: "Hebrews 13:16" },
-    { text: "For if the willingness is there, the gift is acceptable according to what one has, not according to what one does not have.", ref: "2 Corinthians 8:12" },
-    { text: "But when you give to the needy, do not let your left hand know what your right hand is doing, so that your giving may be in secret.", ref: "Matthew 6:3-4" },
-    { text: "Give, and it will be given to you. A good measure, pressed down, shaken together and running over, will be poured into your lap.", ref: "Luke 6:38" },
-];
+// Only the IDs live here; text and reference come from `dashboard:verse.<id>`.
+//
+// The ID is what makes the daily rotation stable: it is derived from the reference,
+// so the same verse appears on the same day in every language, and switching
+// language re-renders the same passage in the other translation rather than
+// jumping to a different verse.
+//
+// pt-BR uses João Ferreira de Almeida (public domain) — the English is NIV/NLT
+// wording, so these are the SAME passages, not string-for-string translations.
+const VERSE_IDS = [
+    'proverbs-21-20',
+    'luke-16-10',
+    'proverbs-13-11',
+    'proverbs-3-9',
+    'deuteronomy-8-18',
+    'matthew-6-33',
+    'philippians-4-19',
+    'proverbs-22-7',
+    'leviticus-27-30',
+    'deuteronomy-16-17',
+    'proverbs-11-24',
+    'hebrews-13-16',
+    '2corinthians-8-12',
+    'matthew-6-3',
+    'luke-6-38',
+] as const;
+
+type VerseId = (typeof VERSE_IDS)[number];
 
 // Verse of the day — deterministic from the calendar date, so it rotates daily and
 // every user sees the same verse on a given day. Pure local computation: no backend,
 // no storage, and stable across re-renders within the same day.
-const getDailyVerse = () => {
+const getDailyVerse = (): VerseId => {
     const now = new Date();
     const startOfYear = new Date(now.getFullYear(), 0, 0).getTime();
     const dayOfYear = Math.floor((now.getTime() - startOfYear) / 86_400_000);
-    return VERSES[dayOfYear % VERSES.length];
+    return VERSE_IDS[dayOfYear % VERSE_IDS.length];
 };
 
 // ─── Real transaction type (expenses/details + savings/history) ──────────────
@@ -108,7 +122,9 @@ export default function DashboardScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
-    const { formatMoney: fmtMoney, monthAbbr } = useLocale();
+    const { formatMoney: fmtMoney, monthAbbr, monthLabel } = useLocale();
+    const { t } = useTranslation('dashboard');
+    const { t: tc } = useTranslation('common');
 
     // Month state. MONTHS is the canonical English list (constants/months.ts) — it is
     // what gets POSTed and stored, and is never translated. Display goes through
@@ -127,7 +143,7 @@ export default function DashboardScreen() {
 
     // Scripture modal state
     const [showScriptureModal, setShowScriptureModal] = useState(false);
-    const [currentVerse, setCurrentVerse] = useState(VERSES[0]);
+    const [currentVerse, setCurrentVerse] = useState<VerseId>(VERSE_IDS[0]);
     const verseShownMonthsRef = useRef<Set<string>>(new Set());
 
     // Accordion state — which category is expanded
@@ -183,7 +199,7 @@ export default function DashboardScreen() {
 
             if (allGreen && !verseShownMonthsRef.current.has(currentMonth)) {
                 verseShownMonthsRef.current.add(currentMonth);
-                setCurrentVerse(VERSES[Math.floor(Math.random() * VERSES.length)]);
+                setCurrentVerse(VERSE_IDS[Math.floor(Math.random() * VERSE_IDS.length)]);
                 setShowScriptureModal(true);
             }
         } catch (error) {
@@ -219,7 +235,8 @@ export default function DashboardScreen() {
         }
     };
 
-    const CAT_API_MAP = { needs: 'Needs', wants: 'Wants', goals: 'Goals' } as const;
+    // CAT_API covers needs/wants; 'Goals' has no picker so it is not in that table.
+    const CAT_API_MAP = { ...CAT_API, goals: 'Goals' } as const;
 
     const fetchCategoryTxs = async (catKey: 'needs' | 'wants' | 'goals') => {
         if (!user?.id) return;
@@ -310,38 +327,38 @@ export default function DashboardScreen() {
     const categories = [
         {
             key: 'needs' as const,
-            label: 'Needs',
+            label: tc('category.Needs'),
             pct: `${Math.round(activeBudgetType.needs * 100)}%`,
             Icon: IconNeedsMascot,
             color: theme.needs,
             soft: theme.needsSoft,
             spent: expenses.needs,
             budget: budgets.needs,
-            sub: 'Rent, groceries, bills',
+            sub: t('category.needsSub'),
             navType: 'expense' as const,
         },
         {
             key: 'wants' as const,
-            label: 'Wants',
+            label: tc('category.Wants'),
             pct: `${Math.round(activeBudgetType.wants * 100)}%`,
             Icon: IconWantsMascot,
             color: theme.wants,
             soft: theme.wantsSoft,
             spent: expenses.wants,
             budget: budgets.wants,
-            sub: 'Lifestyle, treats, fun',
+            sub: t('category.wantsSub'),
             navType: 'expense' as const,
         },
         {
             key: 'goals' as const,
-            label: 'Goals',
+            label: tc('category.Goals'),
             pct: `${Math.round(activeBudgetType.savings * 100)}%`,
             Icon: IconSavingsGoalMascot,
             color: theme.goals,
             soft: theme.goalsSoft,
             spent: expenses.goals,
             budget: budgets.goals,
-            sub: 'Savings + debt paydown',
+            sub: t('category.goalsSub'),
             navType: 'expense' as const,
         },
     ];
@@ -362,16 +379,16 @@ export default function DashboardScreen() {
                             <IconScripture size={28} color={theme.brand} />
                         </View>
                         <Text style={[styles.modalTitle, { color: theme.ink }]}>
-                            Well done, faithful steward!
+                            {t('scripture.modalTitle')}
                         </Text>
                         <Text style={[styles.modalVerse, { color: theme.ink2 }]}>
-                            "{currentVerse.text}"
+                            {t('scripture.quoted', { text: t(`verse.${currentVerse}.text`) })}
                         </Text>
                         <Text style={[styles.modalRef, { color: theme.ink3 }]}>
-                            — {currentVerse.ref}
+                            — {t(`verse.${currentVerse}.ref`)}
                         </Text>
                         <Button
-                            label="Amen!"
+                            label={t('scripture.amen')}
                             variant="primary"
                             size="lg"
                             fullWidth
@@ -394,9 +411,11 @@ export default function DashboardScreen() {
                                 <IconLogoMascot size={24} />
                             </View>
                             <View>
-                                <Text style={styles.wordmark}>DollarSeeds</Text>
+                                <Text style={styles.wordmark}>{t('wordmark')}</Text>
                                 <Text style={styles.subline}>
-                                    {user?.email?.split('@')[0] ?? 'steward'} · steward
+                                    {t('subline', {
+                                        name: user?.email?.split('@')[0] ?? t('stewardFallback'),
+                                    })}
                                 </Text>
                             </View>
                         </View>
@@ -422,8 +441,8 @@ export default function DashboardScreen() {
                             <IconChevronLeft size={16} color="#fff" />
                         </Pressable>
                         <View style={styles.monthCenter}>
-                            <Text style={styles.monthEyebrow}>BUDGET MONTH</Text>
-                            <Text style={styles.monthLabel}>{currentMonth} {new Date().getFullYear()}</Text>
+                            <Text style={styles.monthEyebrow}>{t('monthEyebrow')}</Text>
+                            <Text style={styles.monthLabel}>{monthLabel(currentMonth)} {new Date().getFullYear()}</Text>
                         </View>
                         <Pressable
                             onPress={increaseMonth}
@@ -436,7 +455,7 @@ export default function DashboardScreen() {
                     {/* Big amount */}
                     <View style={{ marginTop: tv(10, 20) }}>
                         <Text style={styles.incomeEyebrow}>
-                            {fmtMoney(total_income)} · TOTAL INCOME
+                            {t('totalIncome', { amount: fmtMoney(total_income) })}
                         </Text>
                         <AnimatedAmount
                             value={totalLeft}
@@ -445,7 +464,7 @@ export default function DashboardScreen() {
                         />
                         <View style={{ marginTop: tv(6, 12), flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <View style={styles.leftChip}>
-                                <Text style={styles.leftChipText}>left this month</Text>
+                                <Text style={styles.leftChipText}>{t('leftThisMonth')}</Text>
                             </View>
                             <Pressable
                                 onPress={() => router.push({
@@ -454,7 +473,7 @@ export default function DashboardScreen() {
                                 } as any)}
                                 style={({ pressed }) => [styles.viewIncomeBtn, pressed && { opacity: 0.7 }]}
                             >
-                                <Text style={styles.viewIncomeBtnText}>View all Income</Text>
+                                <Text style={styles.viewIncomeBtnText}>{t('viewAllIncome')}</Text>
                                 <IconChevronRight size={11} color="rgba(255,255,255,0.85)" />
                             </Pressable>
                         </View>
@@ -475,10 +494,10 @@ export default function DashboardScreen() {
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.rolloverTitle, { color: theme.ink }]}>
-                                    Ready to close out {currentMonth}?
+                                    {t('rollover.closeTitle', { month: monthLabel(currentMonth) })}
                                 </Text>
                                 <Text style={[styles.rolloverSub, { color: theme.ink2 }]}>
-                                    You have {fmtMoney(rollover?.target ?? 0, 2)} left to move into General Savings.
+                                    {t('rollover.closeSub', { amount: fmtMoney(rollover?.target ?? 0, 2) })}
                                 </Text>
                             </View>
                             <Pressable
@@ -490,7 +509,9 @@ export default function DashboardScreen() {
                             </Pressable>
                         </View>
                         <Button
-                            label={closingMonth ? 'Closing…' : `Close out & save ${fmtMoney(rollover?.target ?? 0)}`}
+                            label={closingMonth
+                                ? t('rollover.closing')
+                                : t('rollover.closeButton', { amount: fmtMoney(rollover?.target ?? 0) })}
                             variant="primary"
                             size="md"
                             fullWidth
@@ -509,10 +530,10 @@ export default function DashboardScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.rolloverClosedTitle, { color: theme.ink }]}>
-                                {currentMonth} is closed
+                                {t('rollover.closedTitle', { month: monthLabel(currentMonth) })}
                             </Text>
                             <Text style={[styles.rolloverSub, { color: theme.ink2 }]}>
-                                {fmtMoney(rollover?.amount ?? 0, 2)} rolled into General Savings.
+                                {t('rollover.closedSub', { amount: fmtMoney(rollover?.amount ?? 0, 2) })}
                             </Text>
                         </View>
                         <Pressable
@@ -521,7 +542,7 @@ export default function DashboardScreen() {
                             style={({ pressed }) => [styles.reopenBtn, { borderColor: theme.border }, pressed && { opacity: 0.6 }]}
                         >
                             <Text style={[styles.reopenBtnText, { color: theme.brand }]}>
-                                {closingMonth ? '…' : 'Reopen'}
+                                {closingMonth ? '…' : t('rollover.reopen')}
                             </Text>
                         </Pressable>
                     </View>
@@ -540,10 +561,10 @@ export default function DashboardScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.scriptureVerse, { color: theme.ink }]}>
-                                "{dailyVerse.text}"
+                                {t('scripture.quoted', { text: t(`verse.${dailyVerse}.text`) })}
                             </Text>
                             <Text style={[styles.scriptureRef, { color: theme.ink3 }]}>
-                                {dailyVerse.ref}
+                                {t(`verse.${dailyVerse}.ref`)}
                             </Text>
                         </View>
                     </View>
@@ -553,13 +574,16 @@ export default function DashboardScreen() {
                 <View style={styles.sectionHeader}>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.sectionTitle, { color: theme.ink }]}>
-                            How your seeds are growing
+                            {t('sectionTitle')}
                         </Text>
                         {/* Active budget split driving these numbers (from the API) */}
                         <View style={styles.budgetTypeRow}>
                             <View style={[styles.budgetTypeDot, { backgroundColor: theme.brand }]} />
                             <Text style={[styles.budgetTypeText, { color: theme.ink3 }]}>
-                                {activeBudgetType.name} · {splitLabel(activeBudgetType)}
+                                {t('budgetTypeRow', {
+                                    name: tc(`budgetType.${activeBudgetType.key}.name`),
+                                    split: splitLabel(activeBudgetType),
+                                })}
                             </Text>
                         </View>
                     </View>
@@ -574,20 +598,20 @@ export default function DashboardScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                             <View style={styles.titheTitleRow}>
-                                <Text style={[styles.titheTitle, { color: theme.ink }]}>Tithe</Text>
+                                <Text style={[styles.titheTitle, { color: theme.ink }]}>{t('tithe.title')}</Text>
                                 <Text style={[styles.tithePct, { color: theme.ink3 }]}>
                                     {Math.round((tithe?.rate ?? 0.1) * 100)}%
                                 </Text>
                             </View>
                             <Text style={[styles.titheSub, { color: theme.ink2 }]}>
-                                Set aside first · before budgeting
+                                {t('tithe.sub')}
                             </Text>
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
                             <Text style={[styles.titheAmount, { color: theme.ink }]}>
                                 {fmtMoney(tithe?.amount ?? 0)}
                             </Text>
-                            <Text style={[styles.titheAmountLabel, { color: theme.ink3 }]}>SET ASIDE</Text>
+                            <Text style={[styles.titheAmountLabel, { color: theme.ink3 }]} numberOfLines={1}>{t('tithe.amountLabel')}</Text>
                         </View>
                     </View>
                 )}
@@ -634,7 +658,7 @@ export default function DashboardScreen() {
                         ]}
                     >
                         <IconExpense size={16} color="#fff" />
-                        <Text style={styles.quickActionPrimaryText}>Log Expense</Text>
+                        <Text style={styles.quickActionPrimaryText}>{t('quickAction.expense')}</Text>
                     </Pressable>
                     <Pressable
                         onPress={() => router.push({ pathname: '/(tabs)/transactions', params: { type: 'income' } } as any)}
@@ -645,7 +669,7 @@ export default function DashboardScreen() {
                         ]}
                     >
                         <IconIncome size={16} color={theme.brand} />
-                        <Text style={[styles.quickActionSecondaryText, { color: theme.brand }]}>Log Income</Text>
+                        <Text style={[styles.quickActionSecondaryText, { color: theme.brand }]}>{t('quickAction.income')}</Text>
                     </Pressable>
                 </View>
             </View>
@@ -675,7 +699,9 @@ interface CategoryCardProps {
 }
 
 function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBalance }: CategoryCardProps) {
-    const { formatMoney: fmtMoney, monthAbbr } = useLocale();
+    const { formatMoney: fmtMoney, monthAbbr, subcatLabel, serverTitle } = useLocale();
+    const { t } = useTranslation('dashboard');
+    const { t: tc } = useTranslation('common');
     const pct = cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0;
     const left = cat.budget - cat.spent;
     const over = pct > 100;
@@ -710,8 +736,8 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
                     <Text style={[styles.catLeft, { color: over ? theme.danger : theme.ink }]}>
                         {fmtMoney(Math.abs(left))}
                     </Text>
-                    <Text style={[styles.catLeftLabel, { color: theme.ink3 }]}>
-                        {over ? 'OVER' : 'LEFT'}
+                    <Text style={[styles.catLeftLabel, { color: theme.ink3 }]} numberOfLines={1}>
+                        {over ? t('category.over') : t('category.left')}
                     </Text>
                 </View>
             </Pressable>
@@ -726,10 +752,10 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
                 />
                 <View style={styles.catMeta}>
                     <Text style={[styles.catMetaText, { color: theme.ink3 }]}>
-                        {fmtMoney(cat.spent)} spent
+                        {t('category.spent', { amount: fmtMoney(cat.spent) })}
                     </Text>
                     <Text style={[styles.catMetaText, { color: theme.ink3 }]}>
-                        of {fmtMoney(cat.budget)}
+                        {t('category.ofBudget', { amount: fmtMoney(cat.budget) })}
                     </Text>
                 </View>
             </View>
@@ -760,7 +786,9 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.txName, { color: theme.ink }]} numberOfLines={1}>
-                                    {item.title || item.sub_category}
+                                    {item.title
+                                        ? serverTitle(item.title)
+                                        : subcatLabel(item.sub_category, cat.key === 'goals' ? null : cat.key)}
                                 </Text>
                                 <Text style={[styles.txDate, { color: theme.ink3 }]}>
                                     {monthAbbr(item.month)} {item.day}
@@ -776,7 +804,7 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
                     {cat.key === 'goals' && txs !== null && txs.length === 0 && (
                         <View style={[styles.piggyRow, { backgroundColor: theme.brandSoft }]}>
                             <IconSavings size={20} color={theme.brand} accent={theme.brand2} />
-                            <Text style={[styles.piggyLabel, { color: theme.brand }]}>Piggy bank balance</Text>
+                            <Text style={[styles.piggyLabel, { color: theme.brand }]}>{t('category.piggyBalance')}</Text>
                             <Text style={[styles.piggyAmount, { color: theme.brand }]}>
                                 {fmtMoney(piggyBalance, 2)}
                             </Text>
@@ -794,7 +822,7 @@ function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBa
                             ]}
                         >
                             <Text style={[styles.viewAllText, { color: theme.brand }]}>
-                                View all {cat.label.toLowerCase()} →
+                                {tc('action.viewAll', { label: cat.label.toLowerCase() })}
                             </Text>
                         </Pressable>
                     )}

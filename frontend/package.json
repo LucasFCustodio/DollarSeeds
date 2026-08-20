@@ -8,7 +8,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "check-locales": "node scripts/check-locales.mjs",
+    "verify-i18n": "node scripts/verify-i18n.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",

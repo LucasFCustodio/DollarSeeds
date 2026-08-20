@@ -1,20 +1,11 @@
 {
   "action": {
     "cancel": "Cancelar",
-    "save": "Salvar",
-    "delete": "Excluir",
-    "done": "Concluir",
-    "next": "Avançar",
-    "skip": "Pular",
-    "back": "Voltar",
     "retry": "Toque para tentar novamente",
-    "close": "Fechar",
     "confirm": "Confirmar",
     "viewAll": "Ver todos os {{label}} →"
   },
   "state": {
-    "loading": "Carregando…",
-    "saving": "Salvando…",
     "genericError": "Algo deu errado. Tente novamente."
   },
   "months": {
@@ -64,14 +55,69 @@
   "serverTitle": {
     "General Savings": "Poupança Geral",
     "Reconciliation": "Reconciliação",
-    "rollover": "Saldo transferido — {{month}}",
-    "rolloverRecovery": "Recuperação de saldo — {{month}}",
+    "Starting balance": "Saldo inicial",
+    "Returned from deleted goal": "Devolvido de meta excluída",
+    "Deposit": "Depósito",
+    "Savings goal": "Meta de poupança",
+    "rollover": "Sobra de {{month}}",
+    "rolloverRecovery": "Recuperação da sobra de {{month}}",
+    "spentAfterClose": "Gasto após o fechamento de {{month}}",
     "transferToGoal": "Transferência da Poupança Geral para {{goal}}"
   },
   "serverError": {
     "monthClosed": "{{month}} está fechado. Reabra o mês antes de fazer alterações.",
     "goalNameTaken": "Já existe uma meta com esse nome.",
     "generalSavingsLocked": "A Poupança Geral não pode ser editada.",
-    "reconciliationLocked": "A meta de Reconciliação é gerenciada automaticamente."
+    "generalSavingsUndeletable": "A Poupança Geral não pode ser excluída.",
+    "reconciliationLocked": "A meta de Reconciliação é gerenciada automaticamente.",
+    "reconciliationUndeletable": "A meta de Reconciliação é gerenciada automaticamente e não pode ser excluída.",
+    "targetTooSmall": "O valor da meta precisa ser maior que zero.",
+    "alreadyCompleted": "Essa meta já foi concluída."
+  },
+  "source": {
+    "Paycheck": "Salário",
+    "Side gig": "Trabalho extra",
+    "Gift": "Presente",
+    "Refund": "Reembolso",
+    "Bonus": "Bônus",
+    "Other": "Outra"
+  },
+  "subcategory": {
+    "needs": {
+      "Rent": "Aluguel",
+      "Groceries": "Mercado",
+      "Utilities": "Contas de casa",
+      "Transit": "Transporte",
+      "Insurance": "Seguro",
+      "Healthcare": "Saúde",
+      "Other": "Outro"
+    },
+    "wants": {
+      "Dining": "Restaurantes",
+      "Coffee": "Café",
+      "Streaming": "Streaming",
+      "Shopping": "Compras",
+      "Travel": "Viagens",
+      "Gifts": "Presentes",
+      "Other": "Outro"
+    }
+  },
+  "budgetType": {
+    "balanced": {
+      "name": "Equilibrado",
+      "tagline": "Uma divisão firme e equilibrada."
+    },
+    "wealth_builder": {
+      "name": "Construtor de Patrimônio",
+      "tagline": "Gastos baixos ou renda alta — guarde com força."
+    },
+    "firm_foundation": {
+      "name": "Base Firme",
+      "tagline": "Custos essenciais altos — construa estabilidade e uma reserva."
+    }
+  },
+  "legal": {
+    "disclaimerFull": "O DollarSeeds oferece ferramentas de orçamento e conteúdo educativo com finalidade exclusivamente informativa. Não constitui consultoria financeira, de investimentos ou tributária. Consulte um profissional qualificado antes de tomar decisões financeiras.",
+    "disclaimerShort": "Apenas para fins educativos e de orçamento — não é consultoria financeira, de investimentos ou tributária."
   }
 }

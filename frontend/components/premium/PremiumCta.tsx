@@ -50,7 +50,15 @@ export default function PremiumCta({ placement, style }: Props) {
     if (premiumActive && placement === 'lessons') return null;
 
     const isManage = premiumActive && placement === 'settings';
-    const currentTier = describeProduct(productId);
+    // describeProduct returns the tier/period pair; the label is composed from the
+    // catalogue so a subscriber sees their tier in their own language.
+    const current = describeProduct(productId);
+    const currentTier = current
+        ? t('tierPeriod', {
+            tier: t(`tier.${current.tier}`),
+            period: t(current.period === 'monthly' ? 'paywall.monthly' : 'paywall.yearly'),
+        })
+        : null;
 
     const body = isManage
         ? (currentTier ?? t('cta.activeFallback'))
@@ -59,7 +67,7 @@ export default function PremiumCta({ placement, style }: Props) {
     return (
         <View style={style}>
             {placement === 'settings' && (
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>PREMIUM</Text>
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('cta.sectionLabel')}</Text>
             )}
 
             <Pressable

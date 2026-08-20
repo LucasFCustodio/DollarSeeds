@@ -1,0 +1,23 @@
+{
+  "back": "← Voltar",
+  "titleCategory": "Detalhamento de {{category}} — {{month}}",
+  "titleIncome": "Detalhamento da renda — {{month}}",
+  "empty": {
+    "expense": "Nenhum gasto registrado ainda.",
+    "income": "Nenhuma renda registrada ainda."
+  },
+  "row": {
+    "day": "Dia {{day}}",
+    "noteAndDay": "{{note}} · dia {{day}}"
+  },
+  "fallback": {
+    "goalExpense": "Gasto de meta",
+    "savingsDeposit": "Depósito na poupança",
+    "setAside": "Separado",
+    "income": "Renda"
+  },
+  "monthClosed": {
+    "title": "Mês fechado",
+    "body": "Não é possível excluir de um mês fechado. Reabra {{month}} para editar"
+  }
+}

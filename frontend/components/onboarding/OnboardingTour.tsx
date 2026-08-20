@@ -16,12 +16,12 @@ import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { useTranslation } from 'react-i18next';
 import { ONBOARDING_STEPS } from '../../constants/onboarding';
-import { DISCLAIMER_SHORT } from '../../constants/legal';
 import Button from '../ui/Button';
 
 export default function OnboardingTour() {
     const { active, step, stepCount, next, skip } = useOnboarding();
     const { t } = useTranslation('onboarding');
+    const { t: tc } = useTranslation('common');
     const { theme } = useTheme();
     const router = useRouter();
     const segments = useSegments();
@@ -90,7 +90,7 @@ export default function OnboardingTour() {
                 ) : null}
 
                 {current.showDisclaimer ? (
-                    <Text style={[styles.footnote, { color: theme.ink3 }]}>{DISCLAIMER_SHORT}</Text>
+                    <Text style={[styles.footnote, { color: theme.ink3 }]}>{tc('legal.disclaimerShort')}</Text>
                 ) : null}
 
                 <View style={styles.footer}>

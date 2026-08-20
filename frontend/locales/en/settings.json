@@ -5,7 +5,6 @@
     "giving": "GIVING",
     "appearance": "APPEARANCE",
     "languageCurrency": "LANGUAGE & CURRENCY",
-    "premium": "PREMIUM",
     "dev": "DEV",
     "about": "ABOUT",
     "dangerZone": "DANGER ZONE"
@@ -65,10 +64,17 @@
     "modalTitle": "Delete account",
     "modalBody": "Deleting the account is irreversible. You'll lose all the information you've tracked. If you want to delete your account, type \"DELETE\" in the text box below, then click Delete.",
     "error": "That's not right — type \"DELETE\" exactly to confirm.",
-    "manageSubscriptions": "Manage subscriptions"
+    "manageSubscriptions": "Manage subscriptions",
+    "confirm": "Delete"
   },
   "firmFoundation": {
-    "title": "Build your Firm Foundation",
-    "emergencyHint": " — aim for about {{amount}}"
-  }
+    "emergencyHint": " — aim for about {{amount}}",
+    "modalTitle": "Let's build your foundation",
+    "modalBody": "Firm Foundation is about stability. Two goals make a big difference — and every dollar toward them is real progress:",
+    "debtRow": "A <bold>Debt</bold> goal to pay down what you owe",
+    "emergencyRow": "A <bold>3-Month Emergency Fund</bold>",
+    "setUp": "Set these up",
+    "later": "Maybe later"
+  },
+  "eyebrow": "PREFERENCES"
 }

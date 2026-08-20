@@ -34,6 +34,8 @@ import {
 } from '../constants/currencies';
 import { formatMoney as rawFormatMoney, formatNumber as rawFormatNumber, parseAmount as rawParseAmount } from '../lib/money';
 import { MONTHS, type MonthName } from '../constants/months';
+import { type SubcatDomain } from '../constants/txCategories';
+import { serverError as rawServerError, serverTitle as rawServerTitle } from '../lib/serverStrings';
 import { rescheduleRemindersForLanguage } from '../hooks/useNotifications';
 
 const LANGUAGE_KEY = 'display_language';
@@ -58,6 +60,20 @@ type LocaleContextType = {
     /** Localised "Apr 15" / "15 de abr". */
     dayMonth: (month: string, day: number) => string;
     monthYear: (month: string, year: number) => string;
+    /**
+     * Canonical stored value -> display label. The ARGUMENT stays English and is
+     * what gets written back to the database; only the return value is translated.
+     */
+    sourceLabel: (source: string) => string;
+    /**
+     * `domain` disambiguates 'Other', which exists in needs, wants AND sources.
+     * Pass null when unknown and the raw stored English falls through.
+     */
+    subcatLabel: (sub: string, domain: SubcatDomain | null) => string;
+    /** Translates a title the SERVER composed (see lib/serverStrings.ts). */
+    serverTitle: (title: string) => string;
+    /** Translates a backend error `detail` that a screen renders raw. */
+    serverError: (detail: string) => string;
 };
 
 const noop = async () => {};
@@ -76,6 +92,10 @@ const LocaleContext = createContext<LocaleContextType>({
     monthAbbr: m => m,
     dayMonth: (m, d) => `${m} ${d}`,
     monthYear: (m, y) => `${m} ${y}`,
+    sourceLabel: s => s,
+    subcatLabel: s => s,
+    serverTitle: t => t,
+    serverError: d => d,
 });
 
 export const useLocale = () => useContext(LocaleContext);
@@ -180,6 +200,14 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
                 t('date.dayMonth', { month: monthAbbr(month), day }),
             monthYear: (month, year) =>
                 t('date.monthYear', { month: monthLabel(month), year }),
+            // `defaultValue` is the fall-through that keeps an unrecognised stored
+            // value readable instead of leaking a `source.…` key onto the screen.
+            sourceLabel: (source: string) =>
+                t(`source.${source}`, { defaultValue: source }),
+            subcatLabel: (sub: string, domain: SubcatDomain | null) =>
+                domain ? t(`subcategory.${domain}.${sub}`, { defaultValue: sub }) : sub,
+            serverTitle: (title: string) => rawServerTitle(title, t, monthLabel),
+            serverError: (detail: string) => rawServerError(detail, t, monthLabel),
         };
         // `i18nInstance.language` is in the dep list so every formatter is rebuilt when
         // the language changes — that is what stops reactCompiler serving stale output.

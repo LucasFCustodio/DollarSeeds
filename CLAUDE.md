@@ -36,7 +36,29 @@ npm start -- --clear   # clear cache when metro.config.js changes
 npm run android
 npm run ios
 npm run lint
+npm run check-locales  # locale parity + any catalogue string still hardcoded
+npm run verify-i18n    # boots i18next on the real catalogues (plurals, pt-BR resolution)
 ```
+
+#### Dev build on a physical iPhone
+
+**Expo Go cannot run this app.** `react-native-purchases` and `@sentry/react-native` are
+third-party native modules Expo Go does not bundle, so IAP and crash reporting are absent
+and the app fails at startup. A development build is required on device.
+
+```bash
+cd frontend
+eas build --profile development --platform ios   # build the dev client, then install via the QR/link
+eas build:list --platform ios --limit 5          # recent builds + their status
+```
+
+The `development` profile in [frontend/eas.json](frontend/eas.json) sets
+`developmentClient: true` and `distribution: internal` — an ad-hoc build for registered
+devices, not a store build.
+
+Install it **once**, then `npm start` and open the dev client: JS and asset changes reload
+over the network with no rebuild. Rebuild only when native config changes — a new native
+dependency, or an `app.json` plugin / bundle-id / entitlement edit.
 
 ### Backend
 ```bash

@@ -1,0 +1,106 @@
+{
+  "wordmark": "DollarSeeds",
+  "subline": "{{name}} · mordomo",
+  "stewardFallback": "mordomo",
+  "monthEyebrow": "MÊS DO ORÇAMENTO",
+  "totalIncome": "{{amount}} · RENDA TOTAL",
+  "leftThisMonth": "disponível neste mês",
+  "viewAllIncome": "Ver toda a renda",
+  "sectionTitle": "Como suas sementes estão crescendo",
+  "budgetTypeRow": "{{name}} · {{split}}",
+  "quickAction": {
+    "expense": "Registrar gasto",
+    "income": "Registrar renda"
+  },
+  "tithe": {
+    "title": "Dízimo",
+    "sub": "Separado primeiro · antes de orçar",
+    "amountLabel": "SEPARADO"
+  },
+  "rollover": {
+    "closeTitle": "Pronto para fechar {{month}}?",
+    "closeSub": "Você ainda tem {{amount}} para levar para a Poupança Geral.",
+    "closing": "Fechando…",
+    "closeButton": "Fechar e guardar {{amount}}",
+    "closedTitle": "{{month}} está fechado",
+    "closedSub": "{{amount}} foram para a Poupança Geral.",
+    "reopen": "Reabrir"
+  },
+  "scripture": {
+    "modalTitle": "Muito bem, servo fiel!",
+    "amen": "Amém!",
+    "quoted": "“{{text}}”"
+  },
+  "category": {
+    "needsSub": "Aluguel, mercado, contas",
+    "wantsSub": "Estilo de vida, mimos, diversão",
+    "goalsSub": "Poupança + quitação de dívidas",
+    "over": "ACIMA",
+    "left": "RESTA",
+    "spent": "{{amount}} gastos",
+    "ofBudget": "de {{amount}}",
+    "piggyBalance": "Saldo do cofrinho"
+  },
+  "verse": {
+    "proverbs-21-20": {
+      "text": "Na casa do sábio há depósito de azeite e de tesouro, mas o homem insensato o desperdiça.",
+      "ref": "Provérbios 21:20"
+    },
+    "luke-16-10": {
+      "text": "Quem é fiel no mínimo também é fiel no muito.",
+      "ref": "Lucas 16:10"
+    },
+    "proverbs-13-11": {
+      "text": "A fazenda que vem da vaidade diminuirá, mas quem a ajunta com trabalho a aumentará.",
+      "ref": "Provérbios 13:11"
+    },
+    "proverbs-3-9": {
+      "text": "Honra ao Senhor com os teus bens e com as primícias de toda a tua renda; e se encherão os teus celeiros, e transbordarão de vinho os teus lagares.",
+      "ref": "Provérbios 3:9-10"
+    },
+    "deuteronomy-8-18": {
+      "text": "Antes, te lembrarás do Senhor, teu Deus, porque é ele o que te dá força para adquirires riquezas.",
+      "ref": "Deuteronômio 8:18"
+    },
+    "matthew-6-33": {
+      "text": "Mas buscai primeiro o Reino de Deus, e a sua justiça, e todas estas coisas vos serão acrescentadas.",
+      "ref": "Mateus 6:33"
+    },
+    "philippians-4-19": {
+      "text": "O meu Deus, segundo a sua riqueza em glória, suprirá todas as vossas necessidades em Cristo Jesus.",
+      "ref": "Filipenses 4:19"
+    },
+    "proverbs-22-7": {
+      "text": "O rico domina sobre os pobres, e o que toma emprestado é servo do que empresta.",
+      "ref": "Provérbios 22:7"
+    },
+    "leviticus-27-30": {
+      "text": "Também todas as dízimas do campo, da semente do campo, do fruto das árvores, são do Senhor; santas são ao Senhor.",
+      "ref": "Levítico 27:30"
+    },
+    "deuteronomy-16-17": {
+      "text": "Cada um conforme o que puder dar, conforme a bênção do Senhor, teu Deus, que te houver dado.",
+      "ref": "Deuteronômio 16:17"
+    },
+    "proverbs-11-24": {
+      "text": "Alguns há que espalham, e ainda se lhes acrescenta mais; e outros que retêm mais do que é justo, e se empobrecem. A alma generosa engordará, e o que regar também será regado.",
+      "ref": "Provérbios 11:24-25"
+    },
+    "hebrews-13-16": {
+      "text": "E não vos esqueçais da beneficência e comunicação, porque com tais sacrifícios Deus se agrada.",
+      "ref": "Hebreus 13:16"
+    },
+    "2corinthians-8-12": {
+      "text": "Porque, se há prontidão de vontade, será aceita segundo o que qualquer tem e não segundo o que não tem.",
+      "ref": "2 Coríntios 8:12"
+    },
+    "matthew-6-3": {
+      "text": "Mas, quando tu deres esmola, não saiba a tua mão esquerda o que faz a tua direita, para que a tua esmola seja dada ocultamente.",
+      "ref": "Mateus 6:3-4"
+    },
+    "luke-6-38": {
+      "text": "Dai, e ser-vos-á dado; boa medida, recalcada, sacudida e transbordando vos darão.",
+      "ref": "Lucas 6:38"
+    }
+  }
+}

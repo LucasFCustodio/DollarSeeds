@@ -23,7 +23,6 @@ import {
     PACKAGE_MAP,
     RC_ANDROID_API_KEY,
     RC_IOS_API_KEY,
-    TIER_LABELS,
     TIER_ORDER,
     type BillingPeriod,
     type TierKey,
@@ -32,7 +31,13 @@ import {
 export type TierOption = {
     key: string;              // RevenueCat package identifier
     tier: TierKey | null;     // null for a package we don't recognise
-    label: string;            // "Basic"
+    /**
+     * LAST-RESORT English fallback, derived from the package identifier. The label a
+     * user actually sees comes from `premium:tier.<tier>`, with this as the
+     * `defaultValue` — so it only surfaces for a tier added in the RevenueCat
+     * dashboard that has no catalogue entry yet.
+     */
+    label: string;
     period: BillingPeriod;
     priceString: string;      // ALWAYS from the store — never computed or hardcoded
     productId: string;
@@ -171,7 +176,7 @@ export async function loadTierOptions(): Promise<Record<BillingPeriod, TierOptio
         grouped[period].push({
             key: pkg.identifier,
             tier,
-            label: tier ? TIER_LABELS[tier] : humanise(pkg.identifier, period),
+            label: humanise(pkg.identifier, period),
             period,
             priceString: pkg.product.priceString,
             productId: pkg.product.identifier,

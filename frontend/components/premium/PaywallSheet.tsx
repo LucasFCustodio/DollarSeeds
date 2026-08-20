@@ -64,7 +64,13 @@ export default function PaywallSheet() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paywallVisible]);
 
-    const currentTier = useMemo(() => describeProduct(productId), [productId]);
+    const current = useMemo(() => describeProduct(productId), [productId]);
+    const currentTier = current
+        ? t('premium:tierPeriod', {
+            tier: t(`premium:tier.${current.tier}`),
+            period: t(current.period === 'monthly' ? 'premium:paywall.monthly' : 'premium:paywall.yearly'),
+        })
+        : null;
     const shown = options[period] ?? [];
 
     const handleClose = () => {

@@ -24,8 +24,11 @@ import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import axios from 'axios';
 
+import { useTranslation } from 'react-i18next';
+
 import { useAuth } from '../../context/AuthContext';
 import { useLocale } from '../../context/LocaleContext';
+import { SOURCES } from '../../constants/txCategories';
 import { MONTHS } from '../../constants/months';
 import { CURRENCIES } from '../../constants/currencies';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
@@ -36,7 +39,8 @@ import { resolveBudgetType } from '../../constants/budgetTypes';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SOURCES = ['Paycheck', 'Side gig', 'Gift', 'Refund', 'Bonus', 'Other'];
+// SOURCES lives in constants/txCategories.ts, which documents why these values stay
+// English in every language: they are written to the database as `income.source`.
 
 const BASE = 'https://dollarseeds-1.onrender.com';
 
@@ -111,7 +115,9 @@ export default function IncomeContainer({ embedded = false }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
-    const { formatMoney: fmtMoney, parseAmount, currency } = useLocale();
+    const { t } = useTranslation('transactions');
+    const { t: tc } = useTranslation('common');
+    const { formatMoney: fmtMoney, parseAmount, currency, monthLabel, sourceLabel } = useLocale();
     const currencySymbol = CURRENCIES[currency].symbol;
     const analytics = useAnalytics();
 
@@ -171,7 +177,7 @@ export default function IncomeContainer({ embedded = false }) {
         } catch (err) {
             // A 409 means the target month is closed (rollover feature) and read-only.
             if (err?.response?.status === 409) {
-                Alert.alert('Month closed', `Cannot add to closed month. Reopen ${month} to edit`);
+                Alert.alert(t('monthClosed.title'), t('monthClosed.body', { month: monthLabel(month) }));
             } else {
                 console.error('Income submit error:', err?.message ?? err);
             }
@@ -200,8 +206,8 @@ export default function IncomeContainer({ embedded = false }) {
                         <IconChevronLeft size={18} color={theme.ink} />
                     </Pressable>
                     <View style={{ flex: 1 }}>
-                        <Text style={[styles.screenTitle, { color: theme.ink }]}>Log Income</Text>
-                        <Text style={[styles.screenSubtitle, { color: theme.ink3 }]}>Every harvest counts</Text>
+                        <Text style={[styles.screenTitle, { color: theme.ink }]}>{t('income.screenTitle')}</Text>
+                        <Text style={[styles.screenSubtitle, { color: theme.ink3 }]}>{t('income.screenSubtitle')}</Text>
                     </View>
                 </View>
             )}
@@ -227,7 +233,7 @@ export default function IncomeContainer({ embedded = false }) {
                     </View>
 
                     <View style={styles.amountInner}>
-                        <Text style={styles.amountEyebrow}>AMOUNT RECEIVED</Text>
+                        <Text style={styles.amountEyebrow}>{t('income.amountEyebrow')}</Text>
                         <View style={styles.amountRow}>
                             <Text style={styles.amountDollar}>{currencySymbol}</Text>
                             <TextInput
@@ -242,9 +248,9 @@ export default function IncomeContainer({ embedded = false }) {
                             />
                         </View>
                         <Text style={styles.amountScripture}>
-                            "Every good and perfect gift is from above"
+                            {t('income.scripture')}
                         </Text>
-                        <Text style={styles.amountVerse}>— James 1:17</Text>
+                        <Text style={styles.amountVerse}>{t('income.scriptureRef')}</Text>
                     </View>
                 </LinearGradient>
                 </View>
@@ -252,7 +258,7 @@ export default function IncomeContainer({ embedded = false }) {
                 {/* ── 50/30/20 split preview ───────────────────────────── */}
                 <View style={[styles.splitCard, { backgroundColor: theme.surface, ...shadow(3) }]}>
                     <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 0, marginBottom: 12 }]}>
-                        HOW IT SPLITS
+                        {t('income.splitsLabel')}
                     </Text>
                     {/* Color bar */}
                     <View style={styles.splitBar}>
@@ -265,21 +271,36 @@ export default function IncomeContainer({ embedded = false }) {
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.needs }]} />
-                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{pct(bt.needs)}% Needs</Text>
+                                <Text
+                                    style={[styles.splitPctLabel, { color: theme.ink3 }]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.7}
+                                >{t('income.splitRow', { percent: pct(bt.needs), category: tc('category.Needs') })}</Text>
                             </View>
                             <Text style={[styles.splitAmt, { color: theme.ink }]}>{fmtMoney(needsAmt)}</Text>
                         </View>
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.wants }]} />
-                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{pct(bt.wants)}% Wants</Text>
+                                <Text
+                                    style={[styles.splitPctLabel, { color: theme.ink3 }]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.7}
+                                >{t('income.splitRow', { percent: pct(bt.wants), category: tc('category.Wants') })}</Text>
                             </View>
                             <Text style={[styles.splitAmt, { color: theme.ink }]}>{fmtMoney(wantsAmt)}</Text>
                         </View>
                         <View style={styles.splitCol}>
                             <View style={styles.splitDotRow}>
                                 <View style={[styles.dot, { backgroundColor: theme.goals }]} />
-                                <Text style={[styles.splitPctLabel, { color: theme.ink3 }]}>{pct(bt.savings)}% Goals</Text>
+                                <Text
+                                    style={[styles.splitPctLabel, { color: theme.ink3 }]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    minimumFontScale={0.7}
+                                >{t('income.splitRow', { percent: pct(bt.savings), category: tc('category.Goals') })}</Text>
                             </View>
                             <Text style={[styles.splitAmt, { color: theme.ink }]}>{fmtMoney(goalsAmt)}</Text>
                         </View>
@@ -287,7 +308,7 @@ export default function IncomeContainer({ embedded = false }) {
                 </View>
 
                 {/* ── Source chips ─────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>SOURCE</Text>
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('income.sourceLabel')}</Text>
                 <View style={styles.chipsWrap}>
                     {SOURCES.map(s => {
                         const active = source === s;
@@ -308,7 +329,7 @@ export default function IncomeContainer({ embedded = false }) {
                                     styles.chipText,
                                     { color: active ? '#fff' : theme.ink2 },
                                 ]}>
-                                    {s}
+                                    {sourceLabel(s)}
                                 </Text>
                             </Pressable>
                         );
@@ -316,7 +337,7 @@ export default function IncomeContainer({ embedded = false }) {
                 </View>
 
                 {/* ── Title ───────────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>TITLE (OPTIONAL)</Text>
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('income.titleLabel')}</Text>
                 <TextInput
                     style={[
                         styles.fieldInput,
@@ -326,7 +347,7 @@ export default function IncomeContainer({ embedded = false }) {
                             color: theme.ink,
                         },
                     ]}
-                    placeholder="January paycheck"
+                    placeholder={t('income.titlePlaceholder')}
                     placeholderTextColor={theme.ink3}
                     value={title}
                     onChangeText={setTitle}
@@ -334,14 +355,14 @@ export default function IncomeContainer({ embedded = false }) {
                 />
 
                 {/* ── Month & Day ──────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>DATE</Text>
+                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('date.label')}</Text>
                 <View style={styles.dateRow}>
                     <View style={{ flex: 2 }}>
-                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>Month</Text>
+                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>{t('date.month')}</Text>
                         <MonthPicker value={month} onChange={setMonth} theme={theme} />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>Day</Text>
+                        <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>{t('date.day')}</Text>
                         <TextInput
                             style={[
                                 styles.fieldInput,
@@ -352,7 +373,7 @@ export default function IncomeContainer({ embedded = false }) {
                                     fontFamily: 'Geist-SemiBold',
                                 },
                             ]}
-                            placeholder="25"
+                            placeholder={t('date.dayPlaceholder')}
                             placeholderTextColor={theme.ink3}
                             value={day}
                             onChangeText={setDay}
@@ -375,7 +396,7 @@ export default function IncomeContainer({ embedded = false }) {
                     ]}
                 >
                     <Text style={styles.submitText}>
-                        {submitted ? 'Harvested!' : 'Add to Harvest'}
+                        {submitted ? t('income.submitted') : t('income.submit')}
                     </Text>
                     <IconCheck size={16} color="#fff" />
                 </Pressable>

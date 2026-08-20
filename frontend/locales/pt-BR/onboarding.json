@@ -28,5 +28,24 @@
       "body": "Séries em vídeo fundamentadas nas Escrituras sobre dinheiro, generosidade e mordomia, apresentadas por profissionais bem-sucedidos.",
       "subnote": "Novas séries serão adicionadas conforme o app e seu alcance crescerem"
     }
+  },
+  "startingBalance": {
+    "eyebrow": "SÓ MAIS UMA COISA",
+    "title": "Seu saldo inicial",
+    "body": "O DollarSeeds acompanha seu dinheiro mês a mês. Informe o quanto você já tinha guardado ANTES de {{month}} — tudo o que você já havia separado.",
+    "note": "Não inclua as rendas nem os gastos de {{month}}. Esses você registra normalmente na aba Transações.",
+    "inputLabel": "Saldo inicial",
+    "add": "+ Adicionar",
+    "done": "Concluir",
+    "skip": "Deixar para depois",
+    "confirmTitle": "Está correto?",
+    "confirmBody": "Esse valor passa a ser o saldo da sua Poupança Geral. Você pode acrescentar a ele ou levá-lo para uma meta quando quiser.",
+    "no": "Não",
+    "yes": "Sim",
+    "retry": "Tentar de novo",
+    "error": {
+      "timeout": "Está demorando demais. Verifique sua conexão e tente novamente.",
+      "generic": "Não foi possível salvar seu saldo inicial. Tente novamente."
+    }
   }
 }

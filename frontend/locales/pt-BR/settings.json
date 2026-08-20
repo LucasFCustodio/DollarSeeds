@@ -5,7 +5,6 @@
     "giving": "GENEROSIDADE",
     "appearance": "APARÊNCIA",
     "languageCurrency": "IDIOMA E MOEDA",
-    "premium": "PREMIUM",
     "dev": "DEV",
     "about": "SOBRE",
     "dangerZone": "ZONA DE RISCO"
@@ -65,10 +64,17 @@
     "modalTitle": "Excluir conta",
     "modalBody": "A exclusão da conta é irreversível. Você perderá todas as informações que registrou. Se quiser excluir sua conta, digite \"DELETE\" na caixa abaixo e toque em Excluir.",
     "error": "Não confere — digite exatamente \"DELETE\" para confirmar.",
-    "manageSubscriptions": "Gerenciar assinaturas"
+    "manageSubscriptions": "Gerenciar assinaturas",
+    "confirm": "Excluir"
   },
   "firmFoundation": {
-    "title": "Construa sua Base Firme",
-    "emergencyHint": " — mire em cerca de {{amount}}"
-  }
+    "emergencyHint": " — mire em cerca de {{amount}}",
+    "modalTitle": "Vamos construir sua base",
+    "modalBody": "A Base Firme é sobre estabilidade. Duas metas fazem uma grande diferença — e cada real colocado nelas é progresso de verdade:",
+    "debtRow": "Uma meta de <bold>Dívida</bold> para quitar o que você deve",
+    "emergencyRow": "Uma <bold>Reserva de Emergência de 3 meses</bold>",
+    "setUp": "Criar essas metas",
+    "later": "Talvez depois"
+  },
+  "eyebrow": "PREFERÊNCIAS"
 }

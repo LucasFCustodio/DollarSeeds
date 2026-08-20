@@ -1,20 +1,11 @@
 {
   "action": {
     "cancel": "Cancel",
-    "save": "Save",
-    "delete": "Delete",
-    "done": "Done",
-    "next": "Next",
-    "skip": "Skip",
-    "back": "Back",
     "retry": "Tap to retry",
-    "close": "Close",
     "confirm": "Confirm",
     "viewAll": "View all {{label}} →"
   },
   "state": {
-    "loading": "Loading…",
-    "saving": "Saving…",
     "genericError": "Something went wrong. Please try again."
   },
   "months": {
@@ -64,14 +55,69 @@
   "serverTitle": {
     "General Savings": "General Savings",
     "Reconciliation": "Reconciliation",
+    "Starting balance": "Starting balance",
+    "Returned from deleted goal": "Returned from deleted goal",
+    "Deposit": "Deposit",
+    "Savings goal": "Savings goal",
     "rollover": "Rollover — {{month}}",
     "rolloverRecovery": "Rollover recovery — {{month}}",
+    "spentAfterClose": "Spent after close — {{month}}",
     "transferToGoal": "Transfer from General Savings to {{goal}}"
   },
   "serverError": {
     "monthClosed": "{{month}} is closed. Reopen it before making changes.",
     "goalNameTaken": "A goal with this name already exists.",
     "generalSavingsLocked": "General Savings cannot be edited.",
-    "reconciliationLocked": "The Reconciliation goal is managed automatically."
+    "generalSavingsUndeletable": "General Savings cannot be deleted.",
+    "reconciliationLocked": "The Reconciliation goal is managed automatically.",
+    "reconciliationUndeletable": "The Reconciliation goal is managed automatically and cannot be deleted.",
+    "targetTooSmall": "Target amount must be greater than zero.",
+    "alreadyCompleted": "Goal is already completed."
+  },
+  "source": {
+    "Paycheck": "Paycheck",
+    "Side gig": "Side gig",
+    "Gift": "Gift",
+    "Refund": "Refund",
+    "Bonus": "Bonus",
+    "Other": "Other"
+  },
+  "subcategory": {
+    "needs": {
+      "Rent": "Rent",
+      "Groceries": "Groceries",
+      "Utilities": "Utilities",
+      "Transit": "Transit",
+      "Insurance": "Insurance",
+      "Healthcare": "Healthcare",
+      "Other": "Other"
+    },
+    "wants": {
+      "Dining": "Dining",
+      "Coffee": "Coffee",
+      "Streaming": "Streaming",
+      "Shopping": "Shopping",
+      "Travel": "Travel",
+      "Gifts": "Gifts",
+      "Other": "Other"
+    }
+  },
+  "budgetType": {
+    "balanced": {
+      "name": "Balanced",
+      "tagline": "A steady, even split."
+    },
+    "wealth_builder": {
+      "name": "Wealth Builder",
+      "tagline": "Low expenses or high income — save aggressively."
+    },
+    "firm_foundation": {
+      "name": "Firm Foundation",
+      "tagline": "High essential costs — build stability and a safety net."
+    }
+  },
+  "legal": {
+    "disclaimerFull": "DollarSeeds provides budgeting tools and educational content for general informational purposes only. It is not financial, investment, or tax advice. Consult a qualified professional before making financial decisions.",
+    "disclaimerShort": "For education and budgeting only — not financial, investment, or tax advice."
   }
 }

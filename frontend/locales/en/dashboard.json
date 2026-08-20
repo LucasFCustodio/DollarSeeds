@@ -1,0 +1,106 @@
+{
+  "wordmark": "DollarSeeds",
+  "subline": "{{name}} · steward",
+  "stewardFallback": "steward",
+  "monthEyebrow": "BUDGET MONTH",
+  "totalIncome": "{{amount}} · TOTAL INCOME",
+  "leftThisMonth": "left this month",
+  "viewAllIncome": "View all Income",
+  "sectionTitle": "How your seeds are growing",
+  "budgetTypeRow": "{{name}} · {{split}}",
+  "quickAction": {
+    "expense": "Log Expense",
+    "income": "Log Income"
+  },
+  "tithe": {
+    "title": "Tithe",
+    "sub": "Set aside first · before budgeting",
+    "amountLabel": "SET ASIDE"
+  },
+  "rollover": {
+    "closeTitle": "Ready to close out {{month}}?",
+    "closeSub": "You have {{amount}} left to move into General Savings.",
+    "closing": "Closing…",
+    "closeButton": "Close out & save {{amount}}",
+    "closedTitle": "{{month}} is closed",
+    "closedSub": "{{amount}} rolled into General Savings.",
+    "reopen": "Reopen"
+  },
+  "scripture": {
+    "modalTitle": "Well done, faithful steward!",
+    "amen": "Amen!",
+    "quoted": "“{{text}}”"
+  },
+  "category": {
+    "needsSub": "Rent, groceries, bills",
+    "wantsSub": "Lifestyle, treats, fun",
+    "goalsSub": "Savings + debt paydown",
+    "over": "OVER",
+    "left": "LEFT",
+    "spent": "{{amount}} spent",
+    "ofBudget": "of {{amount}}",
+    "piggyBalance": "Piggy bank balance"
+  },
+  "verse": {
+    "proverbs-21-20": {
+      "text": "The wise have wealth and luxury, but fools spend whatever they get.",
+      "ref": "Proverbs 21:20"
+    },
+    "luke-16-10": {
+      "text": "Whoever can be trusted with very little can also be trusted with much.",
+      "ref": "Luke 16:10"
+    },
+    "proverbs-13-11": {
+      "text": "Dishonest money dwindles away, but whoever gathers money little by little makes it grow.",
+      "ref": "Proverbs 13:11"
+    },
+    "proverbs-3-9": {
+      "text": "Honor the Lord with your wealth, with the firstfruits of all your crops; then your barns will be filled to overflowing, and your vats will brim over with new wine.",
+      "ref": "Proverbs 3:9-10"
+    },
+    "deuteronomy-8-18": {
+      "text": "Remember the Lord your God, for it is he who gives you the ability to produce wealth.",
+      "ref": "Deuteronomy 8:18"
+    },
+    "matthew-6-33": {
+      "text": "Seek first the kingdom of God and his righteousness, and all these things will be given to you.",
+      "ref": "Matthew 6:33"
+    },
+    "philippians-4-19": {
+      "text": "And my God will meet all your needs according to the riches of his glory in Christ Jesus.",
+      "ref": "Philippians 4:19"
+    },
+    "proverbs-22-7": {
+      "text": "The rich rule over the poor, and the borrower is slave to the lender.",
+      "ref": "Proverbs 22:7"
+    },
+    "leviticus-27-30": {
+      "text": "A tithe of everything from the land, whether grain from the soil or fruit from the trees, belongs to the Lord; it is holy to the Lord.",
+      "ref": "Leviticus 27:30"
+    },
+    "deuteronomy-16-17": {
+      "text": "Each of you must bring a gift in proportion to the way the Lord your God has blessed you.",
+      "ref": "Deuteronomy 16:17"
+    },
+    "proverbs-11-24": {
+      "text": "One person gives freely, yet gains even more; another withholds unduly, but comes to poverty. A generous person will prosper; whoever refreshes others will be refreshed.",
+      "ref": "Proverbs 11:24-25"
+    },
+    "hebrews-13-16": {
+      "text": "And do not forget to do good and to share with others, for with such sacrifices God is pleased.",
+      "ref": "Hebrews 13:16"
+    },
+    "2corinthians-8-12": {
+      "text": "For if the willingness is there, the gift is acceptable according to what one has, not according to what one does not have.",
+      "ref": "2 Corinthians 8:12"
+    },
+    "matthew-6-3": {
+      "text": "But when you give to the needy, do not let your left hand know what your right hand is doing, so that your giving may be in secret.",
+      "ref": "Matthew 6:3-4"
+    },
+    "luke-6-38": {
+      "text": "Give, and it will be given to you. A good measure, pressed down, shaken together and running over, will be poured into your lap.",
+      "ref": "Luke 6:38"
+    }
+  }
+}

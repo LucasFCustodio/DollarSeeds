@@ -23,7 +23,7 @@ import axios from 'axios';
 
 import * as WebBrowser from 'expo-web-browser';
 
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
 import { useTheme, shadow, Fonts, AppTheme } from '../context/ThemeContext';
@@ -33,7 +33,7 @@ import { useLocale } from '../context/LocaleContext';
 import { SUPPORTED_LANGUAGES } from '../lib/i18n';
 import { CURRENCIES, CURRENCY_CODES, type CurrencyCode } from '../constants/currencies';
 import { DEV_ACCOUNT_EMAIL } from '../constants/onboarding';
-import { DISCLAIMER_FULL, TERMS_URL, PRIVACY_URL } from '../constants/legal';
+import { TERMS_URL, PRIVACY_URL } from '../constants/legal';
 import { MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
 import { supabase } from '../lib/supabase';
 import {
@@ -191,30 +191,35 @@ export default function SettingsScreen() {
                             <IconSparkle size={26} color={theme.brand} />
                         </View>
                         <Text style={[styles.modalTitle, { color: theme.ink }]}>
-                            Let's build your foundation
+                            {t('settings:firmFoundation.modalTitle')}
                         </Text>
                         <Text style={[styles.modalBody, { color: theme.ink2 }]}>
-                            Firm Foundation is about stability. Two goals make a big difference — and
-                            every dollar toward them is real progress:
+                            {t('settings:firmFoundation.modalBody')}
                         </Text>
 
                         <View style={[styles.suggestRow, { backgroundColor: theme.dangerSoft }]}>
                             <IconTarget size={18} color={theme.danger} />
                             <Text style={[styles.suggestText, { color: theme.ink }]}>
-                                A <Text style={{ fontFamily: 'Geist-SemiBold' }}>Debt</Text> goal to pay down what you owe
+                                <Trans
+                                    i18nKey="settings:firmFoundation.debtRow"
+                                    components={{ bold: <Text style={{ fontFamily: 'Geist-SemiBold' }} /> }}
+                                />
                             </Text>
                         </View>
                         <View style={[styles.suggestRow, { backgroundColor: theme.goalsSoft }]}>
                             <IconTarget size={18} color={theme.goals} />
                             <Text style={[styles.suggestText, { color: theme.ink }]}>
-                                A <Text style={{ fontFamily: 'Geist-SemiBold' }}>3-Month Emergency Fund</Text>
+                                <Trans
+                                    i18nKey="settings:firmFoundation.emergencyRow"
+                                    components={{ bold: <Text style={{ fontFamily: 'Geist-SemiBold' }} /> }}
+                                />
                                 {suggestedEmergency != null ? t('settings:firmFoundation.emergencyHint', { amount: formatMoney(suggestedEmergency) }) : ''}
                             </Text>
                         </View>
 
                         <View style={{ height: 8 }} />
                         <Button
-                            label="Set these up"
+                            label={t('settings:firmFoundation.setUp')}
                             variant="primary"
                             size="lg"
                             fullWidth
@@ -222,7 +227,7 @@ export default function SettingsScreen() {
                             onPress={() => resolveFirmPrompt(true)}
                         />
                         <Pressable onPress={() => resolveFirmPrompt(false)} style={styles.laterBtn}>
-                            <Text style={[styles.laterText, { color: theme.ink3 }]}>Maybe later</Text>
+                            <Text style={[styles.laterText, { color: theme.ink3 }]}>{t('settings:firmFoundation.later')}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -241,7 +246,7 @@ export default function SettingsScreen() {
                     <IconChevronLeft size={18} color={theme.ink} />
                 </Pressable>
                 <View>
-                    <Text style={[styles.eyebrow, { color: theme.ink3 }]}>PREFERENCES</Text>
+                    <Text style={[styles.eyebrow, { color: theme.ink3 }]}>{t('settings:eyebrow')}</Text>
                     <Text style={[styles.title, { color: theme.ink }]}>{t('settings:title')}</Text>
                 </View>
             </View>
@@ -253,8 +258,7 @@ export default function SettingsScreen() {
                     {/* ── Budget type section ─────────────────────────────── */}
                     <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('settings:section.budgetSplit')}</Text>
                     <Text style={[styles.sectionHint, { color: theme.ink2 }]}>
-                        Pick the split that fits your situation. Changes apply to this month and
-                        going forward — past months stay as they were.
+                        {t('settings:budgetSplit.hint')}
                     </Text>
                     <BudgetTypeSelector value={budgetType} onSelect={handleSelectBudgetType} disabled={saving} />
 
@@ -279,7 +283,7 @@ export default function SettingsScreen() {
                         {restoring
                             ? <ActivityIndicator color={theme.brand} />
                             : <Text style={[styles.restoreText, { color: theme.brand }]}>
-                                Restore Purchases
+                                {t('settings:premium.restore')}
                             </Text>}
                     </Pressable>
 
@@ -294,7 +298,7 @@ export default function SettingsScreen() {
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:tithing.title')}</Text>
                                 <Text style={[styles.rowSub, { color: theme.ink2 }]}>
-                                    Set aside {ratePct}% as a tithe before budgeting
+                                    {t('settings:tithing.subtitle', { percent: ratePct })}
                                 </Text>
                             </View>
                             <Switch
@@ -308,9 +312,11 @@ export default function SettingsScreen() {
 
                         <View style={[styles.explainBox, { backgroundColor: theme.surfaceSoft, borderTopColor: theme.borderSoft }]}>
                             <Text style={[styles.explainText, { color: theme.ink2 }]}>
-                                When on, {ratePct}% of new income is carved into a Tithe envelope first,
-                                and your {splitLabel(activeType)} budget is calculated on the remaining {100 - ratePct}%.
-                                Past months keep their original split.
+                                {t('settings:tithing.explain', {
+                                    percent: ratePct,
+                                    split: splitLabel(activeType),
+                                    remainder: 100 - ratePct,
+                                })}
                             </Text>
                         </View>
                     </View>
@@ -328,7 +334,9 @@ export default function SettingsScreen() {
                             <View style={{ flex: 1 }}>
                                 <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:appearance.darkMode')}</Text>
                                 <Text style={[styles.rowSub, { color: theme.ink2 }]}>
-                                    {isDark ? 'On' : 'Off'} · system-aware by default
+                                    {t('settings:appearance.subtitle', {
+                                        state: isDark ? t('settings:appearance.on') : t('settings:appearance.off'),
+                                    })}
                                 </Text>
                             </View>
                             <Switch
@@ -412,15 +420,15 @@ export default function SettingsScreen() {
                                         <IconSparkle size={22} color={theme.brand} />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={[styles.rowTitle, { color: theme.ink }]}>Onboarding tour</Text>
+                                        <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:dev.onboardingTitle')}</Text>
                                         <Text style={[styles.rowSub, { color: theme.ink2 }]}>
-                                            Replay the first-run guided tour
+                                            {t('settings:dev.onboardingSubtitle')}
                                         </Text>
                                     </View>
                                 </View>
                                 <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
                                     <Button
-                                        label="Replay Onboarding Tour"
+                                        label={t('settings:dev.onboardingButton')}
                                         variant="secondary"
                                         size="lg"
                                         fullWidth
@@ -438,7 +446,7 @@ export default function SettingsScreen() {
                     <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
                         <View style={styles.legalBody}>
                             <Text style={[styles.legalText, { color: theme.ink3 }]}>
-                                {DISCLAIMER_FULL}
+                                {t('common:legal.disclaimerFull')}
                             </Text>
                         </View>
 
@@ -451,7 +459,7 @@ export default function SettingsScreen() {
                             ]}
                         >
                             <Text style={[styles.legalLinkText, { color: theme.brand }]}>
-                                Terms of Service
+                                {t('settings:about.terms')}
                             </Text>
                         </Pressable>
 
@@ -464,7 +472,7 @@ export default function SettingsScreen() {
                             ]}
                         >
                             <Text style={[styles.legalLinkText, { color: theme.brand }]}>
-                                Privacy Policy
+                                {t('settings:about.privacy')}
                             </Text>
                         </Pressable>
                     </View>
@@ -485,7 +493,7 @@ export default function SettingsScreen() {
                     <View style={[styles.dangerZone, { backgroundColor: theme.dangerSoft, borderColor: theme.danger }]}>
                         <Text style={[styles.dangerLabel, { color: theme.danger }]}>{t('settings:section.dangerZone')}</Text>
                         <Text style={[styles.dangerHint, { color: theme.ink2 }]}>
-                            Permanently delete your account and every record tied to it.
+                            {t('settings:delete.hint')}
                         </Text>
                         <Pressable
                             onPress={() => { setDeleteConfirm(''); setDeleteError(false); setShowDeleteModal(true); }}
@@ -505,11 +513,9 @@ export default function SettingsScreen() {
             <Modal visible={showDeleteModal} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <View style={[styles.modalCard, { backgroundColor: theme.surface, ...shadow(9) }]}>
-                        <Text style={[styles.modalTitle, { color: theme.danger }]}>Delete account</Text>
+                        <Text style={[styles.modalTitle, { color: theme.danger }]}>{t('settings:delete.modalTitle')}</Text>
                         <Text style={[styles.modalBody, { color: theme.ink2 }]}>
-                            Deleting the account is irreversible. You'll lose all the information you've
-                            tracked. If you want to delete your account, type "DELETE" in the text box
-                            below, then click Delete.
+                            {t('settings:delete.modalBody')}
                         </Text>
 
                         {/* App Review 5.1.1(v): deleting the account does NOT cancel an
@@ -525,21 +531,21 @@ export default function SettingsScreen() {
                                 hitSlop={6}
                             >
                                 <Text style={[styles.subWarningLink, { color: theme.brand }]}>
-                                    Manage subscriptions
+                                    {t('settings:delete.manageSubscriptions')}
                                 </Text>
                             </Pressable>
                         </View>
 
                         {deleteError && (
                             <Text style={[styles.deleteErrorText, { color: theme.danger }]}>
-                                That's not right — type "DELETE" exactly to confirm.
+                                {t('settings:delete.error')}
                             </Text>
                         )}
 
                         <TextInput
                             value={deleteConfirm}
                             onChangeText={(t) => { setDeleteConfirm(t); if (deleteError) setDeleteError(false); }}
-                            placeholder="DELETE"
+                            placeholder="DELETE" /* i18n-canonical: the backend matches this exact string */
                             placeholderTextColor={theme.ink3}
                             autoCapitalize="characters"
                             autoCorrect={false}
@@ -563,14 +569,14 @@ export default function SettingsScreen() {
                         >
                             {deleting
                                 ? <ActivityIndicator color="#fff" />
-                                : <Text style={styles.deleteText}>Delete</Text>}
+                                : <Text style={styles.deleteText}>{t('settings:delete.confirm')}</Text>}
                         </Pressable>
                         <Pressable
                             onPress={() => setShowDeleteModal(false)}
                             disabled={deleting}
                             style={styles.laterBtn}
                         >
-                            <Text style={[styles.laterText, { color: theme.ink3 }]}>Cancel</Text>
+                            <Text style={[styles.laterText, { color: theme.ink3 }]}>{t('common:action.cancel')}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -591,16 +597,17 @@ export default function SettingsScreen() {
         setRestoring(false);
 
         if (result.status === 'restored') {
-            Alert.alert('Purchases restored', 'Your subscription is active again.');
+            Alert.alert(t('settings:premium.restoredTitle'), t('settings:premium.restoredBody'));
         } else if (result.status === 'nothing') {
             Alert.alert(
-                'Nothing to restore',
-                'No previous subscription was found for this account.',
+                t('settings:premium.nothingTitle'),
+                t('settings:premium.nothingBody'),
             );
         } else if (result.status === 'unavailable') {
-            Alert.alert('Unavailable', 'Purchases are not available on this device yet.');
+            Alert.alert(t('settings:premium.unavailableTitle'), t('settings:premium.unavailableBody'));
         } else {
-            Alert.alert('Could not restore', result.message);
+            // `result.message` comes from RevenueCat and is localised by the store SDK.
+            Alert.alert(t('settings:premium.failedTitle'), result.message);
         }
     }
 

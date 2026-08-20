@@ -1,0 +1,43 @@
+{
+  "tab": {
+    "title": "Transactions",
+    "subtitle": "Log what comes in and goes out",
+    "toggleExpense": "Expense",
+    "toggleIncome": "Income"
+  },
+  "expense": {
+    "screenTitle": "New Expense",
+    "screenSubtitle": "Plant where it counts",
+    "amountEyebrow": "AMOUNT",
+    "categoryLabel": "CATEGORY",
+    "subcategoryLabel": "SUB-CATEGORY",
+    "titleLabel": "TITLE (OPTIONAL)",
+    "titlePlaceholder": "Trader Joe's haul",
+    "submit": "Plant Expense",
+    "submitted": "Planted!"
+  },
+  "income": {
+    "screenTitle": "Log Income",
+    "screenSubtitle": "Every harvest counts",
+    "amountEyebrow": "AMOUNT RECEIVED",
+    "scripture": "\"Every good and perfect gift is from above\"",
+    "scriptureRef": "— James 1:17",
+    "splitsLabel": "HOW IT SPLITS",
+    "splitRow": "{{percent}}% {{category}}",
+    "sourceLabel": "SOURCE",
+    "titleLabel": "TITLE (OPTIONAL)",
+    "titlePlaceholder": "January paycheck",
+    "submit": "Add to Harvest",
+    "submitted": "Harvested!"
+  },
+  "date": {
+    "label": "DATE",
+    "month": "Month",
+    "day": "Day",
+    "dayPlaceholder": "25"
+  },
+  "monthClosed": {
+    "title": "Month closed",
+    "body": "Cannot add to closed month. Reopen {{month}} to edit"
+  }
+}
