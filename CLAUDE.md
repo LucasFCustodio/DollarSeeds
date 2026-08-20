@@ -92,6 +92,7 @@ All colors and theme tokens come from `useTheme()` — **never hardcode colors**
 | [.claude/docs/data_model.md](.claude/docs/data_model.md) | When touching DB queries, Supabase tables, or budget calculation logic |
 | [.claude/docs/design_system.md](.claude/docs/design_system.md) | When building UI — color tokens, Button variants, dark mode, SVG setup |
 | [.claude/docs/lessons_page.md](.claude/docs/lessons_page.md) | When touching the Lessons tab — written vs video content, series/lessons schema, storage buckets, backend routes |
+| [.claude/docs/i18n.md](.claude/docs/i18n.md) | **Before touching any user-facing string** — the canonical-value invariant, the two check scripts, and what is deliberately left untranslated |
 
 ## Important - DB Changes
 
