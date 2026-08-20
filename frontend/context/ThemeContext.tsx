@@ -220,15 +220,55 @@ const ThemeContext = createContext<ThemeContextType>({
     toggleTheme: () => {},
 });
 
+// ─── Dark mode kill switch ────────────────────────────────────────────────────
+/**
+ * Every user gets the light palette, always, and nothing in the UI reveals that a
+ * dark one exists (the Appearance toggle in Settings is gone).
+ *
+ * WHY: the dark palette has real contrast failures we are not fixing under time
+ * pressure — on the paywall the price text is nearly invisible against the dark
+ * surface, and the harvest callout goes muddy brown. Shipping light-only is the
+ * honest interim answer; the palette gets revisited properly rather than patched.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  TO RE-ENABLE DARK MODE: set FORCE_LIGHT_MODE to false, on the line below.   ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
+ *
+ * That one flip restores system-scheme following and makes `toggleTheme()` live
+ * again. Everything else is intact and deliberately NOT deleted: the DARK palette,
+ * `isDark`, `toggleTheme`, and every `theme.*` consumer. Two things do not come back
+ * on their own, because they were removed rather than switched off:
+ *
+ *   1. The Appearance card in app/settings.tsx (the Switch bound to `toggleTheme`),
+ *      along with its `settings:section.appearance` / `settings:appearance.*` strings
+ *      in locales/en and locales/pt-BR.
+ *   2. The two forced-light lines in app/_layout.tsx (navigation ThemeProvider and
+ *      <StatusBar>), plus `userInterfaceStyle` in app.json — see the notes there.
+ */
+const FORCE_LIGHT_MODE = true;
+
 export function AppThemeProvider({ children }: { children: React.ReactNode }) {
+    // The hook has to be called unconditionally (rules of hooks), but while
+    // FORCE_LIGHT_MODE is on nothing downstream reads its value — the seed below is
+    // forced false and the effect returns early, so the system scheme cannot select
+    // the dark palette.
     const systemScheme = useColorScheme();
-    const [isDark, setIsDark] = useState(systemScheme === 'dark');
+    const [isDark, setIsDark] = useState(!FORCE_LIGHT_MODE && systemScheme === 'dark');
 
     useEffect(() => {
+        if (FORCE_LIGHT_MODE) return;
         setIsDark(systemScheme === 'dark');
     }, [systemScheme]);
 
-    const toggleTheme = () => setIsDark(prev => !prev);
+    // Inert while forced, so a caller left over anywhere cannot flip into dark. There
+    // is no stored preference to override either: the theme was only ever in-memory
+    // (system scheme + this toggle), never written to AsyncStorage or user_settings,
+    // so a user who had dark on is already in light on their next launch.
+    const toggleTheme = () => {
+        if (FORCE_LIGHT_MODE) return;
+        setIsDark(prev => !prev);
+    };
+
     const theme = isDark ? DARK : LIGHT;
 
     return (

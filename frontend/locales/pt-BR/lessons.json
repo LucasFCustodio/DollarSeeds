@@ -7,7 +7,13 @@
     "empty": "Nenhuma série em vídeo ainda — volte em breve.",
     "detailLoadFailed": "Não foi possível carregar esta série.",
     "lessonCount": "{{count}} AULA",
-    "lessonCount_plural": "{{count}} AULAS"
+    "lessonCount_plural": "{{count}} AULAS",
+    "social": {
+      "heading": "ENCONTRE O CRIADOR",
+      "instagram": "Instagram",
+      "linkedin": "LinkedIn",
+      "website": "Site"
+    }
   },
   "progress": "{{done}} de {{total}} lições concluídas",
   "minutes": "{{count}} min",

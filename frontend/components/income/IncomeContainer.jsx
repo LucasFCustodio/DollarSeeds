@@ -160,7 +160,13 @@ export default function IncomeContainer({ embedded = false }) {
             await axios.post('https://dollarseeds-1.onrender.com/income/', {
                 amount: parsed,
                 source,
-                title: title.trim() || source,
+                // A blank title stores NULL, never a copy of the source chip. Baking
+                // the source in here is what made every entry read "Paycheck" in
+                // "View all income": the row's title and its source became the same
+                // string, so the list had no way to tell "the user named this" from
+                // "the user named nothing". The fallback belongs at RENDER time —
+                // see the income row in app/details.tsx.
+                title: title.trim() || null,
                 day: parsedDay,
                 month,
                 user_id: user?.id,

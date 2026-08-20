@@ -3,7 +3,6 @@
   "section": {
     "budgetSplit": "DIVISÃO DO ORÇAMENTO",
     "giving": "GENEROSIDADE",
-    "appearance": "APARÊNCIA",
     "languageCurrency": "IDIOMA E MOEDA",
     "dev": "DEV",
     "about": "SOBRE",
@@ -16,12 +15,6 @@
     "title": "Dízimo",
     "subtitle": "Separe {{percent}}% como dízimo antes de orçar",
     "explain": "Quando ativado, {{percent}}% de cada nova entrada é separado primeiro para o Dízimo, e o seu orçamento {{split}} é calculado sobre os {{remainder}}% restantes. Os meses anteriores mantêm a divisão original."
-  },
-  "appearance": {
-    "darkMode": "Modo escuro",
-    "on": "Ativado",
-    "off": "Desativado",
-    "subtitle": "{{state}} · segue o sistema por padrão"
   },
   "language": {
     "title": "Idioma",

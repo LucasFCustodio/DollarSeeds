@@ -1,5 +1,7 @@
 import '../lib/axiosConfig'; // sets axios.defaults.timeout before any screen can fire a request
 
+// DarkTheme is intentionally still imported: dark mode is switched off, not deleted.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,7 +10,6 @@ import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { useFonts } from 'expo-font';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { LocaleProvider, useLocale } from '../context/LocaleContext';
@@ -41,7 +42,6 @@ export const unstable_settings = {
 };
 
 function RootLayoutNav() {
-    const colorScheme = useColorScheme();
     const { user, initialized } = useAuth();
     const { theme } = useTheme();
     // Gate the first paint on the stored language too. Without this, i18next boots to
@@ -96,7 +96,12 @@ function RootLayoutNav() {
     }
 
     return (
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        // Forced light, in step with FORCE_LIGHT_MODE in ThemeContext. This drives the
+        // navigation container's own background/card colours, which are NOT theme
+        // tokens — leaving it on the system scheme would paint a dark backdrop behind
+        // light screens during transitions. Restore
+        // `colorScheme === 'dark' ? DarkTheme : DefaultTheme` when dark mode returns.
+        <ThemeProvider value={DefaultTheme}>
             <Stack>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
@@ -113,7 +118,9 @@ function RootLayoutNav() {
             <PaywallSheet />
             {/* Last, so it covers everything above it including the auth screen. */}
             <UpdateGate />
-            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+            {/* Dark glyphs on the cream background — forced with the palette above.
+                Restore `colorScheme === 'dark' ? 'light' : 'dark'` alongside it. */}
+            <StatusBar style="dark" />
         </ThemeProvider>
     );
 }

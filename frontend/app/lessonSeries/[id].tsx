@@ -8,7 +8,7 @@
  */
 import React, { useState, useCallback } from 'react';
 import {
-    View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
+    View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -18,7 +18,10 @@ import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useAnalytics } from '../../lib/analytics';
-import { IconChevronLeft, IconChevronRight, IconLock } from '../../components/icons';
+import {
+    IconChevronLeft, IconChevronRight, IconLock,
+    IconInstagram, IconLinkedIn, IconGlobe,
+} from '../../components/icons';
 
 const BASE = 'https://dollarseeds-1.onrender.com';
 
@@ -40,7 +43,51 @@ type SeriesDetail = {
     lessons: SeriesLesson[];
     // Sent only to builds advertising the premium capability.
     is_premium?: boolean;
+    // Creator social links. Sent only to builds advertising the `social` capability
+    // (lib/axiosConfig.ts), and null on any series where nobody filled them in — the
+    // backend always sends all three keys for a social build, so absent here means an
+    // older backend, not "no account". Both cases render nothing.
+    instagram_url?: string | null;
+    linkedin_url?: string | null;
+    website_url?: string | null;
 };
+
+/**
+ * Parse a stored link into something safe to open, or null.
+ *
+ * The scheme allowlist is the point: these values are typed by hand into the Supabase
+ * SQL editor and go straight to `Linking.openURL`, which will happily dispatch
+ * `javascript:`, `file:` or any custom scheme a typo lands on. Only http(s) is a link
+ * to a person's profile, so only http(s) opens.
+ */
+function safeUrl(raw?: string | null): URL | null {
+    const value = raw?.trim();
+    if (!value) return null;
+    try {
+        const url = new URL(value);
+        return url.protocol === 'https:' || url.protocol === 'http:' ? url : null;
+    } catch {
+        return null;   // not a URL at all — a bare handle, a note to self, anything
+    }
+}
+
+/** `https://www.instagram.com/igorbarroso/` → `@igorbarroso`. */
+function instagramHandle(url: URL): string {
+    const slug = url.pathname.split('/').filter(Boolean).pop();
+    return slug ? `@${slug}` : url.host.replace(/^www\./, '');
+}
+
+/**
+ * `https://www.linkedin.com/in/igor-barroso/` → `linkedin.com/in/igor-barroso`,
+ * `https://igorbarroso.com` → `igorbarroso.com`. LinkedIn has no @-handle convention
+ * and a website has none at all, so both show the address itself rather than an
+ * invented one. Deriving the label from the URL — instead of storing it in a second
+ * column — is what stops a handle drifting out of sync with the link beside it.
+ */
+function addressLabel(url: URL): string {
+    const path = url.pathname.replace(/\/+$/, '');
+    return `${url.host.replace(/^www\./, '')}${path}`;
+}
 
 function formatDuration(seconds?: number | null): string | null {
     if (!seconds || seconds <= 0) return null;
@@ -224,6 +271,87 @@ export default function LessonSeriesScreen() {
                             </>
                         );
                     })()}
+
+                    {/* ── Creator's socials, below the lesson list ──────────────
+                        Built from the three optional columns added in migration
+                        0006. Anything that is null, blank, or not an http(s) URL
+                        produces no row at all, and when nothing survives the whole
+                        section — heading included — is absent rather than empty. */}
+                    {(() => {
+                        const links = [
+                            {
+                                key: 'instagram' as const,
+                                url: safeUrl(detail.instagram_url),
+                                Icon: IconInstagram,
+                                label: tl('series.social.instagram'),
+                                handle: instagramHandle,
+                            },
+                            {
+                                key: 'linkedin' as const,
+                                url: safeUrl(detail.linkedin_url),
+                                Icon: IconLinkedIn,
+                                label: tl('series.social.linkedin'),
+                                handle: addressLabel,
+                            },
+                            {
+                                key: 'website' as const,
+                                url: safeUrl(detail.website_url),
+                                Icon: IconGlobe,
+                                label: tl('series.social.website'),
+                                handle: addressLabel,
+                            },
+                        ].filter((link): link is typeof link & { url: URL } => link.url !== null);
+
+                        if (links.length === 0) return null;
+
+                        return (
+                            <View style={styles.socialSection}>
+                                <Text style={[styles.sectionEyebrow, { color: theme.ink3 }]}>
+                                    {tl('series.social.heading')}
+                                </Text>
+                                <View style={styles.socialList}>
+                                    {links.map(({ key, url, Icon, label, handle }) => (
+                                        <Pressable
+                                            key={key}
+                                            accessibilityRole="link"
+                                            accessibilityLabel={`${label} — ${handle(url)}`}
+                                            onPress={() => {
+                                                // href, not the raw column: whatever was
+                                                // stored has been through the URL parser
+                                                // and the http(s) check by now.
+                                                Linking.openURL(url.href).catch(err =>
+                                                    console.error('Social link open error:', err));
+                                            }}
+                                            style={({ pressed }) => [
+                                                styles.socialRow,
+                                                { backgroundColor: theme.surface, borderColor: theme.border },
+                                                pressed && { transform: [{ scale: 0.99 }], opacity: 0.9 },
+                                            ]}
+                                        >
+                                            <View style={[
+                                                styles.socialIconTile,
+                                                { backgroundColor: theme.surfaceSoft, borderColor: theme.border },
+                                            ]}>
+                                                <Icon size={18} color={theme.brand} />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.socialLabel, { color: theme.ink }]}>
+                                                    {label}
+                                                </Text>
+                                                <Text
+                                                    style={[styles.socialHandle, { color: theme.ink3 }]}
+                                                    numberOfLines={1}
+                                                >
+                                                    {handle(url)}
+                                                </Text>
+                                            </View>
+                                            <IconChevronRight size={18} color={theme.ink3} />
+                                        </Pressable>
+                                    ))}
+                                </View>
+                            </View>
+                        );
+                    })()}
                 </>
             )}
         </ScrollView>
@@ -333,6 +461,41 @@ const styles = StyleSheet.create({
         letterSpacing: -0.1,
     },
     lessonDuration: {
+        fontFamily: 'JetBrainsMono-Regular',
+        fontSize: 11,
+        marginTop: 3,
+    },
+    socialSection: {
+        marginTop: 30,
+    },
+    socialList: {
+        gap: 10,
+    },
+    socialRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 14,
+        // A hairline border rather than the lesson rows' 1.5px ink outline: these are
+        // a footnote to the playlist, not another thing to tap first.
+        borderWidth: 1,
+    },
+    socialIconTile: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    socialLabel: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: 14,
+        letterSpacing: -0.1,
+    },
+    socialHandle: {
         fontFamily: 'JetBrainsMono-Regular',
         fontSize: 11,
         marginTop: 3,

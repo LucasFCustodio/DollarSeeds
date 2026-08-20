@@ -17,6 +17,9 @@ interface Expense {
 }
 interface Income {
     id: number;
+    /** What the user typed. NULL on rows where they left the field blank — the
+     *  source is the fallback, resolved at render (see incomeLabel below). */
+    title?: string | null;
     jobTitle?: string;
     source?: string;
     amount: number;
@@ -136,6 +139,30 @@ export default function DetailsScreen() {
         }
     };
 
+    /**
+     * What one income row is called.
+     *
+     * The user's own title wins; a blank one falls back to the source chip. Two
+     * shapes of row reach this, and both must read correctly:
+     *
+     *   - NEW rows store NULL when the title was left blank (IncomeContainer).
+     *   - OLD rows have the source string COPIED into `title`, because that is what
+     *     the app used to POST. Those are indistinguishable from a user who typed
+     *     "Paycheck" on purpose — and are not worth a backfill — so a title equal to
+     *     its own source is treated as the copy it almost certainly is and rendered
+     *     through `sourceLabel`. That keeps pt-BR showing "Salário" on rows created
+     *     before this fix, instead of silently reverting them to English.
+     *
+     * User text is rendered verbatim: unlike savings titles it was never composed by
+     * the server, so it must not go through `serverTitle`.
+     */
+    const incomeLabel = (item: Income): string => {
+        const typed = item.title?.trim();
+        if (typed && typed !== item.source) return typed;
+        if (item.source) return sourceLabel(item.source);
+        return item.jobTitle ?? t('fallback.income');
+    };
+
     const accentColor = getCategoryColor();
     const items = type === 'expense' ? expenses : income;
     const isEmpty = items.length === 0;
@@ -196,9 +223,7 @@ export default function DetailsScreen() {
                             <View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
                             <View style={styles.rowInfo}>
                                 <Text style={[styles.rowTitle, { color: theme.text }]}>
-                                    {item.source
-                                        ? sourceLabel(item.source)
-                                        : item.jobTitle ?? t('fallback.income')}
+                                    {incomeLabel(item)}
                                 </Text>
                                 <Text style={[styles.rowDate, { color: theme.textMuted }]}>
                                     {t('row.day', { day: item.day })}

@@ -257,6 +257,13 @@ class _Query:
 
     def execute(self) -> FakeResponse:
         self.db.calls.append((self.op, self.table))
+        if self.op == "select":
+            # Recorded separately from `calls`, which is a 2-tuple several tests unpack.
+            # The COLUMN LIST is part of the backward-compatibility contract, not just
+            # the table: GET /lessons/series/{id}/ widens its select only for clients
+            # advertising `social`, so that an unmarked request cannot be affected by a
+            # stale PostgREST schema cache on a freshly-added column.
+            self.db.selects.append((self.table, self.columns))
         rows = self._rows()
 
         if self.op == "select":
@@ -402,6 +409,8 @@ class FakeSupabase:
     def __init__(self):
         self.tables: dict[str, list[dict]] = {}
         self.calls: list[tuple[str, str]] = []
+        # (table, columns) per select. `columns` is None for select("*").
+        self.selects: list[tuple[str, Optional[list[str]]]] = []
         self.deleted_auth_users: list[str] = []
         self.remote_tokens: dict[str, str] = {}   # token -> user_id (remote verify)
         self.remote_verify_calls: list[str] = []

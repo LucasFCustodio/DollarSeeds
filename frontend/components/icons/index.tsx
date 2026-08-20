@@ -439,6 +439,49 @@ export const IconArrow = ({ size = 16, color = '#0F2820', dir = 'up' }: { size?:
     );
 };
 
+// ── Creator social glyphs (24×24) ────────────────────────────────────────────
+// Drawn in the same single-stroke geometric style as the utility icons above rather
+// than using each platform's official logo: the brand marks come with trademark usage
+// rules and colour requirements that would fight the Seed & Soil palette, and these
+// sit next to `IconChevronRight` in the same row.
+
+export const IconInstagram = ({ size = 20, color = '#0F2820' }: { size?: number; color?: string }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Rect x={3} y={3} width={18} height={18} rx={5} stroke={color} strokeWidth={1.6} />
+        <Circle cx={12} cy={12} r={4} stroke={color} strokeWidth={1.6} />
+        <Circle cx={17} cy={7} r={1.1} fill={color} />
+    </Svg>
+);
+
+export const IconLinkedIn = ({ size = 20, color = '#0F2820' }: { size?: number; color?: string }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Rect x={3} y={3} width={18} height={18} rx={4} stroke={color} strokeWidth={1.6} />
+        <Circle cx={7.6} cy={7.8} r={1.2} fill={color} />
+        <Path d="M7.6 10.8v6.2" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
+        <Path
+            d="M11.4 17v-6.2M11.4 13.4a2.4 2.4 0 0 1 4.8 0V17"
+            stroke={color}
+            strokeWidth={1.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </Svg>
+);
+
+/** Generic "business website" mark — a globe, since the site could be anything. */
+export const IconGlobe = ({ size = 20, color = '#0F2820' }: { size?: number; color?: string }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Circle cx={12} cy={12} r={9} stroke={color} strokeWidth={1.6} />
+        <Path d="M3 12h18" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
+        <Path
+            d="M12 3c2.5 2.6 3.8 5.7 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z"
+            stroke={color}
+            strokeWidth={1.6}
+            strokeLinejoin="round"
+        />
+    </Svg>
+);
+
 // ── Transaction category glyphs (20×20) ──────────────────────────────────────
 
 export const GlyphHouse = ({ color = '#D97706' }: { color?: string }) => (

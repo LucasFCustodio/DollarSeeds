@@ -62,6 +62,7 @@ All screens and components consume design tokens via `useTheme()` — never hard
 - `AppThemeProvider` wraps the app in [frontend/app/_layout.tsx](../../frontend/app/_layout.tsx)
 - Apply tokens inline: `style={{ backgroundColor: theme.surface, color: theme.text }}`
 - Full token list and Button API: [design_system.md](./design_system.md)
+- **Dark mode is currently disabled** — `isDark` is always `false` and `toggleTheme()` is inert. See `FORCE_LIGHT_MODE` in `ThemeContext.tsx` and the Dark Mode section of [design_system.md](./design_system.md)
 
 ---
 

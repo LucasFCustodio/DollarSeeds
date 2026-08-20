@@ -15,14 +15,31 @@
  *    `user_id` the app sends in params/bodies. Attaching the header centrally here is
  *    what keeps that working across all ~43 call sites without touching one of them.
  *
- * 3. CAPABILITY MARKER. `X-Client-Features: premium` identifies this build as one that
- *    can handle premium content. Its ABSENCE is what the backend keys backward
- *    compatibility off, so it must reach every backend request and no other host.
+ * 3. CAPABILITY MARKERS. `X-Client-Features` lists what THIS build can handle. Its
+ *    absence is what the backend keys backward compatibility off, so it must reach
+ *    every backend request and no other host. It is a LIST, and grows one token per
+ *    capability rather than being overloaded — see CLIENT_FEATURES below.
  */
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { supabase } from './supabase';
 
 axios.defaults.timeout = 15000;
+
+/**
+ * What this build understands, sent on every backend request.
+ *
+ *   premium — has the paywall, the purchase path, and a handler for 403
+ *             premium_required, so the backend may show it premium series.
+ *   social  — renders the creator's Instagram / LinkedIn / website rows on the series
+ *             page, so GET /lessons/series/{id}/ may include those three fields.
+ *
+ * Two tokens, not one, because two unpatchable generations are already in the wild:
+ * the original App Store binary (no header at all) and the premium build (`premium`
+ * only). Each keeps getting exactly the response it was written against. ADD a token
+ * when a new capability lands; never repurpose an existing one, and never remove one —
+ * the backend reads absence as "this build cannot handle it".
+ */
+const CLIENT_FEATURES = 'premium, social';
 
 /** The DollarSeeds API. Screens each declare their own `BASE` constant; this is the
  *  host they all point at. */
@@ -69,18 +86,18 @@ function isBackendUrl(rawUrl: string | undefined): boolean {
 axios.interceptors.request.use(async (config) => {
     if (!isBackendUrl(config.url)) return config;
 
-    // 3. CAPABILITY MARKER. Tells the backend this build understands premium content:
-    //    it has the paywall, the purchase path, and a handler for 403 premium_required.
-    //    A request WITHOUT this header is treated as the binary already in the App
-    //    Store, which has none of those — so the backend hides premium series from it
-    //    entirely and never gates its playback. That is what keeps those users working.
+    // 3. CAPABILITY MARKERS (see CLIENT_FEATURES above). A request WITHOUT this
+    //    header is treated as the binary already in the App Store, which has neither
+    //    the paywall nor the social rows — so the backend hides premium series from it
+    //    entirely, never gates its playback, and omits the creator link fields. That
+    //    is what keeps those users working.
     //
     //    Set here rather than at each call site precisely because this interceptor is
     //    the one choke point every backend request passes through: one line covers
     //    every screen, and every route added later, with nothing to forget. It sits
     //    AFTER the isBackendUrl guard above so it never leaks to Sentry, PostHog, or
     //    the Supabase Storage URLs expo-video streams.
-    config.headers.set('X-Client-Features', 'premium');
+    config.headers.set('X-Client-Features', CLIENT_FEATURES);
 
     try {
         const { data } = await supabase.auth.getSession();

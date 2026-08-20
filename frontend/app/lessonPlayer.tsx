@@ -12,7 +12,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    View, Text, Pressable, StyleSheet, ActivityIndicator,
+    View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -29,6 +29,10 @@ const BASE = 'https://dollarseeds-1.onrender.com';
 type SeriesLesson = {
     id: string;
     title: string;
+    // Optional AND nullable, both on purpose: PostgREST returns a selected-but-empty
+    // column as an explicit `null` (the production capture has real lessons shaped
+    // exactly that way), so this is never merely absent.
+    description?: string | null;
     duration_seconds?: number | null;
     sort_order: number;
 };
@@ -147,6 +151,9 @@ export default function LessonPlayerScreen() {
     const hasPrev = index > 0;
     const hasNext = index >= 0 && index < lessons.length - 1;
     const currentTitle = index >= 0 ? lessons[index].title : '';
+    // Null, an empty string and whitespace all mean "this lesson has no description"
+    // and must render nothing at all — no empty block, and certainly not "null".
+    const currentDescription = (index >= 0 ? lessons[index].description : null)?.trim() || '';
     const position = index >= 0 ? `Lesson ${index + 1} of ${lessons.length}` : '';
 
     const goPrev = useCallback(() => {
@@ -252,6 +259,23 @@ export default function LessonPlayerScreen() {
                     <IconChevronRight size={16} color={theme.onBrand} />
                 </Pressable>
             </View>
+
+            {/* Lesson description, below the Previous / Next buttons. Scrollable
+                because real descriptions run to a full paragraph and this screen is a
+                fixed View — without it a long one is simply clipped off the bottom.
+                Absent when there is nothing to show, so the layout is unchanged for
+                the lessons that have no description. */}
+            {!!currentDescription && (
+                <ScrollView
+                    style={styles.descriptionScroll}
+                    contentContainerStyle={styles.descriptionContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <Text style={[styles.description, { color: theme.ink2 }]}>
+                        {currentDescription}
+                    </Text>
+                </ScrollView>
+            )}
         </View>
     );
 }
@@ -330,5 +354,19 @@ const styles = StyleSheet.create({
     navText: {
         fontFamily: 'Geist-SemiBold',
         fontSize: 14,
+    },
+    descriptionScroll: {
+        // Claims whatever height is left under the nav row rather than a fixed amount,
+        // so a short description sits tight and a long one scrolls in place.
+        flex: 1,
+        marginTop: 22,
+    },
+    descriptionContent: {
+        paddingBottom: 40,
+    },
+    description: {
+        fontFamily: 'Geist-Regular',
+        fontSize: 14,
+        lineHeight: 21,
     },
 });

@@ -3,7 +3,6 @@
   "section": {
     "budgetSplit": "BUDGET SPLIT",
     "giving": "GIVING",
-    "appearance": "APPEARANCE",
     "languageCurrency": "LANGUAGE & CURRENCY",
     "dev": "DEV",
     "about": "ABOUT",
@@ -16,12 +15,6 @@
     "title": "Tithing",
     "subtitle": "Set aside {{percent}}% as a tithe before budgeting",
     "explain": "When on, {{percent}}% of new income is carved into a Tithe envelope first, and your {{split}} budget is calculated on the remaining {{remainder}}%. Past months keep their original split."
-  },
-  "appearance": {
-    "darkMode": "Dark mode",
-    "on": "On",
-    "off": "Off",
-    "subtitle": "{{state}} · system-aware by default"
   },
   "language": {
     "title": "Language",
