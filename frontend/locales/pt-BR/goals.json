@@ -11,7 +11,7 @@
     "whichGoal": "PARA QUAL META",
     "fundingSource": "DE ONDE VEM",
     "transfer": "Transferir",
-    "plantSeed": "Plantar semente"
+    "plantSeed": "Plantar"
   },
   "funding": {
     "thisMonth": "Renda deste mês",
@@ -75,7 +75,7 @@
   "editGoal": {
     "titleDebt": "Editar dívida",
     "titleSaving": "Editar meta",
-    "save": "Salvar alterações"
+    "save": "Salvar"
   },
   "alert": {
     "missingInfoTitle": "Faltam informações",
