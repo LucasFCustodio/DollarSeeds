@@ -119,22 +119,24 @@ for (const locale of locales) {
 const SKIP_SHORT = 12;
 
 /**
- * Files that legitimately contain the English text.
+ * Files that legitimately contain the English text, because in them English IS the
+ * canonical value rather than one locale's rendering of it.
  *
- * `lib/serverStrings.ts` matches ON the English the backend emits — those literals
- * ARE the lookup keys, so finding them there is the code working. Everything else
- * on this list is prose still awaiting translation; each entry is a to-do, and
- * removing it once translated is how the check starts protecting that file.
+ * `lib/serverStrings.ts` matches ON the English the backend emits, so those literals
+ * are the lookup keys — finding them there is the code working, not a miss.
+ * `constants/budgetTypes.ts` holds the English name/tagline as the fallback behind
+ * `common:budgetType`, for the same reason.
+ *
+ * Keep this list at exactly those two. If prose ever lands here as a to-do, delete
+ * the entry the moment it is translated — an entry that outlives its reason silently
+ * switches the check off for a whole file. That happened once already, to
+ * constants/lessons.ts.
  */
 const ALLOW_ENGLISH = new Set([
     'lib/serverStrings.ts',
     // constants/budgetTypes.ts keeps its English name/tagline as the canonical
     // fallback behind common:budgetType — same rationale as serverStrings.
     'constants/budgetTypes.ts',
-    // ── still to translate (tracked, not forgotten) ──
-    // The two written lessons: ~820 words of prose that riffs on specific NLT wording,
-    // so it is a rewrite against Almeida rather than a translation.
-    'constants/lessons.ts',
 ]);
 
 const sources = SOURCE_DIRS.flatMap(d => {
