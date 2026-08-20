@@ -37,7 +37,7 @@ import { TERMS_URL, PRIVACY_URL } from '../constants/legal';
 import { MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
 import { supabase } from '../lib/supabase';
 import {
-    IconChevronLeft, IconScripture, IconMoon, IconSun, IconTarget, IconSparkle, IconCheck,
+    IconChevronLeft, IconScripture, IconTarget, IconSparkle, IconCheck,
 } from '../components/icons';
 import Button from '../components/ui/Button';
 import PremiumCta from '../components/premium/PremiumCta';
@@ -51,7 +51,7 @@ const BASE = 'https://dollarseeds-1.onrender.com';
 export default function SettingsScreen() {
     const router = useRouter();
     const { user } = useAuth();
-    const { theme, isDark, toggleTheme } = useTheme();
+    const { theme } = useTheme();
     const { replay: replayOnboarding } = useOnboarding();
     const { restore: restorePremium } = useSubscription();
     const { t } = useTranslation(['settings', 'common', 'premium']);
@@ -321,32 +321,11 @@ export default function SettingsScreen() {
                         </View>
                     </View>
 
-                    {/* ── Appearance section ──────────────────────────────── */}
-                    <Text style={[styles.sectionLabel, { color: theme.ink3, marginTop: 26 }]}>{t('settings:section.appearance')}</Text>
-
-                    <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(7) }]}>
-                        <View style={styles.rowTop}>
-                            <View style={[styles.iconTile, { backgroundColor: theme.brandSoft }]}>
-                                {isDark
-                                    ? <IconSun size={22} color={theme.brand} />
-                                    : <IconMoon size={22} color={theme.brand} />}
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.rowTitle, { color: theme.ink }]}>{t('settings:appearance.darkMode')}</Text>
-                                <Text style={[styles.rowSub, { color: theme.ink2 }]}>
-                                    {t('settings:appearance.subtitle', {
-                                        state: isDark ? t('settings:appearance.on') : t('settings:appearance.off'),
-                                    })}
-                                </Text>
-                            </View>
-                            <Switch
-                                value={isDark}
-                                onValueChange={toggleTheme}
-                                trackColor={{ false: theme.borderSoft, true: theme.brand }}
-                                thumbColor="#fff"
-                            />
-                        </View>
-                    </View>
+                    {/* The Appearance section (a dark-mode Switch bound to toggleTheme)
+                        was removed here. Dark mode ships off — see FORCE_LIGHT_MODE in
+                        context/ThemeContext.tsx for why, and for what to restore. The
+                        `settings:section.appearance` / `settings:appearance.*` strings
+                        went with it, because check-locales rejects an unreferenced key. */}
 
                     {/* ── Language & currency ─────────────────────────────── */}
                     {/* Two INDEPENDENT settings. Language changes the words and the

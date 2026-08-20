@@ -38,6 +38,7 @@ npm run ios
 npm run lint
 npm run check-locales  # locale parity + any catalogue string still hardcoded
 npm run verify-i18n    # boots i18next on the real catalogues (plurals, pt-BR resolution)
+npm run verify-goal-rate  # unit tests for the goal card's $/week pace (lib/goalRate.ts)
 ```
 
 #### Dev build on a physical iPhone
@@ -80,7 +81,7 @@ All colors and theme tokens come from `useTheme()` — **never hardcode colors**
 - Danger = red `#B91C1C`, Harvest yellow = `#F4D35E`
 - Typography: Instrument Serif (display/amounts) · Geist (UI) · JetBrains Mono (eyebrows/dates) — use the `Fonts` export from ThemeContext
 - Shadows: `shadow(depth)` helper exported from ThemeContext — depth 0–10
-- Dark mode: system-aware by default; user toggles via 🌙/☀️ button in dashboard hero
+- Dark mode: **disabled** — every user gets the light palette. Flip `FORCE_LIGHT_MODE` in `ThemeContext.tsx` to re-enable; the dark tokens are all still there
 
 → Full token reference, type scale, shadow scale, and component API: [.claude/docs/design_system.md](.claude/docs/design_system.md)
 
@@ -92,6 +93,7 @@ All colors and theme tokens come from `useTheme()` — **never hardcode colors**
 | [.claude/docs/data_model.md](.claude/docs/data_model.md) | When touching DB queries, Supabase tables, or budget calculation logic |
 | [.claude/docs/design_system.md](.claude/docs/design_system.md) | When building UI — color tokens, Button variants, dark mode, SVG setup |
 | [.claude/docs/lessons_page.md](.claude/docs/lessons_page.md) | When touching the Lessons tab — written vs video content, series/lessons schema, storage buckets, backend routes |
+| [.claude/docs/i18n.md](.claude/docs/i18n.md) | **Before touching any user-facing string** — the canonical-value invariant, the two check scripts, and what is deliberately left untranslated |
 
 ## Important - DB Changes
 

@@ -28,7 +28,8 @@ All colors/fonts from `useTheme()` — never hardcode (see [design_system.md](de
 
 Two tables, one-to-many (`lesson_series` 1─∞ `lessons`, `on delete cascade`). RLS **enabled, no policies** — parity with all other tables; the service-role backend bypasses RLS, the anon client is blocked. Migration: [backend/migrations/0001_lesson_series.sql](../../backend/migrations/0001_lesson_series.sql).
 
-- `lesson_series`: `id, title, description, creator, thumbnail_url, sort_order, is_published, is_premium, created_at`
+- `lesson_series`: `id, title, description, creator, thumbnail_url, sort_order, is_published, is_premium, created_at`,
+  plus `instagram_url, linkedin_url, website_url` (migration `0006` — the creator's socials, all nullable)
 - `lessons`: `id, series_id, title, description, video_provider, video_id, duration_seconds, thumbnail_url, sort_order, created_at`
 
 Rules:
@@ -36,6 +37,14 @@ Rules:
 - Always `order by sort_order` (series on the page, lessons within a series).
 - `is_premium` **is gated** — see [Premium gating](#premium-gating) below. It defaults to
   `true` since migration `0005`, so a new series is paid unless deliberately made free.
+- The three social columns hold a **complete `https://` URL** and nothing else. Nothing
+  normalises or prefixes them, so what you paste is what the phone opens; the app derives
+  the displayed handle (`@igorbarroso`, `linkedin.com/in/igor-barroso`) from the URL, so
+  there is no second column to keep in sync. Anything that is null, blank, or not http(s)
+  renders no row, and a series with none of the three shows no section at all.
+- They reach the app only for clients sending `X-Client-Features: social` — its own
+  capability token, deliberately NOT `premium`. See [Premium gating](#premium-gating);
+  the same reasoning applies, one shipped generation further on.
 
 ### Storage buckets
 
@@ -60,6 +69,16 @@ insert into lessons (series_id, title, video_id, duration_seconds, sort_order) v
 -- Publish / unpublish
 update lesson_series set is_published = true  where id = '<series-id>';
 
+-- Creator socials (migration 0006). All three optional — set only the ones that exist.
+update lesson_series set
+  instagram_url = 'https://www.instagram.com/igorbarroso',
+  linkedin_url  = 'https://www.linkedin.com/in/igor-barroso',
+  website_url   = 'https://igorbarroso.com'
+where id = '<series-id>';
+
+-- Remove one link again
+update lesson_series set linkedin_url = null where id = '<series-id>';
+
 -- Reorder
 update lesson_series set sort_order = 1 where id = '<series-id>';
 update lessons        set sort_order = 2 where id = '<lesson-id>';
@@ -77,7 +96,7 @@ All in [backend/main.py](../../backend/main.py). None return raw video paths/URL
 | Route | Returns |
 |-------|---------|
 | `GET /lessons/series/` | Published series (`is_published=true`), ordered, each with derived `lesson_count` |
-| `GET /lessons/series/{series_id}/` | The series + its lessons ordered by `sort_order` |
+| `GET /lessons/series/{series_id}/` | The series + its lessons ordered by `sort_order`. Adds `is_premium` for `premium` clients and `instagram_url` / `linkedin_url` / `website_url` for `social` clients |
 | `GET /lessons/{lesson_id}/playback/` | `{ url, expires_in }` — signed URL from `lesson-videos` (TTL `SIGNED_URL_TTL_SECONDS`, 3600s). **The premium gate lives here** — the only route that enforces it. |
 
 ## Premium gating
@@ -113,6 +132,28 @@ not the UX trigger.
 > `lesson_series` lookup, no `subscriptions` scan. `test_backcompat_lessons.py` asserts
 > the query set directly, and three older tests seed a lesson whose `series_id` has no
 > `lesson_series` row so that hoisting a lookup fails loudly instead of shipping.
+
+### `X-Client-Features` is a LIST, one token per capability
+
+`premium` was the first; `social` (creator links, migration `0006`) is the second. They
+are independent on purpose — a build that ships a paywall was not thereby written to
+render a link row, and by now the premium build is *itself* a shipped generation that
+cannot be patched. Each generation gets exactly the response it was built against:
+
+| | No marker (first binary) | `premium` only | `premium, social` |
+|---|---|---|---|
+| `is_premium` on the detail route | absent | present | present |
+| `instagram_url` / `linkedin_url` / `website_url` | absent | absent | present (null when unset) |
+
+Two consequences worth keeping:
+
+- **Add a token, never repurpose one.** The frontend list lives in `CLIENT_FEATURES` in
+  [frontend/lib/axiosConfig.ts](../../frontend/lib/axiosConfig.ts); the backend constants
+  sit together near `PREMIUM_FEATURE` in `main.py`.
+- **Gate the `select()`, not just the response.** `get_lesson_series` only *selects* the
+  social columns when the caller asked for them, so a stale PostgREST schema cache after
+  a column-adding migration can break social builds and never the App Store binary.
+  `test_an_unmarked_request_does_not_even_select_the_new_columns` pins that.
 
 Entitlement, the RevenueCat webhook and the `subscriptions` schema are in
 [data_model.md](data_model.md#subscriptions).

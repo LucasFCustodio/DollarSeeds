@@ -1372,6 +1372,18 @@ def create_lesson_rating(entry: LessonRating, user_id: str = Depends(get_current
 PREMIUM_FEATURE = "premium"
 PREMIUM_ENTITLEMENT_ID = "premium"
 
+# A SECOND capability, not a reuse of `premium`. X-Client-Features is a LIST of what
+# the calling build understands, and this is what that list is for: creator social
+# links have nothing to do with subscriptions, and a build that renders the paywall is
+# not thereby a build that renders a link row.
+#
+# The distinction is not academic — the premium binary is itself now a shipped
+# generation that cannot be patched. Keying these fields off `premium` would start
+# sending it keys it was never written against; keying them off their own token means
+# each generation gets exactly the response it was built for, and the question "which
+# build sees this field" stays answerable by reading one line.
+SOCIAL_FEATURE = "social"
+
 # Two switches, deliberately not one:
 #   * Hiding premium series from UNMARKED clients is ALWAYS on. It is backward
 #     compatibility, not a business rule, and must survive every rollback.
@@ -1657,6 +1669,11 @@ class SeriesDetail(BaseModel):
     creator: Optional[str] = None
     thumbnail_url: Optional[str] = None
     lessons: list[SeriesLesson]
+    # Creator social links (migration 0006). Sent ONLY to builds advertising the
+    # `social` capability — see get_lesson_series. Full https:// URLs, or absent.
+    instagram_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    website_url: Optional[str] = None
 
 class PlaybackResponse(BaseModel):
     url: str
@@ -1720,10 +1737,26 @@ def get_lesson_series(series_id: str,
 
     Deliberately NOT marker-filtered: an old binary cannot reach a premium series id,
     because it never appears in its list, and nothing here exposes a video path. Marked
-    clients additionally get `is_premium` so the playlist can lock rows before the tap."""
-    s = supabase.table("lesson_series") \
-        .select("id, title, description, creator, thumbnail_url, is_published, is_premium") \
-        .eq("id", series_id).execute().data
+    clients additionally get `is_premium` so the playlist can lock rows before the tap,
+    and `social`-capable clients get the three creator link fields.
+
+    Widening the SERIES select is safe in a way the lessons select is not — those rows
+    are never handed to the client. Every series field on the wire is copied out by
+    hand into the dict at the bottom of this function, so a column selected here
+    reaches nobody until a line down there puts it inside a capability check. It is
+    still selected conditionally; see the comment on series_columns for why."""
+    wants_social = SOCIAL_FEATURE in features
+    # The new columns are selected ONLY when someone is going to be sent them. An
+    # unmarked request therefore issues the identical query it issues today, right down
+    # to the column list — which is what keeps a stale PostgREST schema cache after the
+    # 0006 migration (PGRST204) a problem for social builds alone, instead of 500-ing
+    # this endpoint for the binaries in the App Store. Same reasoning as the /playback/
+    # gate: an old client must not merely get the same answer, it must run the same path.
+    series_columns = "id, title, description, creator, thumbnail_url, is_published, is_premium"
+    if wants_social:
+        series_columns += ", instagram_url, linkedin_url, website_url"
+
+    s = supabase.table("lesson_series").select(series_columns).eq("id", series_id).execute().data
     if not s or not s[0].get("is_published"):
         raise HTTPException(status_code=404, detail="Series not found.")
     series = s[0]
@@ -1745,6 +1778,21 @@ def get_lesson_series(series_id: str,
     }
     if PREMIUM_FEATURE in features:
         data["is_premium"] = bool(series.get("is_premium", False))
+    if wants_social:
+        # Marked-only, NOT unconditional. Old clients would indeed ignore unknown keys
+        # — but "would ignore" is a claim about a binary nobody can patch if it turns
+        # out to be wrong, and the goldens exist precisely so that claim never has to
+        # be made. Adding these for everyone would change GET /lessons/series/{id}/ for
+        # the App Store binary, which test_backcompat_lessons.py treats as a regression
+        # rather than a golden to update.
+        #
+        # Always all three keys, present as null when unset. A key that appeared only
+        # when populated would make the client's "no links at all" branch depend on
+        # absence rather than on value — the same null-vs-undefined trap the goldens
+        # README documents for lesson.description.
+        data["instagram_url"] = series.get("instagram_url")
+        data["linkedin_url"] = series.get("linkedin_url")
+        data["website_url"] = series.get("website_url")
     return {"data": data}
 
 

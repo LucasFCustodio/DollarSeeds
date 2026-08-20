@@ -35,6 +35,7 @@ import { CURRENCIES } from '../../constants/currencies';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import { ft, tv } from '../../constants/responsive';
 import { useAnalytics } from '../../lib/analytics';
+import { weeklyGoalRate } from '../../lib/goalRate';
 import HeroBg from '../../components/ui/HeroBg';
 import AnimatedAmount from '../../components/ui/AnimatedAmount';
 import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
@@ -82,13 +83,12 @@ const getDeadline = (m: string, y: number) => monthEndDate(m, y);
 const getMonthsLeft = (m: string, y: number) =>
     Math.max(0, Math.ceil((getDeadline(m, y).getTime() - Date.now()) / (30 * 86_400_000)));
 
-const getWeeklyRate = (target: number, allocated: number, m: string, y: number, createdAt: string) => {
-    const remaining = Math.max(0, target - allocated);
-    const totalDays = Math.max(1, Math.ceil(
-        (getDeadline(m, y).getTime() - new Date(createdAt).getTime()) / 86_400_000
-    ));
-    return (remaining / totalDays) * 7;
-};
+// The $/week pace is THE PLAN — target over the created→deadline window — so it holds
+// steady as the goal is funded and moves only when the target or the deadline moves.
+// `allocated_amount` is deliberately not an input; see lib/goalRate.ts for why, and
+// `npm run verify-goal-rate` for the cases that pin it down.
+const getWeeklyRate = (target: number, m: string, y: number, createdAt: string) =>
+    weeklyGoalRate(target, createdAt, getDeadline(m, y));
 
 
 // ─── Year picker ──────────────────────────────────────────────────────────────
@@ -626,7 +626,7 @@ export default function PiggyBankScreen() {
             ? getMonthsLeft(g.target_month, g.target_year)
             : 0;
         const weekly = g.target_month && g.target_year
-            ? getWeeklyRate(target, g.allocated_amount, g.target_month, g.target_year, g.created_at)
+            ? getWeeklyRate(target, g.target_month, g.target_year, g.created_at)
             : 0;
         const achieved = target > 0 && g.allocated_amount >= target;
         const barColor = achieved ? theme.success : accent;

@@ -139,6 +139,33 @@ def test_add_income_defaults_the_snapshot_when_settings_are_untouched(client, su
     assert row["budget_type"] == "balanced"
 
 
+def test_a_blank_income_title_is_stored_as_null_not_as_the_source(client, supabase_db, current_month):
+    """The app used to POST `title: title.trim() || source`, which copied the source
+    chip into the title and made every entry in "View all income" read "Paycheck" —
+    the row's own title and source became the same string, so the list could not tell
+    "the user named this" from "the user named nothing". The client now sends null and
+    resolves the fallback at render; the server has to accept that without complaint,
+    and must not substitute anything of its own.
+
+    Old binaries still send the copied source, and those rows keep working: the column
+    is nullable either way and nothing here is backfilled."""
+    res = client.post("/income/", headers=HEADERS, json={
+        "amount": 1200.0, "day": 4, "month": current_month,
+        "title": None, "source": "Paycheck",
+    })
+    assert res.status_code == 200
+
+    row = supabase_db.rows("income")[0]
+    assert row["title"] is None, "a blank title must not be backfilled from the source"
+    assert row["source"] == "Paycheck"
+
+    # And it survives the round trip the details screen actually makes.
+    listed = client.get("/income/details/", params={"month": current_month},
+                        headers=HEADERS).json()["data"]
+    assert listed[0]["title"] is None
+    assert listed[0]["source"] == "Paycheck"
+
+
 def test_income_details_and_delete(client, supabase_db, current_month):
     client.post("/income/", headers=HEADERS, json={"amount": 900.0, "day": 3, "month": current_month})
 

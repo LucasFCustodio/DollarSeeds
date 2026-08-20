@@ -245,3 +245,137 @@ def test_a_dangling_series_id_cannot_break_playback(client, supabase_db):
     # v2 too: _series_is_premium fails OPEN rather than locking someone out over a
     # missing row.
     assert client.get("/lessons/orphan/playback/", headers=v2()).status_code == 200
+
+
+# ══ C. Creator social links reach `social` builds and nobody else ═══════════════
+#
+# Migration 0006 added instagram_url / linkedin_url / website_url to lesson_series.
+# They are served from GET /lessons/series/{id}/ behind their OWN capability token,
+# not behind `premium` — see SOCIAL_FEATURE in main.py. Two generations of binary are
+# already unpatchable (the App Store build, and the premium build), and each must keep
+# getting exactly the response it was written against.
+
+SOCIAL = v2(features="social")
+PREMIUM_ONLY = v2(features="premium")
+BOTH = v2(features="premium, social")   # what the app's axios interceptor now sends
+
+
+@pytest.fixture
+def linked_series(supabase_db):
+    """One published series with all three links, and one with none."""
+    supabase_db.seed("lesson_series", {
+        "id": "s-links", "title": "Linked", "description": "d", "creator": "Igor",
+        "thumbnail_url": "https://img/l.png",
+        "is_published": True, "is_premium": False, "sort_order": 0,
+        "instagram_url": "https://www.instagram.com/igorbarroso",
+        "linkedin_url": "https://www.linkedin.com/in/igor-barroso",
+        "website_url": "https://igorbarroso.com",
+    })
+    supabase_db.seed("lesson_series", {
+        "id": "s-bare", "title": "Bare", "description": "d", "creator": "DS",
+        "thumbnail_url": "https://img/b.png",
+        "is_published": True, "is_premium": False, "sort_order": 1,
+    })
+    # A real lesson row, so the key-set assertion below actually iterates something.
+    supabase_db.seed("lessons", {
+        "id": "links-0", "series_id": "s-links", "title": "Linked lesson",
+        "description": None, "thumbnail_url": None,
+        "sort_order": 0, "video_id": "links/0.mp4", "duration_seconds": 120,
+    })
+    return supabase_db
+
+
+SOCIAL_KEYS = {"instagram_url", "linkedin_url", "website_url"}
+
+
+@pytest.mark.parametrize("headers,label", [
+    (OLD_BINARY, "the App Store binary"),
+    (PREMIUM_ONLY, "a premium-only build"),
+])
+def test_social_links_are_absent_without_the_social_marker(client, linked_series, headers, label):
+    """`premium` must NOT imply `social`. A build that ships a paywall was not thereby
+    written to render a link row, and it cannot be patched if that assumption is wrong."""
+    data = client.get("/lessons/series/s-links/", headers=headers).json()["data"]
+    assert SOCIAL_KEYS & set(data) == set(), f"{label} received {sorted(SOCIAL_KEYS & set(data))}"
+
+
+def test_the_unmarked_series_detail_is_still_byte_identical_with_links_populated(
+        client, live_content):
+    """The shape assertion above proves nothing on its own if the seeded series has no
+    links. Populate them on the very series the goldens were captured from, then assert
+    the unmarked response is unchanged — the columns exist and are full, and an old
+    binary still cannot tell."""
+    live_content.seed("lesson_series", {
+        "id": "s-generosity", "title": "The Truth on Generosity",
+        "description": "A series on generosity.", "creator": "Igor",
+        "thumbnail_url": "https://img/gen.png",
+        "is_published": True, "is_premium": False, "sort_order": 0,
+        "instagram_url": "https://www.instagram.com/igorbarroso",
+        "linkedin_url": "https://www.linkedin.com/in/igor-barroso",
+        "website_url": "https://igorbarroso.com",
+    })
+    res = client.get("/lessons/series/s-generosity/", headers=OLD_BINARY)
+    assert res.status_code == 200
+    assert shape_of(res.json()) == shape_of(golden("series_detail"))
+
+
+@pytest.mark.parametrize("headers,label", [
+    (OLD_BINARY, "the App Store binary"),
+    (PREMIUM_ONLY, "a premium-only build"),
+])
+def test_an_unmarked_request_does_not_even_select_the_new_columns(
+        client, linked_series, headers, label):
+    """Stronger than "the keys are absent": the QUERY is unchanged too.
+
+    A column added by a migration is invisible to PostgREST until its schema cache
+    reloads, and a select naming an unknown column is a 400 — which would surface as a
+    500 on this endpoint. Selecting the socials only for clients that will be sent them
+    confines that failure mode to builds that can be fixed, and keeps the request the
+    App Store binary makes byte-for-byte the one it makes today."""
+    linked_series.selects.clear()
+    assert client.get("/lessons/series/s-links/", headers=headers).status_code == 200
+
+    series_selects = [cols for table, cols in linked_series.selects if table == "lesson_series"]
+    assert series_selects, "the endpoint must have queried lesson_series"
+    for cols in series_selects:
+        assert cols is not None, f"{label} triggered a select(*) on lesson_series"
+        assert SOCIAL_KEYS.isdisjoint(cols), f"{label} selected {sorted(SOCIAL_KEYS & set(cols))}"
+
+
+@pytest.mark.parametrize("headers", [SOCIAL, BOTH])
+def test_a_social_build_gets_all_three_links(client, linked_series, headers):
+    data = client.get("/lessons/series/s-links/", headers=headers).json()["data"]
+    assert data["instagram_url"] == "https://www.instagram.com/igorbarroso"
+    assert data["linkedin_url"] == "https://www.linkedin.com/in/igor-barroso"
+    assert data["website_url"] == "https://igorbarroso.com"
+
+
+def test_unset_links_are_null_keys_not_missing_keys(client, linked_series):
+    """The frontend hides the whole section when all three are falsy. That branch must
+    key off VALUE, never off absence — so the keys are always present for a social
+    build, exactly as PostgREST returns a selected-but-empty column."""
+    data = client.get("/lessons/series/s-bare/", headers=SOCIAL).json()["data"]
+    for key in SOCIAL_KEYS:
+        assert key in data and data[key] is None
+
+
+def test_social_and_premium_markers_are_independent(client, linked_series):
+    """Sending `social` alone must not smuggle in `is_premium`, and vice versa."""
+    social_only = client.get("/lessons/series/s-links/", headers=SOCIAL).json()["data"]
+    assert "is_premium" not in social_only
+
+    both = client.get("/lessons/series/s-links/", headers=BOTH).json()["data"]
+    assert both["is_premium"] is False
+    assert SOCIAL_KEYS <= set(both)
+
+
+def test_the_lessons_rows_never_grow_a_social_key(client, linked_series):
+    """The socials live on the SERIES, and the lesson rows are still passed through
+    verbatim. Adding a column to that select is the one leak main.py warns about, so
+    pin the six-key set for a social build too — not just for an old binary."""
+    data = client.get("/lessons/series/s-links/", headers=BOTH).json()["data"]
+    assert data["lessons"], "fixture must seed a lesson or this asserts nothing"
+    for lesson in data["lessons"]:
+        assert set(lesson.keys()) == {
+            "id", "title", "description", "duration_seconds", "thumbnail_url", "sort_order",
+        }

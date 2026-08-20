@@ -280,11 +280,22 @@ Labels are rendered as eyebrow caps (`JetBrains Mono, 11px, 600, letterSpacing: 
 
 ---
 
-## Dark Mode
+## Dark Mode — **currently disabled**
 
-- Defaults to system preference via `useColorScheme()` from `react-native`
-- User override: 🌙/☀️ `Pressable` in the dashboard hero header — calls `toggleTheme()`
-- Toggle location: [frontend/app/(tabs)/index.tsx](../../frontend/app/(tabs)/index.tsx) (hero header row)
+Every user gets the light palette. Nothing in the UI reveals that a dark one exists.
+
+- Kill switch: `FORCE_LIGHT_MODE` in [frontend/context/ThemeContext.tsx](../../frontend/context/ThemeContext.tsx) — **set it to `false` to re-enable**, that is the whole flip
+- Why: the dark palette has real contrast failures (paywall price text against the dark surface; the harvest callout going muddy brown). Light-only ships while that is fixed properly
+- The `DARK` palette, `isDark`, `toggleTheme` and every dark token stay in the file — switched off, not deleted. The **Dark** column in the token tables above is still accurate and still the target when it comes back
+- There is **no persisted preference** anywhere — not AsyncStorage, not `user_settings`. The theme was only ever in-memory, so a user who had dark on is in light on their next launch with nothing to migrate
+
+Three things were removed rather than switched off, and have to be restored by hand alongside the flip:
+
+| What | Where |
+|------|-------|
+| The Appearance card (a `Switch` bound to `toggleTheme`) and its `settings:section.appearance` / `settings:appearance.*` strings in both locales | [frontend/app/settings.tsx](../../frontend/app/settings.tsx) |
+| Navigation `ThemeProvider` pinned to `DefaultTheme`, and `<StatusBar style="dark" />` | [frontend/app/_layout.tsx](../../frontend/app/_layout.tsx) |
+| `"userInterfaceStyle": "light"` (native chrome — system alerts, keyboard) | [frontend/app.json](../../frontend/app.json) — needs a new build to take effect |
 
 ---
 
