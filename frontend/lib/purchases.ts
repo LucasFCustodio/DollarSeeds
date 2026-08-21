@@ -112,12 +112,20 @@ export async function loginPurchases(userId: string): Promise<void> {
 export async function logoutPurchases(): Promise<void> {
     if (!configurePurchases()) return;
     try {
+        // ASK BEFORE CALLING, don't call-and-catch. logOut() throws when the current
+        // RevenueCat user is already anonymous — the normal state on a cold start
+        // before anyone has signed in, and again after a second sign-out. Catching the
+        // throw is not enough: the SDK ALSO emits its own ERROR-level log through
+        // setLogHandler before it rejects, and that surfaces as a red LogBox screen in
+        // dev and as error noise in production. The only way to silence it is to not
+        // make the call. SubscriptionContext invokes this unconditionally whenever
+        // there is no user (see the `!user?.id` branch), so the anonymous case is
+        // routine rather than exceptional.
+        if (await Purchases.isAnonymous()) return;
         await Purchases.logOut();
     } catch (err) {
-        // logOut THROWS when the current user is already anonymous — which is the
-        // normal state if the user signed out twice, or signed out before ever
-        // logging in. Swallowing it matters: this runs inside the auth listener, and
-        // an unhandled rejection there is a plausible sign-out crash.
+        // Still swallowed. isAnonymous() can itself fail, and this runs inside the auth
+        // listener where an unhandled rejection is a plausible sign-out crash.
         console.warn('RevenueCat logOut skipped:', err);
     }
 }
