@@ -39,6 +39,7 @@
   "date": {
     "dayMonth": "{{month}} {{day}}",
     "monthYear": "{{month}} {{year}}",
+    "dayMonthYear": "{{month}} {{day}}, {{year}}",
     "day": "Day {{day}}"
   },
   "category": {

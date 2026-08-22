@@ -1,0 +1,16 @@
+{
+  "eyebrow": "Comunicado",
+  "badge": "Novo",
+  "modalA11y": "Comunicado",
+  "buttonA11y": "Abrir comunicados",
+  "link": {
+    "default": "Saiba mais"
+  },
+  "nav": {
+    "previous": "Comunicado anterior",
+    "next": "Próximo comunicado",
+    "position": "{{current}} de {{total}}"
+  },
+  "meta": "{{date}} · {{author}}",
+  "close": "Fechar"
+}

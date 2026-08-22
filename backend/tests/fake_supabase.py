@@ -148,7 +148,11 @@ class _Query:
         self.columns = columns  # None = all columns ("*")
         self.filters: list[tuple[str, str, Any]] = []
         self._limit: Optional[int] = None
-        self._order: Optional[tuple[str, bool]] = None
+        # A LIST, not a single tuple: PostgREST appends each `order=` it is given,
+        # so `.order(a).order(b)` sorts by a then b. Collapsing them to the last call
+        # would make a two-column ordering silently one-column here, and a tiebreak
+        # that only exists in the fake's imagination proves nothing.
+        self._order: list[tuple[str, bool]] = []
 
     # ── filters (chainable) ──────────────────────────────────────────────────
     def eq(self, col: str, val: Any) -> "_Query":
@@ -199,7 +203,7 @@ class _Query:
         return self
 
     def order(self, col: str, desc: bool = False) -> "_Query":
-        self._order = (col, desc)
+        self._order.append((col, desc))
         return self
 
     # ── evaluation ───────────────────────────────────────────────────────────
@@ -268,8 +272,9 @@ class _Query:
 
         if self.op == "select":
             out = [r for r in rows if self._matches(r)]
-            if self._order:
-                col, desc = self._order
+            # Applied last-key-first, which is how you build a multi-key sort out of a
+            # stable single-key one — `sorted` is stable, so earlier keys win.
+            for col, desc in reversed(self._order):
                 # None sorts last ascending / first descending, as in Postgres.
                 out = sorted(out, key=lambda r: (r.get(col) is None, r.get(col)), reverse=desc)
             if self._limit is not None:

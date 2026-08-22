@@ -56,6 +56,7 @@ PROTECTED_ROUTES = [
     ("GET",    "/lessons/series/abc/",            {},                                   None),
     ("GET",    "/lessons/abc/playback/",          {},                                   None),
     ("GET",    "/me/entitlements/",               {},                                   None),
+    ("GET",    "/announcements/",                 {},                                   None),
 ]
 
 ROUTE_IDS = [f"{m} {p}" for m, p, _, _ in PROTECTED_ROUTES]

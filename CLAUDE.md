@@ -39,6 +39,8 @@ npm run lint
 npm run check-locales  # locale parity + any catalogue string still hardcoded
 npm run verify-i18n    # boots i18next on the real catalogues (plurals, pt-BR resolution)
 npm run verify-goal-rate  # unit tests for the goal card's $/week pace (lib/goalRate.ts)
+npm run verify-review-prompt  # unit tests for the rating-prompt throttle (lib/reviewPrompt.ts)
+npm run verify-announcements  # unit tests for the news modal's language pick + link guard
 ```
 
 #### Dev build on a physical iPhone

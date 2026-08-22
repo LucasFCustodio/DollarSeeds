@@ -35,6 +35,7 @@ import { CURRENCIES } from '../../constants/currencies';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import { ft, tv } from '../../constants/responsive';
 import { useAnalytics } from '../../lib/analytics';
+import { maybeRequestReview } from '../../lib/storeReview';
 import { weeklyGoalRate } from '../../lib/goalRate';
 import HeroBg from '../../components/ui/HeroBg';
 import AnimatedAmount from '../../components/ui/AnimatedAmount';
@@ -496,6 +497,16 @@ export default function PiggyBankScreen() {
             });
             analytics.goalCompleted({ goal_id: g.id, goal_type: g.goal_type });
             fetchData();
+
+            // A positive moment: a savings goal reached, or a debt paid off. The
+            // confirmation Alert is already dismissed by the time we get here, so
+            // nothing is being interrupted.
+            //
+            // maybeRequestReview owns the throttling (60 days, never on a first
+            // session) and swallows every failure. It is a NO-OP in dev builds and
+            // TestFlight — see lib/storeReview.ts. Not awaited: the list refresh
+            // above is what the user is waiting on.
+            void maybeRequestReview('goal_completed');
         } catch (e: any) {
             if (e?.response?.status === 409) {
                 Alert.alert(t('alert.monthClosedTitle'), t('alert.cannotComplete', { month: monthLabel(currentMonth) }));

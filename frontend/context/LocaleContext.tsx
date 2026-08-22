@@ -61,6 +61,14 @@ type LocaleContextType = {
     dayMonth: (month: string, day: number) => string;
     monthYear: (month: string, year: number) => string;
     /**
+     * Localised "Apr 15, 2026" / "15 de abr de 2026". Takes the pieces rather than a
+     * Date because the app formats dates through the catalogue, never through
+     * Intl.DateTimeFormat — Hermes' Intl coverage varies by platform and build (the
+     * same reason lib/i18n.ts pins i18next to v23), and a date that silently renders
+     * US-style in Portuguese is exactly the bug this avoids.
+     */
+    dayMonthYear: (month: string, day: number, year: number) => string;
+    /**
      * Canonical stored value -> display label. The ARGUMENT stays English and is
      * what gets written back to the database; only the return value is translated.
      */
@@ -92,6 +100,7 @@ const LocaleContext = createContext<LocaleContextType>({
     monthAbbr: m => m,
     dayMonth: (m, d) => `${m} ${d}`,
     monthYear: (m, y) => `${m} ${y}`,
+    dayMonthYear: (m, d, y) => `${m} ${d}, ${y}`,
     sourceLabel: s => s,
     subcatLabel: s => s,
     serverTitle: t => t,
@@ -200,6 +209,8 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
                 t('date.dayMonth', { month: monthAbbr(month), day }),
             monthYear: (month, year) =>
                 t('date.monthYear', { month: monthLabel(month), year }),
+            dayMonthYear: (month, day, year) =>
+                t('date.dayMonthYear', { month: monthAbbr(month), day, year }),
             // `defaultValue` is the fall-through that keeps an unrecognised stored
             // value readable instead of leaking a `source.…` key onto the screen.
             sourceLabel: (source: string) =>

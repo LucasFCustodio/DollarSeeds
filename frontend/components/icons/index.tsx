@@ -300,6 +300,30 @@ export const IconBell = ({ size = 20, color = '#0F2820' }: { size?: number; colo
     </Svg>
 );
 
+// Announcements / News. Rendered white on the dark forest hero, so it is drawn as a
+// 1.6px stroke like every other utility glyph rather than a filled shape — the same
+// weight as IconGearMascot beside it, at the same 18px.
+export const IconMail = ({ size = 20, color = '#0F2820' }: { size?: number; color?: string }) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Rect
+            x={3}
+            y={5.5}
+            width={18}
+            height={13}
+            rx={2.5}
+            stroke={color}
+            strokeWidth={1.6}
+        />
+        <Path
+            d="M4 8l7.1 5a1.6 1.6 0 0 0 1.8 0L20 8"
+            stroke={color}
+            strokeWidth={1.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </Svg>
+);
+
 export const IconUser = ({ size = 20, color = '#0F2820' }: { size?: number; color?: string }) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <Circle cx={12} cy={9} r={3.5} stroke={color} strokeWidth={1.6} />
