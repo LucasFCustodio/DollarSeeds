@@ -6,6 +6,8 @@
 // NOTE: these two were added by hand to mirror backend/migrations/0001_lesson_series.sql
 // because the Supabase MCP was not authenticated when the feature was built — re-run
 // `generate_typescript_types` after applying that migration to confirm parity.
+// Latest hand-edit: `month_status.tithe_given_at` (backend/migrations/0008_tithe_given.sql)
+// — same caveat as above, mirrored by hand and pending a regenerate after applying.
 // Prior change: added the `month_status` table (per-month open/closed state),
 // `savings_goals.is_reconciliation` (auto-managed Reconciliation debt goal flag), and
 // `savings_transactions.source` now allows 'rollover' (end-of-month rollover feature).
@@ -217,16 +219,19 @@ export type Database = {
         Row: {
           closed_at: string | null
           month: string
+          tithe_given_at: string | null
           user_id: string
         }
         Insert: {
           closed_at?: string | null
           month: string
+          tithe_given_at?: string | null
           user_id: string
         }
         Update: {
           closed_at?: string | null
           month?: string
+          tithe_given_at?: string | null
           user_id?: string
         }
         Relationships: []

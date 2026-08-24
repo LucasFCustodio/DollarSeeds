@@ -21,6 +21,7 @@ import {
     Platform,
     UIManager,
     ActivityIndicator,
+    Animated,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
@@ -60,7 +61,10 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface DashboardData {
     total_income: number;
-    tithe?: { enabled: boolean; rate: number; amount: number };
+    // `given` = the user has confirmed this month's tithe actually left the account.
+    // Optional because a backend deployed before the tithe-given migration omits it;
+    // undefined is read as false, which is the pre-feature behaviour exactly.
+    tithe?: { enabled: boolean; rate: number; amount: number; given?: boolean };
     budget_type?: { key: string; needs: number; wants: number; savings: number };
     // Rollover (end-of-month close-out) state for the displayed month. Purely
     // informational — source='rollover' is excluded from every budget/score number.
@@ -159,6 +163,10 @@ export default function DashboardScreen() {
 
     // Accordion state — which category is expanded
     const [expandedCat, setExpandedCat] = useState<'needs' | 'wants' | 'goals' | null>(null);
+
+    // Tithe "given" toggle — true only while a POST is in flight, so a double tap
+    // cannot fire two opposite writes at once.
+    const [savingTitheGiven, setSavingTitheGiven] = useState(false);
 
     // Rollover close-out state
     const [closingMonth, setClosingMonth] = useState(false);
@@ -263,6 +271,34 @@ export default function DashboardScreen() {
         }
     };
 
+    /**
+     * Mark this month's tithe as given (or un-mark it).
+     *
+     * Optimistic: the hero amount is the whole point of the toggle, so it moves on
+     * the tap rather than after a round-trip. The previous tithe object is captured
+     * and restored on failure, which also puts the switch back where it was.
+     */
+    const handleToggleTitheGiven = async () => {
+        if (!user?.id || savingTitheGiven) return;
+        const previousTithe = dashboardData.tithe;
+        if (!previousTithe) return;
+        const next = !previousTithe.given;
+
+        setSavingTitheGiven(true);
+        setDashboardData(prev => ({ ...prev, tithe: { ...prev.tithe!, given: next } }));
+        try {
+            const BASE = 'https://dollarseeds-1.onrender.com';
+            await axios.post(`${BASE}/tithe/given/`, {
+                user_id: user.id, month: currentMonth, given: next,
+            });
+        } catch (err) {
+            console.error('Tithe given toggle error:', err);
+            setDashboardData(prev => ({ ...prev, tithe: previousTithe }));
+        } finally {
+            setSavingTitheGiven(false);
+        }
+    };
+
     // CAT_API covers needs/wants; 'Goals' has no picker so it is not in that table.
     const CAT_API_MAP = { ...CAT_API, goals: 'Goals' } as const;
 
@@ -330,6 +366,8 @@ export default function DashboardScreen() {
     // ── Derived values ─────────────────────────────────────────────────────────
     const { total_income, budgets, expenses, tithe } = dashboardData;
     const titheActive = !!tithe?.enabled && (tithe?.amount ?? 0) > 0;
+    const titheAmount = tithe?.amount ?? 0;
+    const titheGiven = titheActive && !!tithe?.given;
     const activeBudgetType = resolveBudgetType(dashboardData.budget_type?.key);
     const dailyVerse = getDailyVerse();
 
@@ -349,7 +387,12 @@ export default function DashboardScreen() {
         !dismissedCloseout.has(currentMonth) &&
         !(monthIndex === prevMonthIdx && new Date().getDate() < 4); // give the new month a few days
     const totalSpent = expenses.needs + expenses.wants + expenses.goals;
-    const totalLeft = Math.max(0, total_income - totalSpent);
+    // Until the tithe is actually given the money is still sitting in the account, so
+    // it belongs in "left this month". Once the user marks it given it is gone, and
+    // leaving it in the hero would show them money they no longer have — and read as
+    // unspent leftover when the month is closed out. Note this subtracts from what is
+    // LEFT, never from `total_income`: the income logged is a fact and does not move.
+    const totalLeft = Math.max(0, total_income - totalSpent - (titheGiven ? titheAmount : 0));
 
     // ── Category definitions ───────────────────────────────────────────────────
     const categories = [
@@ -645,11 +688,26 @@ export default function DashboardScreen() {
                 </View>
 
                 {/* Tithe envelope — carved out FIRST, shown above the 50/30/20 split.
-                    Only rendered when tithing is enabled; hidden entirely otherwise. */}
+                    Only rendered when tithing is enabled; hidden entirely otherwise.
+
+                    Two visual states, driven by `titheGiven`. Not-given is the original
+                    harvest-yellow card (money still set aside, still counted as left to
+                    spend); given repaints the outline emerald and the icon tile forest,
+                    so the card reads as "done" at a glance from across the dashboard. */}
                 {titheActive && (
-                    <View style={[styles.titheCard, { backgroundColor: theme.surface, borderColor: theme.harvest, ...stickerShadow('#8A8F86') }]}>
-                        <View style={[styles.titheIconTile, { backgroundColor: theme.harvest }]}>
-                            <IconScripture size={26} color={theme.brand} />
+                    <View style={[
+                        styles.titheCard,
+                        {
+                            backgroundColor: theme.surface,
+                            borderColor: titheGiven ? theme.brand2 : theme.harvest,
+                            ...stickerShadow('#8A8F86'),
+                        },
+                    ]}>
+                        <View style={[styles.titheIconTile, { backgroundColor: titheGiven ? theme.brand : theme.harvest }]}>
+                            {/* On solid forest the brand-coloured glyph would vanish, so the
+                                two accents swap places — harvest ink on brand, brand ink on
+                                harvest. Same rule the settings tithing tile follows. */}
+                            <IconScripture size={26} color={titheGiven ? theme.harvest : theme.brand} />
                         </View>
                         <View style={{ flex: 1 }}>
                             <View style={styles.titheTitleRow}>
@@ -658,15 +716,25 @@ export default function DashboardScreen() {
                                     {Math.round((tithe?.rate ?? 0.1) * 100)}%
                                 </Text>
                             </View>
-                            <Text style={[styles.titheSub, { color: theme.ink2 }]}>
-                                {t('tithe.sub')}
+                            {/* The wide middle column carries the state in words — the switch
+                                itself is compact and right-aligned, and a caption beside it
+                                would squeeze this column on a small phone. */}
+                            <Text style={[styles.titheSub, { color: titheGiven ? theme.brand : theme.ink2 }]}>
+                                {titheGiven ? t('tithe.subGiven') : t('tithe.sub')}
                             </Text>
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
                             <Text style={[styles.titheAmount, { color: theme.ink }]}>
-                                {fmtMoney(tithe?.amount ?? 0)}
+                                {fmtMoney(titheAmount)}
                             </Text>
                             <Text style={[styles.titheAmountLabel, { color: theme.ink3 }]} numberOfLines={1}>{t('tithe.amountLabel')}</Text>
+                            <TitheGivenToggle
+                                theme={theme}
+                                value={titheGiven}
+                                disabled={savingTitheGiven}
+                                onToggle={handleToggleTitheGiven}
+                                a11yLabel={t('tithe.givenToggleA11y')}
+                            />
                         </View>
                     </View>
                 )}
@@ -729,6 +797,66 @@ export default function DashboardScreen() {
                 </View>
             </View>
         </ScrollView>
+    );
+}
+
+// ─── TitheGivenToggle ─────────────────────────────────────────────────────────
+// A small switch for "I have given this month's tithe".
+//
+// Hand-rolled rather than react-native's <Switch> because that renders at a fixed
+// platform size (~51×31 on iOS) which does not fit under the SET ASIDE label without
+// pushing the card's middle column into truncation, and because its track colour is
+// the one thing here that has to sit in the app's palette rather than the OS's.
+// Enlarged on tablets only, like every other non-font size on this screen (tv()).
+const TOGGLE_W = tv(44, 56);
+const TOGGLE_H = tv(24, 30);
+const THUMB = tv(18, 23);
+const TOGGLE_INSET = 3;
+const THUMB_TRAVEL = TOGGLE_W - THUMB - TOGGLE_INSET * 2;
+
+function TitheGivenToggle({
+    theme, value, disabled, onToggle, a11yLabel,
+}: {
+    theme: ReturnType<typeof useTheme>['theme'];
+    value: boolean;
+    disabled: boolean;
+    onToggle: () => void;
+    a11yLabel: string;
+}) {
+    // One driver for both the slide and the track colour. useNativeDriver has to be
+    // false: backgroundColor is not a transform and cannot cross to the UI thread.
+    const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+    useEffect(() => {
+        Animated.timing(anim, {
+            toValue: value ? 1 : 0,
+            duration: 180,
+            useNativeDriver: false,
+        }).start();
+    }, [value, anim]);
+
+    const trackColor = anim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [theme.borderSoft, theme.brand2],
+    });
+    const translateX = anim.interpolate({ inputRange: [0, 1], outputRange: [0, THUMB_TRAVEL] });
+
+    return (
+        <Pressable
+            onPress={onToggle}
+            disabled={disabled}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: value, disabled }}
+            accessibilityLabel={a11yLabel}
+            // The switch is deliberately small; hitSlop keeps the TAP target at the
+            // 44pt minimum in every direction.
+            hitSlop={12}
+            style={({ pressed }) => [styles.titheToggleHit, (pressed || disabled) && { opacity: 0.6 }]}
+        >
+            <Animated.View style={[styles.titheToggleTrack, { backgroundColor: trackColor }]}>
+                <Animated.View style={[styles.titheToggleThumb, { transform: [{ translateX }] }]} />
+            </Animated.View>
+        </Pressable>
     );
 }
 
@@ -1031,6 +1159,27 @@ const styles = StyleSheet.create({
     titheSub: { fontFamily: 'Geist-Regular', fontSize: ft(12, 1.18), marginTop: 2 },
     titheAmount: { fontFamily: 'InstrumentSerif-Regular', fontSize: ft(22, 1.3) },
     titheAmountLabel: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: ft(10, 1.25), letterSpacing: 1 },
+    titheToggleHit: { marginTop: 8 },
+    titheToggleTrack: {
+        width: TOGGLE_W,
+        height: TOGGLE_H,
+        borderRadius: TOGGLE_H / 2,
+        padding: TOGGLE_INSET,
+        justifyContent: 'center',
+    },
+    titheToggleThumb: {
+        width: THUMB,
+        height: THUMB,
+        borderRadius: THUMB / 2,
+        backgroundColor: '#fff',
+        // Same sticker treatment as the cards, scaled down — without it the white
+        // thumb disappears into the pale off-state track.
+        shadowColor: '#000',
+        shadowOpacity: 0.18,
+        shadowRadius: 2,
+        shadowOffset: { width: 0, height: 1 },
+        elevation: 2,
+    },
 
     // Category card
     catCard: {

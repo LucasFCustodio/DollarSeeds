@@ -15,7 +15,9 @@
   "tithe": {
     "title": "Dízimo",
     "sub": "Separado primeiro · antes de orçar",
-    "amountLabel": "SEPARADO"
+    "subGiven": "Entregue · já não faz parte do que resta",
+    "amountLabel": "SEPARADO",
+    "givenToggleA11y": "Dízimo entregue neste mês"
   },
   "rollover": {
     "closeTitle": "Pronto para fechar {{month}}?",

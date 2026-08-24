@@ -15,7 +15,9 @@
   "tithe": {
     "title": "Tithe",
     "sub": "Set aside first · before budgeting",
-    "amountLabel": "SET ASIDE"
+    "subGiven": "Given · no longer part of what's left",
+    "amountLabel": "SET ASIDE",
+    "givenToggleA11y": "Tithe given this month"
   },
   "rollover": {
     "closeTitle": "Ready to close out {{month}}?",
