@@ -69,13 +69,21 @@ comment on column public.month_status.tithe_given_at is
 --   -- 3. the query the live app's dashboard path runs still works
 --   select * from public.month_status limit 1;
 --
---   -- 4. RLS unchanged (on, no policies — service-role backend bypasses it)
+--   -- 4. RLS unchanged. NOTE month_status is NOT the "RLS on, zero policies" shape
+--   -- the comment in 0001 describes — it carries one pre-existing per-user policy,
+--   -- "Users control their own month status" (ALL, authenticated, auth.uid() =
+--   -- user_id). Adding a column does not interact with it: the policy names no
+--   -- column list, so it covers tithe_given_at on the same terms as closed_at.
 --   select c.relrowsecurity from pg_class c
 --     join pg_namespace n on n.oid = c.relnamespace
 --    where n.nspname = 'public' and c.relname = 'month_status';      -- expect true
---   select count(*) from pg_policies
---    where schemaname = 'public' and tablename = 'month_status';     -- expect 0
+--   select policyname, cmd, roles from pg_policies
+--    where schemaname = 'public' and tablename = 'month_status';     -- expect that 1 policy
 
--- Applied to project vbvsblpyeylnemrecyqv on <NOT APPLIED — the Supabase MCP is
--- unauthenticated in this session, so the user applies this by hand in the
--- dashboard SQL editor and fills in the date>.
+-- Applied to project vbvsblpyeylnemrecyqv on 2026-08-24.
+--
+-- Verified after applying: month_status now has 4 columns (user_id, month,
+-- closed_at, tithe_given_at — the last nullable, timestamptz, no default), and
+-- the one pre-existing row is unchanged (rows_total 1, rows_closed 1,
+-- rows_tithe_given 0; its closed_at still 2026-07-01T19:52:31.606185+00). RLS
+-- still enabled with its single per-user policy intact.
