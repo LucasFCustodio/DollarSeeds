@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase'; // Adjust this path if you put it in a different folder!
 import { useTheme, Fonts, shadow } from '../context/ThemeContext';
@@ -48,6 +49,9 @@ function AuthButton({
 export default function AuthScreen() {
   const { theme } = useTheme();
   const { t } = useTranslation('auth');
+  // Keeps the heading clear of the notch / Dynamic Island on every model. The inset
+  // is 0 on devices with no cutout, so the `+ 16` floor gives those a breathing gap too.
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -203,11 +207,19 @@ export default function AuthScreen() {
       style={styles.container}
     >
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.header}>{t('header')}</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.header}>{t('header')}</Text>
+          <View style={[styles.logoBadge, shadow(4, '#06120D')]}>
+            <Image source={logo} style={styles.logo} resizeMode="contain" />
+          </View>
+        </View>
 
         <TextInput
           style={styles.input}
@@ -244,12 +256,6 @@ export default function AuthScreen() {
             />
           )}
         </View>
-
-        <View style={styles.logoWrap}>
-          <View style={[styles.logoBadge, shadow(4, '#06120D')]}>
-            <Image source={logo} style={styles.logo} resizeMode="contain" />
-          </View>
-        </View>
       </ScrollView>
     </LinearGradient>
   );
@@ -261,15 +267,20 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    padding: 24,
+    paddingHorizontal: 24,
     justifyContent: 'center',
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 32,
+  },
   header: {
+    flex: 1,
     fontFamily: Fonts.serif,
-    fontSize: 52,
-    lineHeight: 56,
-    textAlign: 'center',
-    marginBottom: 40,
+    fontSize: 34,
+    lineHeight: 40,
     color: '#FFFFFF',
   },
   input: {
@@ -303,21 +314,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111111',
   },
-  logoWrap: {
-    alignItems: 'center',
-    marginTop: 48,
-  },
   logoBadge: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   logo: {
-    width: 172,
-    height: 172,
+    width: 98,
+    height: 98,
   },
 });
