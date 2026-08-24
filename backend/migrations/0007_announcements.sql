@@ -116,6 +116,15 @@ on conflict (id) do nothing;
 --   select count(*) as series from public.lesson_series;             -- unchanged
 --   select key, value from public.app_config order by key;           -- unchanged
 
--- Applied to project vbvsblpyeylnemrecyqv on <NOT APPLIED — see the summary; the
--- Supabase MCP is unauthenticated in this session, so the user applies this by
--- hand in the dashboard SQL editor and fills in the date>.
+-- Applied to project vbvsblpyeylnemrecyqv on 2026-08-24.
+--
+-- Verified after applying: announcements exists with all 13 columns as specified
+-- (title/body/author/published_at/created_at/is_published NOT NULL, the six
+-- optional columns nullable, is_published defaulting to false), and starts empty
+-- (0 rows). RLS enabled with 0 policies, matching lesson_series / subscriptions.
+-- The partial index announcements_published_idx is present, and the
+-- announcement-images bucket exists with public = true.
+--
+-- Pre-existing data unchanged: lesson_series still 1 row and app_config still 3
+-- rows, the same counts as immediately before the migration ran. This migration
+-- names no existing table other than appending one row to storage.buckets.
