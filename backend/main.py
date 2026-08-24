@@ -1924,6 +1924,59 @@ def get_my_entitlements(user_id: str = Depends(get_current_user_id)):
     }
 
 
+# ─── Announcements (the in-app News modal) ────────────────────────────────────
+#
+# BACK-COMPAT: this is a BRAND-NEW route. No capability marker is needed and none
+# is read here. The binaries already in the App Store were compiled before the
+# path existed, so they never call it — there is no unmarked request to preserve,
+# and nothing this route does can reach them. The X-Client-Features mechanism
+# exists to protect EXISTING endpoints whose response shape changed; adding a new
+# path is the other, simpler way to ship behaviour an old client cannot opt into,
+# and CLAUDE.md's API rules name it explicitly.
+#
+# The response carries BOTH languages and the backend stays locale-unaware. It has
+# no reliable signal for the user's chosen language anyway — that preference is
+# device-local AsyncStorage (see .claude/docs/i18n.md), never sent to us — and
+# picking server-side would also mean a user switching language in Settings kept
+# seeing the old language until the next fetch.
+ANNOUNCEMENT_LIMIT = 3
+
+
+@app.get("/announcements/")
+def list_announcements(user_id: str = Depends(get_current_user_id)):
+    """The 3 most recent PUBLISHED announcements, newest first.
+
+    Protected like every other route (the token's `sub` is verified even though
+    announcements are global and nothing here is user-scoped) — consistency is the
+    property test_auth_security.py enforces, and an unauthenticated content route
+    would be the one exception someone has to remember forever.
+
+    ORDERING IS TWO-COLUMN ON PURPOSE. `published_at` defaults to now(), which is
+    TRANSACTION time, so two rows inserted by one multi-row INSERT share it to the
+    microsecond. Ordering on it alone would leave their relative order up to the
+    planner, and the client keys "have I seen this?" off the id of the FIRST row —
+    so a flip between two boots would re-show a modal the user already dismissed.
+    `id desc` is an arbitrary but STABLE tiebreak, which is all that is required.
+
+    Fails soft: an unreachable table answers with an empty list rather than a 500.
+    Nothing about the app depends on announcements existing, and a modal is not
+    worth an error screen."""
+    try:
+        rows = supabase.table("announcements") \
+            .select("id, title, body, title_pt, body_pt, image_url, "
+                    "link_type, link_target, link_label, author, published_at") \
+            .eq("is_published", True) \
+            .order("published_at", desc=True) \
+            .order("id", desc=True) \
+            .limit(ANNOUNCEMENT_LIMIT) \
+            .execute().data
+    except Exception as e:
+        print(f"announcements read failed: {e}")
+        rows = []
+
+    return {"data": rows}
+
+
 # Events that grant or restore access. All of them do the same thing: trust
 # expiration_at_ms. That is the whole point of driving entitlement off expires_at.
 _GRANTING_EVENTS = {

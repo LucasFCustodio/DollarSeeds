@@ -1,0 +1,16 @@
+{
+  "eyebrow": "Announcement",
+  "badge": "New",
+  "modalA11y": "Announcement",
+  "buttonA11y": "Open announcements",
+  "link": {
+    "default": "Learn more"
+  },
+  "nav": {
+    "previous": "Previous announcement",
+    "next": "Next announcement",
+    "position": "{{current}} of {{total}}"
+  },
+  "meta": "{{date}} · {{author}}",
+  "close": "Close"
+}

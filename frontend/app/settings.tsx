@@ -34,6 +34,7 @@ import { SUPPORTED_LANGUAGES } from '../lib/i18n';
 import { CURRENCIES, CURRENCY_CODES, type CurrencyCode } from '../constants/currencies';
 import { DEV_ACCOUNT_EMAIL } from '../constants/onboarding';
 import { TERMS_URL, PRIVACY_URL } from '../constants/legal';
+import { APP_STORE_REVIEW_URL } from '../constants/review';
 import { MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
 import { supabase } from '../lib/supabase';
 import {
@@ -428,6 +429,26 @@ export default function SettingsScreen() {
                                 {t('common:legal.disclaimerFull')}
                             </Text>
                         </View>
+
+                        {/* Rate DollarSeeds.
+                            NOT the native in-app sheet — that one is asked for
+                            automatically after a completed goal or a closed month (see
+                            lib/storeReview.ts) and Apple caps it at 3 per user per year.
+                            An EXPLICIT tap has no cap and is always permitted, and this
+                            is where someone who wants to leave a review comes looking.
+                            `?action=write-review` opens the composer directly. */}
+                        <Pressable
+                            onPress={() => WebBrowser.openBrowserAsync(APP_STORE_REVIEW_URL)}
+                            style={({ pressed }) => [
+                                styles.legalLinkRow,
+                                { borderTopColor: theme.borderSoft },
+                                pressed && { opacity: 0.6 },
+                            ]}
+                        >
+                            <Text style={[styles.legalLinkText, { color: theme.brand }]}>
+                                {t('settings:about.rate')}
+                            </Text>
+                        </Pressable>
 
                         <Pressable
                             onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}

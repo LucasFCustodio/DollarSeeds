@@ -15,10 +15,12 @@ import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { LocaleProvider, useLocale } from '../context/LocaleContext';
 import { OnboardingProvider } from '../context/OnboardingContext';
 import { SubscriptionProvider } from '../context/SubscriptionContext';
+import { AnnouncementsProvider } from '../context/AnnouncementsContext';
 import OnboardingTour from '../components/onboarding/OnboardingTour';
 import StartingBalanceGate from '../components/onboarding/StartingBalanceGate';
 import PaywallSheet from '../components/premium/PaywallSheet';
 import UpdateGate from '../components/premium/UpdateGate';
+import NewsModal from '../components/news/NewsModal';
 import { useNotifications } from '../hooks/useNotifications';
 import * as Sentry from '@sentry/react-native';
 import { PostHogProvider } from 'posthog-react-native';
@@ -118,6 +120,11 @@ function RootLayoutNav() {
             <PaywallSheet />
             {/* Last, so it covers everything above it including the auth screen. */}
             <UpdateGate />
+            {/* AFTER UpdateGate on purpose. An announcement is never allowed to sit on
+                top of a hard stop the user has to act on — NewsModal renders nothing
+                while the gate is up (it asks via useUpdateBlocked), and this ordering
+                makes that visible in the tree as well as in the code. */}
+            <NewsModal />
             {/* Dark glyphs on the cream background — forced with the palette above.
                 Restore `colorScheme === 'dark' ? 'light' : 'dark'` alongside it. */}
             <StatusBar style="dark" />
@@ -148,7 +155,11 @@ export default Sentry.wrap(function RootLayout() {
                         premium state if it ever needs to. */}
                     <SubscriptionProvider>
                         <OnboardingProvider>
-                            <RootLayoutNav />
+                            {/* Inside AuthProvider — the seen flag is keyed on the
+                                Supabase user id, and the fetch needs a token. */}
+                            <AnnouncementsProvider>
+                                <RootLayoutNav />
+                            </AnnouncementsProvider>
                         </OnboardingProvider>
                     </SubscriptionProvider>
                     </LocaleProvider>

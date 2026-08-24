@@ -50,15 +50,27 @@ export function isBelowVersion(current: string | null, minimum: string | null): 
     return false;
 }
 
+/**
+ * Is this build blocked right now?
+ *
+ * Exported so anything that must NOT appear over the update wall can ask, rather than
+ * re-deriving it and drifting. The News modal is the caller: a user who has to update
+ * before the app will work cannot act on an announcement, so showing them one — and
+ * silently marking it seen — would burn the announcement on someone who never read it.
+ */
+export function useUpdateBlocked(): boolean {
+    const { config } = useSubscription();
+    return useMemo(() => {
+        const current = Application.nativeApplicationVersion;
+        return isBelowVersion(current, config.minSupportedVersion) === true;
+    }, [config.minSupportedVersion]);
+}
+
 export default function UpdateGate() {
     const { theme } = useTheme();
     const { t } = useTranslation('premium');
     const { config } = useSubscription();
-
-    const blocked = useMemo(() => {
-        const current = Application.nativeApplicationVersion;
-        return isBelowVersion(current, config.minSupportedVersion) === true;
-    }, [config.minSupportedVersion]);
+    const blocked = useUpdateBlocked();
 
     if (!blocked) return null;
 

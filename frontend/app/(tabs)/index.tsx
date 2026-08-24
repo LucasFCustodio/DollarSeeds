@@ -29,6 +29,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../context/AuthContext';
 import { useLocale } from '../../context/LocaleContext';
+import { useAnnouncements } from '../../context/AnnouncementsContext';
+import { maybeRequestReview } from '../../lib/storeReview';
 import { CAT_API } from '../../constants/txCategories';
 import { MONTHS } from '../../constants/months';
 import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
@@ -47,6 +49,7 @@ import {
     IconNeedsMascot, IconWantsMascot, IconSavingsGoalMascot,
     IconExpense, IconIncome,
     IconScripture, IconSavings,
+    IconMail,
 } from '../../components/icons';
 
 // Enable LayoutAnimation on Android
@@ -125,6 +128,10 @@ export default function DashboardScreen() {
     const { formatMoney: fmtMoney, monthAbbr, monthLabel } = useLocale();
     const { t } = useTranslation('dashboard');
     const { t: tc } = useTranslation('common');
+    // The announcements button's accessibility label — modal CHROME, so it lives in
+    // the catalogue like every other string (the announcement CONTENT does not; see
+    // lib/announcements.ts).
+    const { t: tn } = useTranslation('news');
 
     // Month state. MONTHS is the canonical English list (constants/months.ts) — it is
     // what gets POSTed and stored, and is never translated. Display goes through
@@ -140,6 +147,10 @@ export default function DashboardScreen() {
         compliance_score: { overall: null, needs: 10, wants: 10, goals: 10 },
     });
     const [piggyBankBalance, setPiggyBankBalance] = useState(0);
+
+    // News modal — the unread dot on the mail button, and the tap that opens it.
+    const { unread: announcementUnread, open: openAnnouncements,
+            announcements } = useAnnouncements();
 
     // Scripture modal state
     const [showScriptureModal, setShowScriptureModal] = useState(false);
@@ -178,8 +189,13 @@ export default function DashboardScreen() {
         setMonthIndex(i);
     };
 
-    const fetchDashboardData = async () => {
-        if (!user?.id) return;
+    /**
+     * @returns whether the allGreen scripture modal was opened by this fetch. The
+     * rollover close-out below needs to know: the rating prompt must come after the
+     * celebration, never over it.
+     */
+    const fetchDashboardData = async (): Promise<boolean> => {
+        if (!user?.id) return false;
         try {
             const BASE = 'https://dollarseeds-1.onrender.com';
             const [dashRes, piggyRes] = await Promise.all([
@@ -201,10 +217,12 @@ export default function DashboardScreen() {
                 verseShownMonthsRef.current.add(currentMonth);
                 setCurrentVerse(VERSE_IDS[Math.floor(Math.random() * VERSE_IDS.length)]);
                 setShowScriptureModal(true);
+                return true;
             }
         } catch (error) {
             if (error instanceof Error) console.error('Dashboard fetch error:', error.message);
         }
+        return false;
     };
 
     const handleCloseMonth = async () => {
@@ -213,7 +231,17 @@ export default function DashboardScreen() {
         try {
             const BASE = 'https://dollarseeds-1.onrender.com';
             await axios.post(`${BASE}/rollover/close/`, { user_id: user.id, month: currentMonth });
-            await fetchDashboardData();
+            const openedScripture = await fetchDashboardData();
+
+            // A positive moment: the user just closed out a month. Ask for the App
+            // Store rating sheet — but only AFTER the celebration, never over it, so
+            // it is skipped entirely when closing the month also opened the allGreen
+            // scripture modal. It will be offered at the next qualifying moment.
+            //
+            // maybeRequestReview owns the throttling (60 days, never on a first
+            // session) and swallows every failure. It is a NO-OP in dev builds and
+            // TestFlight — see lib/storeReview.ts.
+            if (!openedScripture) void maybeRequestReview('month_closed');
         } catch (err) {
             console.error('Close month error:', err);
         } finally {
@@ -422,6 +450,33 @@ export default function DashboardScreen() {
 
                         {/* Control buttons */}
                         <View style={styles.heroControls}>
+                            {/* Announcements. Same styles.glassBtn as the gear, unchanged,
+                                so the two are identical in size — and a WHITE glyph,
+                                because the hero is dark forest and the default ink glyph
+                                would be invisible on it (IconGearMascot does the same).
+                                Hidden until there is something to show: a button that
+                                opens an empty modal is worse than no button. */}
+                            {announcements.length > 0 ? (
+                                <Pressable
+                                    onPress={openAnnouncements}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={tn('buttonA11y')}
+                                    style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
+                                >
+                                    <IconMail size={18} color="#fff" />
+                                    {/* Without this nobody discovers the button. Cleared the
+                                        moment the modal is opened, by either route. */}
+                                    {announcementUnread ? (
+                                        <View
+                                            style={[
+                                                styles.unreadDot,
+                                                { backgroundColor: theme.harvest, borderColor: theme.brand },
+                                            ]}
+                                        />
+                                    ) : null}
+                                </Pressable>
+                            ) : null}
+
                             {/* Settings (tithing, budget type, dark mode, log out) */}
                             <Pressable
                                 onPress={() => router.push('/settings' as any)}
@@ -848,6 +903,12 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255,255,255,0.16)',
         borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
         alignItems: 'center', justifyContent: 'center',
+    },
+    // Absolutely positioned so it cannot change glassBtn's box — the mail button has
+    // to stay pixel-identical in size to the gear beside it.
+    unreadDot: {
+        position: 'absolute', top: 6, right: 6,
+        width: 9, height: 9, borderRadius: 999, borderWidth: 1.5,
     },
 
     // Month nav

@@ -11,7 +11,9 @@
     "lint": "expo lint",
     "check-locales": "node scripts/check-locales.mjs",
     "verify-i18n": "node scripts/verify-i18n.mjs",
-    "verify-goal-rate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-goal-rate.mjs"
+    "verify-goal-rate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-goal-rate.mjs",
+    "verify-review-prompt": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-review-prompt.mjs",
+    "verify-announcements": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-announcements.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
@@ -45,6 +47,7 @@
     "expo-router": "~6.0.23",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
+    "expo-store-review": "~9.0.9",
     "expo-symbols": "~1.0.8",
     "expo-system-ui": "~6.0.9",
     "expo-video": "~3.0.16",
