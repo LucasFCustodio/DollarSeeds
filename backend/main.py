@@ -527,6 +527,15 @@ def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_us
         "target": roll_target,
     }
 
+    # Has this month's tithe actually been handed over? Purely a DISPLAY fact: the
+    # client subtracts the carve-out from "left this month" once it is true, so the
+    # user stops being shown money they have already given away. It moves nothing —
+    # budgetable (and therefore the rollover target) already excludes the tithe.
+    #
+    # `st` comes from select('*'), so on a backend deployed BEFORE migration 0008
+    # the key is simply absent and .get() yields None — identical to "not given".
+    tithe_given_at = st.get("tithe_given_at") if st else None
+
     return {
         "month": current_month,
         "total_income": total_income,
@@ -535,6 +544,10 @@ def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_us
             "enabled": tithe["enabled"],
             "rate": tithe["rate"],
             "amount": tithe["amount"],
+            # ADDED keys — every existing key above is served unchanged, so the
+            # binaries already in the App Store read exactly what they read before.
+            "given": bool(tithe_given_at),
+            "given_at": tithe_given_at,
         },
         "budget_type": {
             "key": bt_key,
@@ -1333,6 +1346,51 @@ def rollover_reopen(action: RolloverAction, user_id: str = Depends(get_current_u
         "user_id": user_id, "month": action.month, "closed_at": None,
     }).execute()
     return {"message": f"{action.month} reopened.", "month": action.month}
+
+
+# ─── Tithe given ──────────────────────────────────────────────────────────────
+class TitheGiven(BaseModel):
+    user_id: Optional[str] = None
+    month: str
+    # Defaulted, so a future client that only ever marks "given" can omit it and
+    # still succeed — an old client can never send it at all, and never calls this.
+    given: bool = True
+
+@app.post("/tithe/given/")
+def set_tithe_given(action: TitheGiven, user_id: str = Depends(get_current_user_id)):
+    """Record (or clear) that this month's tithe has actually been handed over.
+
+    DISPLAY ONLY. It moves no money and writes no savings transaction: the tithe
+    is already carved out of `budgetable`, so the rollover target never contained
+    it. All this decides is whether the dashboard still counts the carve-out as
+    part of "left this month" — before it is given the cash is genuinely still in
+    the user's account, and after it is given it is not.
+
+    Deliberately NOT guarded by _assert_month_open. Closed months are read-only
+    for anything that changes the numbers; this changes none of them, and "I gave
+    my tithe for March" is a fact a user must be able to correct after closing out
+    without having to reopen the month.
+    """
+    if action.month not in MONTHS:
+        raise HTTPException(status_code=400, detail=f"Unknown month: {action.month}")
+
+    given_at = datetime.datetime.now(datetime.timezone.utc).isoformat() if action.given else None
+
+    # Read-then-write rather than upsert: month_status now carries closed_at too,
+    # and this route must never touch it. An UPDATE names exactly one column.
+    existing = _month_status(user_id, action.month)
+    if existing:
+        supabase.table("month_status").update(
+            {"tithe_given_at": given_at}
+        ).eq("user_id", user_id).eq("month", action.month).execute()
+    elif given_at:
+        # No row yet — only worth creating one when there is something to record.
+        # Clearing an unset flag is already the stored state, so it writes nothing.
+        supabase.table("month_status").insert({
+            "user_id": user_id, "month": action.month, "tithe_given_at": given_at,
+        }).execute()
+
+    return {"month": action.month, "given": bool(given_at), "given_at": given_at}
 
 
 class LessonRating(BaseModel):

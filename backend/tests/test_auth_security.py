@@ -51,6 +51,7 @@ PROTECTED_ROUTES = [
     ("GET",    "/rollover/preview/",              {"month": "July"},                    None),
     ("POST",   "/rollover/close/",                {},                                   {"month": "July"}),
     ("POST",   "/rollover/reopen/",               {},                                   {"month": "July"}),
+    ("POST",   "/tithe/given/",                   {},                                   {"month": "July", "given": True}),
     ("POST",   "/lesson-ratings/",                {},                                   {"lesson_id": 1, "rating": 5}),
     ("GET",    "/lessons/series/",                {},                                   None),
     ("GET",    "/lessons/series/abc/",            {},                                   None),

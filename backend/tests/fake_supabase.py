@@ -46,7 +46,8 @@ COLUMN_DEFAULTS: dict[str, dict[str, Any]] = {
         "budget_type": "balanced",
         "firm_foundation_goals_prompted": False,
     },
-    "month_status": {"closed_at": None},
+    # tithe_given_at mirrors migration 0008: nullable, no DEFAULT, NULL = "not given".
+    "month_status": {"closed_at": None, "tithe_given_at": None},
     # is_premium matters as much as is_published: _project below omits keys that are
     # absent from the stored row, so without this default `s.get("is_premium")` is
     # None — accidentally falsy. The free path would work, the premium path would
@@ -321,8 +322,6 @@ class _Query:
             # for `subscriptions` both sides' `month` is None, so None == None passes
             # and the upsert would clobber whichever row that user owns first.
             item = dict(self.payload)
-            for col, default in COLUMN_DEFAULTS.get(self.table, {}).items():
-                item.setdefault(col, default)
             key = UPSERT_KEYS.get(self.table) or UNIQUE_KEYS.get(self.table)
             if key is None:
                 raise AssertionError(
@@ -331,8 +330,18 @@ class _Query:
                 )
             for row in rows:
                 if all(row.get(k) == item.get(k) for k in key):
+                    # PostgREST builds ON CONFLICT DO UPDATE SET from the PAYLOAD's
+                    # columns only, and a column DEFAULT applies to the INSERT branch,
+                    # never to the UPDATE branch. So a column the caller omitted keeps
+                    # its stored value — it is NOT reset to its default. Filling
+                    # defaults here (as this used to) made month_status.tithe_given_at
+                    # vanish every time /rollover/close/ upserted closed_at, a failure
+                    # production does not have.
                     row.update(item)
                     return FakeResponse([dict(row)])
+            # Not found → this is a plain INSERT, where DEFAULTs do apply.
+            for col, default in COLUMN_DEFAULTS.get(self.table, {}).items():
+                item.setdefault(col, default)
             item.setdefault("id", self.db.next_id(self.table))
             item.setdefault("created_at", self.db.next_timestamp())
             rows.append(item)

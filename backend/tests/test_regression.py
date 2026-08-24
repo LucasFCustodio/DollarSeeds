@@ -57,7 +57,8 @@ def test_dashboard_applies_the_live_tithe_setting_to_the_current_month(client, s
 
     body = client.get(f"/dashboard/{current_month}", headers=HEADERS).json()
 
-    assert body["tithe"] == {"enabled": True, "rate": 0.10, "amount": 100.0}
+    assert body["tithe"] == {"enabled": True, "rate": 0.10, "amount": 100.0,
+                             "given": False, "given_at": None}
     # Tithe is carved out FIRST; the split applies to the remaining $900.
     assert body["budgets"]["needs"] == 450.0
     assert body["budgets"]["wants"] == 270.0
@@ -670,6 +671,80 @@ def test_reconciliation_goal_is_surfaced_with_owed_and_repaid(client, supabase_d
     assert goal["target_amount"] == 200.0   # owed
     assert goal["allocated_amount"] == 50.0  # repaid
     assert goal["outstanding"] == 150.0
+
+
+# ══ Tithe given ═════════════════════════════════════════════════════════════════
+
+def test_tithe_given_defaults_to_false_and_round_trips(client, supabase_db, current_month):
+    """The flag the dashboard exposes so the client can drop an already-given tithe
+    out of "left this month"."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": True, "tithe_rate": 0.10})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": current_month})
+
+    body = client.get(f"/dashboard/{current_month}", headers=HEADERS).json()
+    assert body["tithe"]["given"] is False
+    assert body["tithe"]["given_at"] is None
+    assert supabase_db.rows("month_status") == [], "reading must not create a row"
+
+    res = client.post("/tithe/given/", headers=HEADERS,
+                      json={"user_id": USER_A, "month": current_month, "given": True})
+    assert res.status_code == 200
+    assert res.json()["given"] is True
+
+    body = client.get(f"/dashboard/{current_month}", headers=HEADERS).json()
+    assert body["tithe"]["given"] is True
+    assert body["tithe"]["given_at"] is not None
+    # DISPLAY ONLY: the carve-out and the split are untouched, and no money moved.
+    assert body["tithe"]["amount"] == 100.0
+    assert body["budgets"] == {"needs": 450.0, "wants": 270.0, "goals": 180.0}
+    assert supabase_db.rows("savings_transactions") == []
+
+    client.post("/tithe/given/", headers=HEADERS,
+                json={"user_id": USER_A, "month": current_month, "given": False})
+    body = client.get(f"/dashboard/{current_month}", headers=HEADERS).json()
+    assert body["tithe"]["given"] is False
+    assert body["tithe"]["given_at"] is None
+
+
+def test_marking_the_tithe_given_never_touches_closed_at(client, supabase_db, current_month):
+    """month_status carries both flags. Neither route may clobber the other's column —
+    a close that silently un-gives the tithe (or vice versa) would be invisible."""
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": current_month,
+                                      "closed_at": "2026-09-01T00:00:00Z"})
+
+    client.post("/tithe/given/", headers=HEADERS,
+                json={"user_id": USER_A, "month": current_month, "given": True})
+
+    row = supabase_db.rows("month_status")[0]
+    assert row["closed_at"] == "2026-09-01T00:00:00Z"
+    assert row["tithe_given_at"] is not None
+    assert len(supabase_db.rows("month_status")) == 1, "must update in place, not insert"
+
+
+def test_closing_a_month_does_not_clear_the_tithe_given_flag(client, supabase_db, current_month):
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": current_month})
+    client.post("/tithe/given/", headers=HEADERS,
+                json={"user_id": USER_A, "month": current_month, "given": True})
+
+    client.post("/rollover/close/", headers=HEADERS, json={"user_id": USER_A, "month": current_month})
+
+    body = client.get(f"/dashboard/{current_month}", headers=HEADERS).json()
+    assert body["rollover"]["closed"] is True
+    assert body["tithe"]["given"] is True
+
+
+def test_ungiving_a_tithe_that_was_never_given_writes_nothing(client, supabase_db, current_month):
+    res = client.post("/tithe/given/", headers=HEADERS,
+                      json={"user_id": USER_A, "month": current_month, "given": False})
+    assert res.status_code == 200
+    assert res.json()["given"] is False
+    assert supabase_db.rows("month_status") == []
+
+
+def test_tithe_given_rejects_an_unknown_month(client):
+    res = client.post("/tithe/given/", headers=HEADERS,
+                      json={"user_id": USER_A, "month": "Smarch", "given": True})
+    assert res.status_code == 400
 
 
 # ══ Lessons ═════════════════════════════════════════════════════════════════════

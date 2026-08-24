@@ -1,0 +1,81 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 0008 — month_status.tithe_given_at (marking a month's tithe as GIVEN)
+--
+-- WHY. The tithe is carved out of the budget the moment tithing is switched on,
+-- but nothing records whether the money actually left the account. The dashboard
+-- hero shows `total_income − spent`, so the tithe sits inside "left this month"
+-- forever — the user is told they still have money they have already given away,
+-- and at close-out that phantom amount reads as unspent leftover.
+--
+-- This column is the missing fact: "for THIS month, the tithe has been given."
+-- One timestamp per (user_id, month). NULL — the value every existing row has —
+-- means "not given yet", which is exactly the behaviour the app has today, so no
+-- user sees a change until they tap the new toggle.
+--
+-- Purely ADDITIVE. One nullable column on an existing table. Nothing is dropped,
+-- renamed, retyped or narrowed; no existing row is rewritten (a nullable column
+-- with no DEFAULT is a catalogue-only change in Postgres 11+, not a table
+-- rewrite, so the live app never loses access to month_status even briefly).
+--
+-- What pre-migration rows fall back to: NULL ⇒ `tithe.given = false` in the
+-- dashboard payload ⇒ the hero keeps computing `total_income − spent`, i.e. the
+-- pre-feature number. The one and only way the value becomes non-NULL is an
+-- explicit POST /tithe/given/ from a build that has the toggle.
+--
+-- Old binaries: they never read `tithe.given` (the key did not exist when they
+-- were compiled) and they never call POST /tithe/given/ (nor did the route).
+-- month_status keeps every column they do read — `closed_at` is untouched — so
+-- GET /dashboard/{month} and the rollover routes return the same rows and the
+-- same columns for them as before.
+--
+-- Rollback needs no app update: the column simply stays NULL / is ignored. The
+-- backend reads month_status with select('*') and treats a MISSING key exactly
+-- like NULL, so the API is also correct in the window BEFORE this is applied.
+--
+-- DELIBERATELY NOT A ROLLOVER CHANGE. `_compute_target_rollover` already carves
+-- the tithe out of `budgetable`, so the amount moved into General Savings at
+-- close-out never contained the tithe. This column changes what the user is
+-- SHOWN as "left to spend" — it does not move money, and no stored savings
+-- transaction depends on it.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Timestamp rather than a boolean: "when did I give it" is strictly more
+-- information than "did I", it costs the same, and NULL is an unambiguous "no"
+-- (a boolean would need a DEFAULT, and a DEFAULT is a rewrite risk we do not
+-- need to take on a populated table).
+alter table public.month_status
+  add column if not exists tithe_given_at timestamptz;
+
+comment on column public.month_status.tithe_given_at is
+  'When the user marked this month''s tithe as given. NULL = not given. Display-only: it changes the "left this month" figure, never a stored savings transaction.';
+
+-- Verify after applying:
+--   -- 1. the column exists, is nullable, and has NO default
+--   select column_name, data_type, is_nullable, column_default
+--     from information_schema.columns
+--    where table_schema = 'public' and table_name = 'month_status'
+--    order by ordinal_position;
+--   -- expect a tithe_given_at / timestamp with time zone / YES / NULL row,
+--   -- and user_id + month + closed_at unchanged
+--
+--   -- 2. every pre-existing row is untouched: same count, closed_at intact,
+--   --    and the new column NULL everywhere
+--   select count(*)                                as rows_total,
+--          count(closed_at)                        as rows_closed,
+--          count(tithe_given_at)                   as rows_tithe_given
+--     from public.month_status;
+--   -- expect rows_total / rows_closed exactly as before, rows_tithe_given = 0
+--
+--   -- 3. the query the live app's dashboard path runs still works
+--   select * from public.month_status limit 1;
+--
+--   -- 4. RLS unchanged (on, no policies — service-role backend bypasses it)
+--   select c.relrowsecurity from pg_class c
+--     join pg_namespace n on n.oid = c.relnamespace
+--    where n.nspname = 'public' and c.relname = 'month_status';      -- expect true
+--   select count(*) from pg_policies
+--    where schemaname = 'public' and tablename = 'month_status';     -- expect 0
+
+-- Applied to project vbvsblpyeylnemrecyqv on <NOT APPLIED — the Supabase MCP is
+-- unauthenticated in this session, so the user applies this by hand in the
+-- dashboard SQL editor and fills in the date>.
