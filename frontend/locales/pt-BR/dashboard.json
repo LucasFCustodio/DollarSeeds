@@ -26,7 +26,9 @@
     "closeButton": "Fechar e guardar {{amount}}",
     "closedTitle": "{{month}} está fechado",
     "closedSub": "{{amount}} foram para a Poupança Geral.",
-    "reopen": "Reabrir"
+    "reopen": "Reabrir",
+    "reopenTitle": "Reabrir {{month}}?",
+    "reopenWarning": "Isso muda {{month}} para a sua divisão de orçamento atual ({{split}}) e para a sua configuração de dízimo. Se este mês precisa manter uma divisão diferente, altere-a nas Configurações antes de reabrir."
   },
   "scripture": {
     "modalTitle": "Muito bem, servo fiel!",

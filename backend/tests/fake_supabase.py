@@ -47,7 +47,19 @@ COLUMN_DEFAULTS: dict[str, dict[str, Any]] = {
         "firm_foundation_goals_prompted": False,
     },
     # tithe_given_at mirrors migration 0008: nullable, no DEFAULT, NULL = "not given".
-    "month_status": {"closed_at": None, "tithe_given_at": None},
+    # budget_type/tithe_enabled/tithe_rate/year mirror 0009: also nullable with no
+    # DEFAULT, where NULL means "not frozen" — either the month is open or it was
+    # closed before 0009, both of which fall back to the income-row snapshot. They
+    # are present-and-NULL rather than absent so the fallback tests exercise the
+    # same shape the real table returns from select('*').
+    "month_status": {
+        "closed_at": None,
+        "tithe_given_at": None,
+        "budget_type": None,
+        "tithe_enabled": None,
+        "tithe_rate": None,
+        "year": None,
+    },
     # is_premium matters as much as is_published: _project below omits keys that are
     # absent from the stored row, so without this default `s.get("is_premium")` is
     # None — accidentally falsy. The free path would work, the premium path would

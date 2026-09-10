@@ -308,28 +308,132 @@ def _get_user_settings(user_id: str) -> dict:
 def _current_month_name() -> str:
     return datetime.datetime.now().strftime("%B")
 
-def _month_tithe(month: str, total_income: float, income_rows: list, settings: dict) -> dict:
+
+# ─── Per-month frozen state ───────────────────────────────────────────────────
+# A month follows the LIVE user settings until the user CLOSES it out; closing
+# freezes that month's tithe and split onto its month_status row (migration 0009).
+#
+# The old rule asked "is this the current calendar month?" instead, which meant a
+# month silently reverted to whatever its income rows happened to be stamped with
+# the instant the calendar rolled over — the tithe envelope disappearing from the
+# month that just ended, and past months snapping back to 50/30/20.
+
+def _month_year_at(month: str, when: datetime.datetime) -> int:
+    """The calendar year a bare month NAME refers to at time `when`.
+
+    Months carry no year in this app, so the name alone is ambiguous. A month
+    positioned AFTER `when`'s own month can only be one the user has just
+    finished — "December" seen on Jan 2 is last December. Anything at or before
+    `when`'s month is this year.
+    """
+    try:
+        idx = MONTHS.index(month)
+    except ValueError:
+        return when.year
+    return when.year if idx <= when.month - 1 else when.year - 1
+
+
+def _parse_ts(value) -> Optional[datetime.datetime]:
+    """Parse a Postgres timestamptz as PostgREST serialises it, tolerating the
+    '+00' short offset that fromisoformat rejects before Python 3.11."""
+    if not value:
+        return None
+    text = str(value).replace("Z", "+00:00")
+    tail = text[-3:]
+    if len(text) > 3 and tail[0] in "+-" and tail[1:].isdigit():
+        text += ":00"
+    try:
+        return datetime.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _status_is_current_year(status: dict) -> bool:
+    """Does this month_status row describe the month name as it means TODAY?
+
+    (user_id, 'September') is ONE row for all time, so a row left over from last
+    September must not freeze — or lock — this one. `year` is stamped at close;
+    rows closed before 0009 have none and are dated from closed_at instead. A row
+    we cannot date at all is treated as current, which is the pre-0009 behaviour.
+    """
+    month = status.get("month")
+    if not month:
+        return True
+    year = status.get("year")
+    if year is None:
+        closed = _parse_ts(status.get("closed_at"))
+        if closed is None:
+            return True
+        year = _month_year_at(month, closed)
+    return int(year) == _month_year_at(month, datetime.datetime.now())
+
+
+def _status_locked(status: Optional[dict]) -> bool:
+    """Is this month frozen — closed, and closed in the year its name means now?"""
+    return bool(status and status.get("closed_at") and _status_is_current_year(status))
+
+
+def _frozen(status: Optional[dict], key: str):
+    """The value frozen onto month_status when the user closed the month out.
+
+    None means "take the legacy income-row-snapshot path": the month is open, it
+    was closed before migration 0009, or the row is a stale prior-year one.
+    """
+    return status.get(key) if _status_locked(status) else None
+
+
+def _frozen_stamp(settings: dict, month: str) -> dict:
+    """The month_status columns written when a month is closed out.
+
+    Every value is non-NULL on purpose: a NULL would read back as "closed before
+    0009" and send the month down the legacy fallback instead of its own stamp.
+    """
+    key = settings.get("budget_type")
+    rate = settings.get("tithe_rate")
+    return {
+        "budget_type": key if key in BUDGET_TYPES else DEFAULT_BUDGET_TYPE,
+        "tithe_enabled": bool(settings.get("tithe_enabled")),
+        "tithe_rate": float(rate if rate is not None else DEFAULT_TITHE_RATE),
+        "year": _month_year_at(month, datetime.datetime.now()),
+    }
+
+
+def _month_tithe(total_income: float, income_rows: list, settings: dict,
+                 status: Optional[dict]) -> dict:
     """Compute the tithe carve-out for a single month.
 
-    Current real-world month  → uses the LIVE user setting (so toggling the switch
-                                 updates the dashboard immediately).
-    Any other (past) month    → uses the per-row tithe snapshot frozen onto each
-                                 income row at insert time, so past months keep their
-                                 original split no matter how the toggle changes later.
+    NOT closed (past, current or future) → the LIVE user setting, so switching
+                                           tithing on corrects every month the
+                                           user is still allowed to edit.
+    CLOSED                               → the tithe frozen at close-out. Keyed on
+                                           a stored fact, so no clock and no
+                                           timezone can move it.
+    Closed before migration 0009         → the per-row snapshot frozen onto each
+                                           income row at insert time, so months
+                                           already closed keep today's numbers.
 
-    Returns {enabled, rate, amount, budgetable}. With tithe disabled / no snapshots
-    the carve-out is 0 and budgetable == total_income (behavior identical to before).
+    Returns {enabled, rate, amount, budgetable}. With tithe disabled / no
+    snapshots the carve-out is 0 and budgetable == total_income.
     """
-    if month == _current_month_name():
-        enabled = bool(settings.get("tithe_enabled"))
-        rate = float(settings.get("tithe_rate") if settings.get("tithe_rate") is not None else DEFAULT_TITHE_RATE)
+    frozen_enabled = _frozen(status, "tithe_enabled")
+    if frozen_enabled is not None:
+        # Presence, not truthiness — False is a real stamp ("closed with tithing
+        # off") and must not fall through to the income rows.
+        enabled = bool(frozen_enabled)
+        rate = float(_frozen(status, "tithe_rate") or DEFAULT_TITHE_RATE)
         amount = total_income * rate if enabled else 0.0
-    else:
+    elif _status_locked(status):
+        # Closed before 0009. Byte-identical to the pre-fix path, so nothing the
+        # user has already closed changes value.
         tithed = [r for r in income_rows if r.get("tithe_enabled")]
         amount = sum(r["amount"] * float(r.get("tithe_rate") or DEFAULT_TITHE_RATE) for r in tithed)
         enabled = amount > 0
         rate = float(tithed[0].get("tithe_rate") or DEFAULT_TITHE_RATE) if tithed else \
             float(settings.get("tithe_rate") if settings.get("tithe_rate") is not None else DEFAULT_TITHE_RATE)
+    else:
+        enabled = bool(settings.get("tithe_enabled"))
+        rate = float(settings.get("tithe_rate") if settings.get("tithe_rate") is not None else DEFAULT_TITHE_RATE)
+        amount = total_income * rate if enabled else 0.0
     return {
         "enabled": enabled,
         "rate": rate,
@@ -337,24 +441,25 @@ def _month_tithe(month: str, total_income: float, income_rows: list, settings: d
         "budgetable": total_income - amount,
     }
 
-def _month_budget_type(month: str, income_rows: list, settings: dict) -> str:
+def _month_budget_type(income_rows: list, settings: dict, status: Optional[dict]) -> str:
     """Resolve the budget-type KEY governing a month's split — same lifecycle as
-    _month_tithe.
+    _month_tithe: live setting until the month is closed, frozen afterwards.
 
-    Current real-world month → the LIVE user setting (editable mid-month).
-    Any other (past) month   → the snapshot stamped on that month's income rows.
-                               A split is per-month (not per-row), so we take the
-                               most recent income row as the month's representative,
-                               mirroring how _month_tithe picks tithed[0]. Falls back
-                               to 'balanced' (the only split that existed historically).
+    For a month closed before 0009 the split comes from that month's income-row
+    snapshot. A split is per-month (not per-row), so the most recent income row
+    represents the month. Falls back to 'balanced', the only split that existed
+    historically.
     """
-    if month == _current_month_name():
-        key = settings.get("budget_type") or DEFAULT_BUDGET_TYPE
-    elif income_rows:
-        recent = max(income_rows, key=lambda r: r.get("day") or 0)
-        key = recent.get("budget_type") or DEFAULT_BUDGET_TYPE
-    else:
-        key = DEFAULT_BUDGET_TYPE
+    key = _frozen(status, "budget_type")
+    if key not in BUDGET_TYPES:
+        if _status_locked(status):
+            if income_rows:
+                recent = max(income_rows, key=lambda r: r.get("day") or 0)
+                key = recent.get("budget_type") or DEFAULT_BUDGET_TYPE
+            else:
+                key = DEFAULT_BUDGET_TYPE
+        else:
+            key = settings.get("budget_type") or DEFAULT_BUDGET_TYPE
     return key if key in BUDGET_TYPES else DEFAULT_BUDGET_TYPE
 
 
@@ -428,6 +533,13 @@ def get_spending_trends(user_id: str = Depends(get_current_user_id)):
 
     settings = _get_user_settings(user_id)
 
+    # One read for all twelve months, not one per month. select('*') on purpose:
+    # a named column list 400s against a database that has not had migration 0009
+    # applied yet (or is mid schema-cache reload), which would take the whole
+    # trends screen down — .get() on a missing key already yields None.
+    all_status = supabase.table("month_status").select("*").eq("user_id", user_id).execute()
+    status_by_month = {r["month"]: r for r in all_status.data}
+
     results = []
     for month in all_months:
         month_income_rows = income_by_month.get(month, [])
@@ -445,9 +557,10 @@ def get_spending_trends(user_id: str = Depends(get_current_user_id)):
         # Carve tithe out FIRST, then split the remaining (budgetable) income by
         # THIS month's locked budget type. Same rule as the dashboard so the two
         # screens never disagree, and per-month so history stays accurate.
-        tithe = _month_tithe(month, total_income, month_income_rows, settings)
+        month_status = status_by_month.get(month)
+        tithe = _month_tithe(total_income, month_income_rows, settings, month_status)
         budgetable = tithe["budgetable"]
-        bt_key = _month_budget_type(month, month_income_rows, settings)
+        bt_key = _month_budget_type(month_income_rows, settings, month_status)
         bt = BUDGET_TYPES[bt_key]
 
         results.append({
@@ -481,10 +594,15 @@ def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_us
     # Tithe is carved out FIRST; the budget split then applies to the remainder,
     # using this month's budget type. With tithe disabled + 'balanced' type,
     # budgetable == total_income and budgets are the original 50/30/20.
+    #
+    # `st` decides whether this month follows the live settings or the state it was
+    # frozen with at close-out, so it is loaded before both resolvers. It is the
+    # same row the rollover block below reads — one query, not two.
     settings = _get_user_settings(user_id)
-    tithe = _month_tithe(current_month, total_income, income_response.data, settings)
+    st = _month_status(user_id, current_month)
+    tithe = _month_tithe(total_income, income_response.data, settings, st)
     budgetable = tithe["budgetable"]
-    bt_key = _month_budget_type(current_month, income_response.data, settings)
+    bt_key = _month_budget_type(income_response.data, settings, st)
     bt = BUDGET_TYPES[bt_key]
 
     needs_budget = budgetable * bt["needs"]
@@ -518,11 +636,14 @@ def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_us
     # number above, so this is purely informational and can never move the score).
     general_id = _ensure_general_savings(user_id)
     roll_entry = _gs_rollover_entry(user_id, current_month, general_id)
-    roll_target, _, _ = _compute_target_rollover(user_id, current_month, settings)
-    st = _month_status(user_id, current_month)
+    roll_target, _, _ = _compute_target_rollover(user_id, current_month, settings, st)
+    # A row left over from LAST year's same-named month reports as open (see
+    # _status_is_current_year), so `closed_at` is suppressed with it — the two must
+    # agree or the client shows a "closed on <date>" banner for a month it can edit.
+    locked = _status_locked(st)
     rollover_info = {
-        "closed": bool(st and st.get("closed_at")),
-        "closed_at": st.get("closed_at") if st else None,
+        "closed": locked,
+        "closed_at": st.get("closed_at") if locked else None,
         "amount": _r(roll_entry["amount"]) if roll_entry else 0.0,
         "target": roll_target,
     }
@@ -555,6 +676,15 @@ def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_us
             "wants": bt["wants"],
             "savings": bt["savings"],
         },
+        # ADDED key. `budget_type` above is THIS month's split — the frozen one once
+        # the month is closed — so it cannot tell the client what a reopen would
+        # switch the month to. This is the user's live setting, used for the warning
+        # on the Reopen button. Every existing key is served unchanged, so binaries
+        # already in the App Store read exactly what they read before and simply
+        # ignore this one.
+        "live_budget_type": (settings.get("budget_type")
+                             if settings.get("budget_type") in BUDGET_TYPES
+                             else DEFAULT_BUDGET_TYPE),
         "budgets": {
             "needs": needs_budget,
             "wants": wants_budget,
@@ -1106,8 +1236,10 @@ def _month_status(user_id: str, month: str) -> Optional[dict]:
     return res.data[0] if res.data else None
 
 def _is_month_closed(user_id: str, month: str) -> bool:
-    st = _month_status(user_id, month)
-    return bool(st and st.get("closed_at"))
+    # _status_locked, not a bare closed_at check: a row left over from last year's
+    # same-named month must not lock this year's. That only ever RELAXES the 409 in
+    # _assert_month_open — it can never start rejecting a request that used to pass.
+    return _status_locked(_month_status(user_id, month))
 
 def _assert_month_open(user_id: str, month: Optional[str]):
     """Closed months are read-only. Edit routes call this so a user must explicitly
@@ -1131,23 +1263,30 @@ def _goal_balance(user_id: str, goal_id: Optional[int]) -> float:
     res = supabase.table("savings_transactions").select("amount, type").eq("user_id", user_id).eq("goal_id", goal_id).execute()
     return _r(sum(t["amount"] if t["type"] == "deposit" else -t["amount"] for t in res.data))
 
-def _compute_target_rollover(user_id: str, month: str, settings: Optional[dict] = None):
+def _compute_target_rollover(user_id: str, month: str, settings: Optional[dict] = None,
+                             status: Optional[dict] = None):
     """Pure function of the month's data: the leftover the dashboard implies.
 
     budgetable is computed with the SAME _month_tithe the dashboard uses (live
-    setting for the current month, per-row snapshot for past months) and the goals
-    actual is the SAME (legacy 'Goals' expenses + income-sourced deposits), so the
-    rollover amount always equals the "leftover" the user actually sees — they can
-    never diverge. The budget-type split does NOT affect the target (it's NET
-    leftover); the split is only used for the per-category breakdown shown in the UI.
+    settings while the month is open, the state frozen at close-out afterwards) and
+    the goals actual is the SAME (legacy 'Goals' expenses + income-sourced
+    deposits), so the rollover amount always equals the "leftover" the user
+    actually sees — they can never diverge. The budget-type split does NOT affect
+    the target (it's NET leftover); the split is only used for the per-category
+    breakdown shown in the UI.
+
+    Pass `status` when the caller already has the month_status row, to avoid
+    re-reading it. This function is a pure READ — it moves no money.
 
     Returns (target_rollover, breakdown, budgetable).
     """
     settings = settings or _get_user_settings(user_id)
+    if status is None:
+        status = _month_status(user_id, month)
     irows = _rollover_income_rows(user_id, month)
     total_income = sum(r["amount"] for r in irows)
-    budgetable = _month_tithe(month, total_income, irows, settings)["budgetable"]
-    bt = BUDGET_TYPES[_month_budget_type(month, irows, settings)]
+    budgetable = _month_tithe(total_income, irows, settings, status)["budgetable"]
+    bt = BUDGET_TYPES[_month_budget_type(irows, settings, status)]
 
     needs_spent = _sum_expenses(user_id, month, "Needs")
     wants_spent = _sum_expenses(user_id, month, "Wants")
@@ -1243,7 +1382,8 @@ def _recon_summary(user_id: str, recon_id: Optional[int] = None):
     repaid = sum(t["amount"] for t in rows if t["type"] == "deposit")
     return _r(owed), _r(repaid), _r(max(0.0, owed - repaid)), recon_id
 
-def reconcile_month(user_id: str, month: str) -> float:
+def reconcile_month(user_id: str, month: str, settings: Optional[dict] = None,
+                    status: Optional[dict] = None) -> float:
     """Single source of truth for a month's rollover. Idempotent and convergent:
     re-running with no data change is a no-op. Drives
         net = (GS rollover entry) − (this month's booked reconciliation debt)
@@ -1255,8 +1395,11 @@ def reconcile_month(user_id: str, month: str) -> float:
     repaid when leftover recovers). We drive the NET (entry − booked-debt) to
     target instead, which produces the scenario's stated results and stays idempotent.
     """
-    settings = _get_user_settings(user_id)
-    target, _, _ = _compute_target_rollover(user_id, month, settings)
+    # Callers that are about to freeze this month's state pass the SAME settings
+    # dict they will stamp with, so a PATCH /settings/ landing mid-close can never
+    # make the money moved here disagree with the stamp written after it.
+    settings = settings or _get_user_settings(user_id)
+    target, _, _ = _compute_target_rollover(user_id, month, settings, status)
 
     general_id = _ensure_general_savings(user_id)
     entry = _gs_rollover_entry(user_id, month, general_id)
@@ -1312,12 +1455,15 @@ def reconcile_month(user_id: str, month: str) -> float:
 def rollover_preview(month: str, user_id: str = Depends(get_current_user_id)):
     """Target rollover + per-category breakdown (split used for display only) and
     whether the month is closed. Does not mutate anything."""
-    target, breakdown, budgetable = _compute_target_rollover(user_id, month)
+    # Read the status first and pass it down: the target depends on whether the
+    # month is frozen, and this keeps it to one query rather than two.
     st = _month_status(user_id, month)
+    target, breakdown, budgetable = _compute_target_rollover(user_id, month, None, st)
+    locked = _status_locked(st)
     return {
         "month": month,
-        "closed": bool(st and st.get("closed_at")),
-        "closed_at": st.get("closed_at") if st else None,
+        "closed": locked,
+        "closed_at": st.get("closed_at") if locked else None,
         "target_rollover": target,
         "budgetable": budgetable,
         "breakdown": breakdown,
@@ -1330,18 +1476,45 @@ class RolloverAction(BaseModel):
 @app.post("/rollover/close/")
 def rollover_close(action: RolloverAction, user_id: str = Depends(get_current_user_id)):
     """Reconcile the month (first close defines the rollover entry) then mark it
-    closed. Safe to call repeatedly — reconcile is idempotent."""
-    moved = reconcile_month(user_id, action.month)
-    supabase.table("month_status").upsert({
+    closed, freezing the tithe and budget split it was closed with. Safe to call
+    repeatedly — reconcile is idempotent and the freeze happens once.
+
+    Order matters: reconcile runs while the month is still OPEN, so it resolves
+    from the live settings, and the stamp written afterwards freezes those same
+    settings. Money moved and state frozen can therefore never disagree.
+    """
+    settings = _get_user_settings(user_id)
+    st = _month_status(user_id, action.month)
+    already_closed = _status_locked(st)
+    moved = reconcile_month(user_id, action.month, settings, st)
+    payload = {
         "user_id": user_id, "month": action.month,
         "closed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    }).execute()
+    }
+    if not already_closed:
+        # Freeze ONLY on the open→closed transition. Re-stamping an already-closed
+        # month (double tap, axios retry, an old binary) would overwrite its frozen
+        # split with today's live settings while reconcile — which reads the OLD
+        # stamp — correctly does nothing, leaving the month's stored rollover and
+        # its displayed budgets permanently disagreeing. A re-close after Reopen
+        # IS this transition, so it re-freezes as intended.
+        payload.update(_frozen_stamp(settings, action.month))
+    supabase.table("month_status").upsert(payload).execute()
     return {"message": f"{action.month} closed.", "month": action.month, "rolled_over": moved}
 
 @app.post("/rollover/reopen/")
 def rollover_reopen(action: RolloverAction, user_id: str = Depends(get_current_user_id)):
     """Unlock a closed month for editing. Recompute happens on the next close
-    (or whenever reconcile_month runs), the single deterministic recompute point."""
+    (or whenever reconcile_month runs), the single deterministic recompute point.
+
+    Reopening also unfreezes the month's tithe and split: while closed_at is NULL
+    the month follows the LIVE settings again, so a reopened month can shift if the
+    user has changed them since — which is why the client warns before doing this.
+    The frozen columns are deliberately left on the row rather than cleared; every
+    resolver gates on closed_at, so they are inert until the next close overwrites
+    them (this upsert names only closed_at, and PostgREST updates named columns
+    only, so they survive untouched).
+    """
     supabase.table("month_status").upsert({
         "user_id": user_id, "month": action.month, "closed_at": None,
     }).execute()

@@ -127,15 +127,68 @@ A table rather than env vars on purpose: the kill switch flips with one `UPDATE`
 Supabase dashboard — no Render redeploy, and the lever still works when a bad deploy is
 what broke things. **This is the rollback lever** for the premium feature.
 
+### `month_status`
+
+Per-month facts, one row per `(user_id, month)` — that pair is the primary key, and
+`month` is a bare English month **name** with no year.
+
+| Column | Meaning |
+|--------|---------|
+| `closed_at` | When the user closed the month out. `NULL` = open. Closed months are read-only (`_assert_month_open` → 409) and their budget state is frozen. |
+| `tithe_given_at` | When the user marked this month's tithe as handed over. Display-only — it changes "left this month", never a stored transaction. Migration `0008`. |
+| `budget_type`, `tithe_enabled`, `tithe_rate` | The split and tithe the month was **frozen** with at close-out. `NULL` = not frozen. Migration `0009`. |
+| `year` | The calendar year the frozen month belongs to. `NULL` on pre-`0009` rows, where it is derived from `closed_at`. Migration `0009`. |
+
+Read only through `_month_status`, always with `select('*')` so a column that does not
+exist yet reads as `NULL` rather than raising — which is what makes both migrations
+deploy-order-independent on the read path.
+
+**The year column exists because month names have no year.** `(user, 'September')` is
+one row forever, so without it a September closed last year would still read as closed
+this September — freezing the current month to a year-old split and rejecting every new
+entry with a 409. A row whose year is not the current one is treated as never-closed,
+and closing that month again recycles the row. Note this does **not** make the app
+year-aware: `income`, `expenses` and `savings_transactions` are still keyed on a bare
+month name, so two Septembers' rows remain indistinguishable and sum together.
+
 ## Budget Calculation
 
-Computed server-side in [backend/main.py](../../backend/main.py) lines ~53–55 from the month's total income:
+Computed server-side in [backend/main.py](../../backend/main.py) (`get_dashboard_data`,
+and the same math per month in `get_spending_trends`). The tithe is carved out **first**;
+the split then applies to the remainder:
 
 ```
-needs_budget  = total_income * 0.50
-wants_budget  = total_income * 0.30
-goals_budget  = total_income * 0.20
+budgetable    = total_income - tithe_amount
+needs_budget  = budgetable * split.needs
+wants_budget  = budgetable * split.wants
+goals_budget  = budgetable * split.savings
 ```
+
+`BUDGET_TYPES` in `main.py` is the single source of truth for the three splits —
+`balanced` 50/30/20, `wealth_builder` 30/20/50, `firm_foundation` 70/10/20. Only the
+KEY is ever stored (never the percentages), so they cannot drift.
+[frontend/constants/budgetTypes.ts](../../frontend/constants/budgetTypes.ts) mirrors them
+for display and must be kept in sync by hand.
+
+### Which split and tithe a month uses
+
+Resolved by `_month_tithe` / `_month_budget_type`, both keyed on **whether the month is
+closed** — not on where the calendar is:
+
+| Month state | Source |
+|-------------|--------|
+| Not closed (past, current or future) | The **live** `user_settings` row. The month is still the user's to correct, so changing the setting updates it. |
+| Closed | The values frozen onto `month_status` at close-out. Permanent, and clock-independent. |
+| Closed before migration `0009` | Falls back to the per-row snapshot on that month's `income` rows (`income.budget_type` / `.tithe_enabled` / `.tithe_rate`, most recent `day` wins for the split), so months already closed keep exactly the numbers they had. |
+
+This replaced an earlier rule that asked "is this the current calendar month?", which
+made a month silently revert to its income-row snapshot the instant the calendar rolled
+over — the tithe envelope disappearing from the month that just ended, and past months
+snapping back to 50/30/20.
+
+`income.budget_type` / `.tithe_enabled` / `.tithe_rate` are still stamped on every
+`POST /income/` and still needed for that third row. They are not the month's answer
+while it is open.
 
 ## Category Name Mismatch
 

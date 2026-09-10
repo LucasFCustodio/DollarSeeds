@@ -26,7 +26,9 @@
     "closeButton": "Close out & save {{amount}}",
     "closedTitle": "{{month}} is closed",
     "closedSub": "{{amount}} rolled into General Savings.",
-    "reopen": "Reopen"
+    "reopen": "Reopen",
+    "reopenTitle": "Reopen {{month}}?",
+    "reopenWarning": "This switches {{month}} to your current budget split ({{split}}) and tithe setting. If it should keep a different split, change it in Settings before you reopen."
   },
   "scripture": {
     "modalTitle": "Well done, faithful steward!",
