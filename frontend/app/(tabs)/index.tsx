@@ -315,6 +315,13 @@ export default function DashboardScreen() {
      */
     const handleToggleTitheGiven = async () => {
         if (!user?.id || savingTitheGiven) return;
+        // A closed month is settled: its leftover has already been swept into General
+        // Savings, and that figure was computed with the tithe carved out. Un-marking
+        // the tithe here would add it back to the hero's "left this month" and leave
+        // the user looking at more money than actually moved. Read straight off the
+        // payload rather than the derived flag below, so the guard cannot depend on
+        // declaration order.
+        if (dashboardData.rollover?.closed) return;
         const previousTithe = dashboardData.tithe;
         if (!previousTithe) return;
         const next = !previousTithe.given;
@@ -769,7 +776,7 @@ export default function DashboardScreen() {
                             <TitheGivenToggle
                                 theme={theme}
                                 value={titheGiven}
-                                disabled={savingTitheGiven}
+                                disabled={savingTitheGiven || isDisplayedMonthClosed}
                                 onToggle={handleToggleTitheGiven}
                                 a11yLabel={t('tithe.givenToggleA11y')}
                             />
