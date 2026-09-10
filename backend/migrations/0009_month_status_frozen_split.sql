@@ -88,12 +88,10 @@ alter table public.month_status
 
 -- numeric, matching 0004's completed_amount and every other decimal this repo has
 -- added by migration. Exact rather than binary-float, so a rate of 0.10 stores as
--- 0.10. NOTE user_settings.tithe_rate and income.tithe_rate predate this
--- directory and were created straight against Supabase; their physical type is
--- not recorded anywhere in the repo. It does not need to match: this column is
--- only ever written from float() and read back through float() in main.py, and
--- PostgREST serialises numeric/real/double precision alike to a JSON number. The
--- values are two-decimal rates, far inside the exact range of all three.
+-- 0.10. user_settings.tithe_rate and income.tithe_rate predate this directory and
+-- were created straight against Supabase, so their physical type was not recorded
+-- here; it was checked against information_schema before applying and both are
+-- `numeric` too (see the footer), so this column matches them exactly.
 alter table public.month_status
   add column if not exists tithe_rate numeric;
 
