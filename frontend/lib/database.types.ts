@@ -6,8 +6,11 @@
 // NOTE: these two were added by hand to mirror backend/migrations/0001_lesson_series.sql
 // because the Supabase MCP was not authenticated when the feature was built — re-run
 // `generate_typescript_types` after applying that migration to confirm parity.
-// Latest hand-edit: `month_status.tithe_given_at` (backend/migrations/0008_tithe_given.sql)
-// — same caveat as above, mirrored by hand and pending a regenerate after applying.
+// Latest hand-edit: `month_status.budget_type` / `.tithe_enabled` / `.tithe_rate` /
+// `.year` (backend/migrations/0009_month_status_frozen_split.sql) — the tithe and
+// split a month was frozen with when the user closed it out, plus the year that
+// close belongs to. Same caveat as above: mirrored by hand and pending a regenerate.
+// Prior change: `month_status.tithe_given_at` (backend/migrations/0008_tithe_given.sql).
 // Prior change: added the `month_status` table (per-month open/closed state),
 // `savings_goals.is_reconciliation` (auto-managed Reconciliation debt goal flag), and
 // `savings_transactions.source` now allows 'rollover' (end-of-month rollover feature).
@@ -217,22 +220,34 @@ export type Database = {
       }
       month_status: {
         Row: {
+          budget_type: string | null
           closed_at: string | null
           month: string
+          tithe_enabled: boolean | null
           tithe_given_at: string | null
+          tithe_rate: number | null
           user_id: string
+          year: number | null
         }
         Insert: {
+          budget_type?: string | null
           closed_at?: string | null
           month: string
+          tithe_enabled?: boolean | null
           tithe_given_at?: string | null
+          tithe_rate?: number | null
           user_id: string
+          year?: number | null
         }
         Update: {
+          budget_type?: string | null
           closed_at?: string | null
           month?: string
+          tithe_enabled?: boolean | null
           tithe_given_at?: string | null
+          tithe_rate?: number | null
           user_id?: string
+          year?: number | null
         }
         Relationships: []
       }

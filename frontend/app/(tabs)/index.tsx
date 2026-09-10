@@ -15,6 +15,7 @@ import {
     Text,
     ScrollView,
     Pressable,
+    Alert,
     Modal,
     StyleSheet,
     LayoutAnimation,
@@ -66,6 +67,12 @@ interface DashboardData {
     // undefined is read as false, which is the pre-feature behaviour exactly.
     tithe?: { enabled: boolean; rate: number; amount: number; given?: boolean };
     budget_type?: { key: string; needs: number; wants: number; savings: number };
+    // The user's LIVE split setting, which is not the same thing as `budget_type`
+    // above once a month is closed — that one is the split the month was frozen
+    // with. Used to tell the user what reopening a closed month would switch it to.
+    // Optional: a backend deployed before this key existed simply omits it, and
+    // resolveBudgetType falls back to the default.
+    live_budget_type?: string;
     // Rollover (end-of-month close-out) state for the displayed month. Purely
     // informational — source='rollover' is excluded from every budget/score number.
     rollover?: { closed: boolean; closed_at: string | null; amount: number; target: number };
@@ -257,7 +264,35 @@ export default function DashboardScreen() {
         }
     };
 
-    const handleReopenMonth = async () => {
+    /**
+     * Reopen a closed month, after warning what that costs.
+     *
+     * Closing a month freezes the budget split and tithe it was closed with;
+     * reopening un-freezes it, so from that moment the month follows whatever
+     * Settings say NOW. That is the right behaviour — it is the only way to correct
+     * a month closed with the wrong split — but it is invisible, and someone
+     * reopening a month just to fix a typo would silently restate its budgets. So
+     * we name the split the month is about to adopt and let them back out.
+     */
+    const handleReopenMonth = () => {
+        if (!user?.id || closingMonth) return;
+        const liveType = resolveBudgetType(dashboardData.live_budget_type);
+        Alert.alert(
+            t('rollover.reopenTitle', { month: monthLabel(currentMonth) }),
+            // One whole interpolated sentence rather than concatenated fragments —
+            // the clause order differs in Portuguese.
+            t('rollover.reopenWarning', {
+                month: monthLabel(currentMonth),
+                split: `${tc(`budgetType.${liveType.key}.name`)} · ${splitLabel(liveType)}`,
+            }),
+            [
+                { text: tc('action.cancel'), style: 'cancel' },
+                { text: t('rollover.reopen'), onPress: () => { void doReopenMonth(); } },
+            ],
+        );
+    };
+
+    const doReopenMonth = async () => {
         if (!user?.id || closingMonth) return;
         setClosingMonth(true);
         try {
@@ -372,20 +407,23 @@ export default function DashboardScreen() {
     const dailyVerse = getDailyVerse();
 
     // ── Rollover close-out visibility ──────────────────────────────────────────
-    // A month is "closeable" once it's over. We never prompt for the in-progress
-    // month; for the month that just ended we wait until a few days in (≥ 4th), and
-    // older un-closed months can be closed anytime they have income.
+    // A month is "closeable" the moment it's over — offered from the 1st. We only
+    // ever exclude the in-progress month; any other un-closed month with income can
+    // be closed whenever the user gets to it.
+    //
+    // There used to be an extra `new Date().getDate() < 4` clause that hid last
+    // month's prompt until the 4th. It served no purpose the user could see: the
+    // month was over and its numbers were final, but the app looked like it had
+    // forgotten to ask.
     const rollover = dashboardData.rollover;
     const realMonthIdx = new Date().getMonth();
-    const prevMonthIdx = (realMonthIdx + 11) % 12;
     const isDisplayedMonthClosed = !!rollover?.closed;
     const showClosePrompt =
         !!rollover &&
         !rollover.closed &&
         monthIndex !== realMonthIdx &&             // not the in-progress month
         total_income > 0 &&                        // hides empty future months
-        !dismissedCloseout.has(currentMonth) &&
-        !(monthIndex === prevMonthIdx && new Date().getDate() < 4); // give the new month a few days
+        !dismissedCloseout.has(currentMonth);
     const totalSpent = expenses.needs + expenses.wants + expenses.goals;
     // Until the tithe is actually given the money is still sitting in the account, so
     // it belongs in "left this month". Once the user marks it given it is gone, and

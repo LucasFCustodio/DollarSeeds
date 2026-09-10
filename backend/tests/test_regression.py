@@ -11,7 +11,7 @@ goals → rollover → lessons → account.
 
 from __future__ import annotations
 
-from conftest import USER_A, auth
+from conftest import USER_A, auth, stamp_year
 
 HEADERS = auth(USER_A)
 
@@ -65,18 +65,118 @@ def test_dashboard_applies_the_live_tithe_setting_to_the_current_month(client, s
     assert body["budgets"]["goals"] == 180.0
 
 
-def test_dashboard_uses_the_frozen_snapshot_for_past_months(client, supabase_db, past_month):
-    """A past month keeps the tithe/split that were active then, even after the user
-    changes their settings."""
+def test_an_open_past_month_follows_the_live_settings(client, supabase_db, past_month):
+    """THE bug behind "the Tithing envelope vanished from August on September 1st".
+
+    A month the user has not closed out is still theirs to correct, so it tracks the
+    LIVE settings — no matter what its income rows were stamped with at the time, and
+    no matter that the calendar has moved on. Previously this month fell through to
+    the income-row snapshot the instant it stopped being the current month, which
+    deleted the tithe carve-out and snapped the split back to 50/30/20.
+    """
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": True,
+                                       "tithe_rate": 0.10, "budget_type": "wealth_builder"})
+    # Stamped BEFORE the user switched tithing on and changed their split — exactly
+    # the state that used to make the month revert.
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": past_month,
+                                "tithe_enabled": False, "tithe_rate": 0.10, "budget_type": "balanced"})
+
+    body = client.get(f"/dashboard/{past_month}", headers=HEADERS).json()
+
+    assert body["tithe"]["amount"] == 100.0, "an open month must follow the live tithe setting"
+    assert body["budget_type"]["key"] == "wealth_builder"
+    # Tithe carved out first, then the live 30/20/50 split on the remaining $900.
+    assert body["budgets"] == {"needs": 270.0, "wants": 180.0, "goals": 450.0}
+
+
+def test_a_month_with_no_income_still_follows_the_live_budget_type(client, supabase_db, past_month):
+    """The other half of the same bug: with no income rows to read a snapshot from,
+    every non-current month used to be hard-coded to 'balanced'."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": False,
+                                       "tithe_rate": 0.10, "budget_type": "firm_foundation"})
+
+    body = client.get(f"/dashboard/{past_month}", headers=HEADERS).json()
+    assert body["budget_type"]["key"] == "firm_foundation"
+
+
+def test_dashboard_uses_the_frozen_state_for_a_closed_month(client, supabase_db, past_month):
+    """Closing a month locks its tithe and split. Later settings changes must not
+    reach back and restate it."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": False,
+                                       "tithe_rate": 0.10, "budget_type": "wealth_builder"})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": past_month,
+                                "tithe_enabled": False, "tithe_rate": 0.10, "budget_type": "balanced"})
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": past_month,
+                                      "closed_at": "2026-02-01T00:00:00+00:00",
+                                      "budget_type": "balanced", "tithe_enabled": True,
+                                      "tithe_rate": 0.10, "year": stamp_year(past_month)})
+
+    body = client.get(f"/dashboard/{past_month}", headers=HEADERS).json()
+
+    assert body["tithe"]["amount"] == 100.0, "a closed month keeps the tithe it was closed with"
+    assert body["budget_type"]["key"] == "balanced", "a closed month keeps the split it was closed with"
+
+
+def test_a_month_closed_with_tithing_off_stays_off(client, supabase_db, past_month):
+    """tithe_enabled = False is a real frozen value, not "unset". If it were read as
+    truthiness the month would fall through to its income rows and start tithing."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": True, "tithe_rate": 0.10})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": past_month,
+                                "tithe_enabled": True, "tithe_rate": 0.10, "budget_type": "balanced"})
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": past_month,
+                                      "closed_at": "2026-02-01T00:00:00+00:00",
+                                      "budget_type": "balanced", "tithe_enabled": False,
+                                      "tithe_rate": 0.10, "year": stamp_year(past_month)})
+
+    body = client.get(f"/dashboard/{past_month}", headers=HEADERS).json()
+    assert body["tithe"]["amount"] == 0.0
+    assert body["tithe"]["enabled"] is False
+    assert body["budgets"]["needs"] == 500.0, "no carve-out, so the split applies to all $1000"
+
+
+def test_a_month_closed_before_the_freeze_migration_keeps_its_income_row_snapshot(
+        client, supabase_db, past_month):
+    """The compatibility guarantee for migration 0009: rows closed before it have no
+    frozen columns (all NULL), so they take the OLD income-row path and every month
+    the user had already closed shows exactly the numbers it showed before."""
     supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": False,
                                        "tithe_rate": 0.10, "budget_type": "wealth_builder"})
     supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": past_month,
                                 "tithe_enabled": True, "tithe_rate": 0.10, "budget_type": "balanced"})
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": past_month,
+                                      "closed_at": "2026-02-01T00:00:00+00:00"})
 
     body = client.get(f"/dashboard/{past_month}", headers=HEADERS).json()
 
-    assert body["tithe"]["amount"] == 100.0, "past month should keep its tithe snapshot"
-    assert body["budget_type"]["key"] == "balanced", "past month should keep its split snapshot"
+    assert body["tithe"]["amount"] == 100.0, "pre-0009 closed month keeps its per-row snapshot"
+    assert body["budget_type"]["key"] == "balanced"
+
+
+def test_a_month_closed_in_a_previous_year_is_treated_as_open(client, supabase_db, past_month):
+    """Month names carry no year, so (user, 'September') is one row for all time. A
+    close from a previous year must not freeze — or lock — this year's same-named
+    month, or the current month would resolve from a year-old split and reject every
+    new entry with a 409."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": False,
+                                       "tithe_rate": 0.10, "budget_type": "firm_foundation"})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": past_month,
+                                "tithe_enabled": True, "tithe_rate": 0.10, "budget_type": "balanced"})
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": past_month,
+                                      "closed_at": "2020-02-01T00:00:00+00:00",
+                                      "budget_type": "balanced", "tithe_enabled": True,
+                                      "tithe_rate": 0.10, "year": stamp_year(past_month) - 5})
+
+    body = client.get(f"/dashboard/{past_month}", headers=HEADERS).json()
+
+    assert body["budget_type"]["key"] == "firm_foundation", "stale year must not freeze the month"
+    assert body["tithe"]["amount"] == 0.0, "live setting has tithing off"
+    assert body["rollover"]["closed"] is False, "and it must not read as closed"
+    assert body["rollover"]["closed_at"] is None, "closed/closed_at must agree"
+
+    # Nor may it lock the month for editing.
+    res = client.post("/income/", headers=HEADERS,
+                      json={"amount": 50.0, "day": 2, "month": past_month, "title": "Side gig"})
+    assert res.status_code == 200, "a prior-year close must not make this year read-only"
 
 
 def test_dashboard_honours_the_selected_budget_type(client, supabase_db, current_month):
@@ -613,6 +713,151 @@ def test_closing_a_month_twice_is_idempotent(client, supabase_db, current_month)
     assert len(rollovers) == 1
     assert rollovers[0]["amount"] == 500.0
     assert len(supabase_db.rows("month_status")) == 1
+
+
+def test_closing_a_month_freezes_the_live_tithe_and_budget_type(client, supabase_db, current_month):
+    """Close-out is the moment a month stops tracking settings. What was live at that
+    instant is written onto month_status and becomes the month's permanent answer."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": True,
+                                       "tithe_rate": 0.12, "budget_type": "wealth_builder"})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": current_month})
+
+    client.post("/rollover/close/", headers=HEADERS, json={"month": current_month})
+
+    row = supabase_db.rows("month_status")[0]
+    assert row["budget_type"] == "wealth_builder"
+    assert row["tithe_enabled"] is True
+    assert row["tithe_rate"] == 0.12
+    assert row["year"] == stamp_year(current_month)
+
+    # Change everything afterwards — the closed month must not move.
+    client.patch("/settings/", headers=HEADERS,
+                 json={"tithe_enabled": False, "budget_type": "firm_foundation"})
+
+    body = client.get(f"/dashboard/{current_month}", headers=HEADERS).json()
+    assert body["tithe"]["amount"] == 120.0
+    assert body["budget_type"]["key"] == "wealth_builder"
+
+
+def test_reopening_a_month_returns_it_to_the_live_settings(client, supabase_db, current_month):
+    """Reopen is the inverse of close: the month is editable and tracks settings again.
+    The frozen columns stay on the row but are inert while closed_at is NULL, and the
+    next close overwrites them."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": True,
+                                       "tithe_rate": 0.10, "budget_type": "balanced"})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": current_month})
+    client.post("/rollover/close/", headers=HEADERS, json={"month": current_month})
+
+    client.patch("/settings/", headers=HEADERS,
+                 json={"tithe_enabled": False, "budget_type": "firm_foundation"})
+    client.post("/rollover/reopen/", headers=HEADERS, json={"month": current_month})
+
+    body = client.get(f"/dashboard/{current_month}", headers=HEADERS).json()
+    assert body["tithe"]["amount"] == 0.0, "a reopened month follows the live settings again"
+    assert body["budget_type"]["key"] == "firm_foundation"
+
+    # The stale stamp is still on the row — inert, not cleared.
+    row = supabase_db.rows("month_status")[0]
+    assert row["closed_at"] is None
+    assert row["budget_type"] == "balanced"
+
+    # Re-closing re-freezes at whatever is live now.
+    client.post("/rollover/close/", headers=HEADERS, json={"month": current_month})
+    row = supabase_db.rows("month_status")[0]
+    assert row["budget_type"] == "firm_foundation"
+    assert row["tithe_enabled"] is False
+
+
+def test_closing_an_already_closed_month_does_not_refreeze_it(client, supabase_db, current_month):
+    """A second close (double tap, retry, an old binary) must be a no-op. Re-stamping
+    would overwrite the frozen split with today's settings while reconcile — reading
+    the OLD stamp — correctly moves nothing, leaving the stored rollover and the
+    displayed budgets permanently disagreeing."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": False,
+                                       "tithe_rate": 0.10, "budget_type": "balanced"})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": current_month})
+    client.post("/rollover/close/", headers=HEADERS, json={"month": current_month})
+
+    before = client.get(f"/dashboard/{current_month}", headers=HEADERS).json()["rollover"]["amount"]
+    client.patch("/settings/", headers=HEADERS, json={"tithe_enabled": True, "tithe_rate": 0.10})
+    client.post("/rollover/close/", headers=HEADERS, json={"month": current_month})
+
+    row = supabase_db.rows("month_status")[0]
+    assert row["tithe_enabled"] is False, "the frozen state must survive a second close"
+    rollovers = [t for t in supabase_db.rows("savings_transactions") if t["source"] == "rollover"]
+    assert len(rollovers) == 1
+    assert client.get(f"/dashboard/{current_month}",
+                      headers=HEADERS).json()["rollover"]["amount"] == before
+
+
+def test_rollover_preview_uses_the_frozen_state_for_a_closed_month(client, supabase_db, past_month):
+    """The preview's target must come from the month's frozen tithe, not live settings,
+    or it would disagree with the money actually moved at close."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": False, "tithe_rate": 0.10})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": past_month})
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": past_month,
+                                      "closed_at": "2026-02-01T00:00:00+00:00",
+                                      "budget_type": "balanced", "tithe_enabled": True,
+                                      "tithe_rate": 0.10, "year": stamp_year(past_month)})
+
+    body = client.get("/rollover/preview/", params={"month": past_month}, headers=HEADERS).json()
+    assert body["closed"] is True
+    assert body["budgetable"] == 900.0, "the frozen tithe is carved out, not the live one"
+    assert body["target_rollover"] == 900.0
+
+
+def test_a_closed_month_with_no_income_reports_a_zero_tithe(client, supabase_db, past_month):
+    """Edge case worth pinning: on the frozen path `enabled` reflects the stamp, so a
+    month closed with tithing on but no income reads enabled=True with amount 0. The
+    client gates its card on the amount, so nothing renders either way."""
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": past_month,
+                                      "closed_at": "2026-02-01T00:00:00+00:00",
+                                      "budget_type": "balanced", "tithe_enabled": True,
+                                      "tithe_rate": 0.10, "year": stamp_year(past_month)})
+
+    body = client.get(f"/dashboard/{past_month}", headers=HEADERS).json()
+    assert body["tithe"]["enabled"] is True
+    assert body["tithe"]["amount"] == 0.0
+
+
+def test_mixed_tithe_rates_collapse_to_the_months_frozen_rate(client, supabase_db, current_month):
+    """Intentional numeric change for months closed from this release on: one
+    month-level rate over the month's total income, instead of summing each income
+    row's own rate. The reported rate and amount now agree — previously the payload
+    reported the first tithed row's rate while summing every row's."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": True, "tithe_rate": 0.10})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": current_month,
+                                "tithe_enabled": True, "tithe_rate": 0.10})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 500.0, "day": 2, "month": current_month,
+                                "tithe_enabled": True, "tithe_rate": 0.20})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 500.0, "day": 3, "month": current_month,
+                                "tithe_enabled": False, "tithe_rate": 0.10})
+
+    client.post("/rollover/close/", headers=HEADERS, json={"month": current_month})
+
+    body = client.get(f"/dashboard/{current_month}", headers=HEADERS).json()
+    assert body["tithe"]["rate"] == 0.10
+    assert body["tithe"]["amount"] == 200.0, "10% of the whole $2000, one honest rate"
+
+
+def test_trends_reads_month_status_once_for_all_twelve_months(client, supabase_db, past_month):
+    """Trends walks twelve months; resolving each one's frozen state must not become
+    twelve queries."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": False,
+                                       "tithe_rate": 0.10, "budget_type": "wealth_builder"})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": past_month,
+                                "tithe_enabled": False, "tithe_rate": 0.10, "budget_type": "balanced"})
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": past_month,
+                                      "closed_at": "2026-02-01T00:00:00+00:00",
+                                      "budget_type": "balanced", "tithe_enabled": False,
+                                      "tithe_rate": 0.10, "year": stamp_year(past_month)})
+
+    supabase_db.selects.clear()
+    body = client.get("/dashboard/trends/", headers=HEADERS).json()
+
+    assert len([t for t, _ in supabase_db.selects if t == "month_status"]) == 1
+    row = next(m for m in body["data"] if m["month"] == past_month)
+    assert row["budget_type"] == "balanced", "the closed month keeps its frozen split here too"
 
 
 def test_a_closed_month_is_read_only_until_reopened(client, supabase_db, current_month):

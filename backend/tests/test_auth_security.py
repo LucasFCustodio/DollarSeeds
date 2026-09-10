@@ -17,7 +17,7 @@ from __future__ import annotations
 import jwt
 import pytest
 
-from conftest import JWT_SECRET, USER_A, USER_B, auth, make_token
+from conftest import JWT_SECRET, USER_A, USER_B, auth, make_token, stamp_year
 
 # ── Every protected route, with a request that would otherwise be valid ──────────
 # (method, path, query params, json body). Bodies are well-formed on purpose: a 401
@@ -366,6 +366,32 @@ def test_cannot_read_another_users_savings(client, two_users):
     goals = client.get("/savings/goal/", params={"user_id": USER_B}, headers=auth(USER_A))
     titles = [g["title"] for g in goals.json()["data"]]
     assert "B house" not in titles
+
+
+def test_trends_only_reads_the_callers_frozen_month_state(client, supabase_db, past_month):
+    """Trends resolves twelve months' frozen state from ONE bulk month_status read.
+    That query is the only unscoped-by-default table scan in the change, so pin that
+    it filters by user: without the .eq("user_id", ...) another user's close-out
+    would freeze this user's month at a split they never chose."""
+    supabase_db.seed("user_settings", {"user_id": USER_A, "tithe_enabled": False,
+                                       "tithe_rate": 0.10, "budget_type": "wealth_builder"})
+    supabase_db.seed("income", {"user_id": USER_A, "amount": 1000.0, "day": 1, "month": past_month,
+                                "tithe_enabled": False, "tithe_rate": 0.10,
+                                "budget_type": "balanced"})
+    # USER_B closed the SAME month name, frozen to a different split.
+    supabase_db.seed("month_status", {"user_id": USER_B, "month": past_month,
+                                      "closed_at": "2026-02-01T00:00:00+00:00",
+                                      "budget_type": "firm_foundation", "tithe_enabled": True,
+                                      "tithe_rate": 0.10, "year": stamp_year(past_month)})
+
+    row = next(m for m in client.get("/dashboard/trends/", headers=auth(USER_A)).json()["data"]
+               if m["month"] == past_month)
+    assert row["budget_type"] == "wealth_builder", "B's close must not freeze A's month"
+    assert row["tithe"]["amount"] == 0.0, "nor apply B's tithe to A's income"
+
+    body = client.get(f"/dashboard/{past_month}", headers=auth(USER_A)).json()
+    assert body["budget_type"]["key"] == "wealth_builder"
+    assert body["rollover"]["closed"] is False, "B closing the month must not lock A's"
 
 
 def test_cannot_read_another_users_expense_details_or_trends(client, two_users, current_month):

@@ -192,16 +192,35 @@ def client(supabase_db) -> TestClient:
 
 @pytest.fixture
 def current_month() -> str:
-    """The real-world month name. Several code paths branch on 'is this the current
-    month?' (live tithe setting vs frozen per-row snapshot), so tests that exercise
-    the live path must use this rather than a hardcoded month."""
+    """The real-world month name. Kept because several routes stamp or compare
+    against "today's month" (the ledger `day` on a reconcile entry, the `year`
+    frozen at close-out), so tests that exercise those must use this rather than a
+    hardcoded month."""
     return datetime.datetime.now().strftime("%B")
 
 
 @pytest.fixture
 def past_month(current_month: str) -> str:
-    """A month that is definitely not the current one — for the snapshot path."""
+    """A month that is definitely not the current one.
+
+    NOTE this is no longer "the frozen path" — since migration 0009 a month is
+    frozen when it is CLOSED, not when the calendar moves past it, so a month_status
+    row with closed_at is what selects that path. This fixture just guarantees a
+    different month name from the current one.
+    """
     return "January" if current_month != "January" else "February"
+
+
+def stamp_year(month: str) -> int:
+    """The `year` the backend freezes onto month_status when `month` is closed today.
+
+    Tests that need a NON-stale closed month must use this rather than
+    `datetime.now().year`: a bare month name that sits after the current month
+    refers to LAST year (December, seen in January, is the December just gone), so
+    hardcoding the current year makes those rows read as stale — which would break
+    the suite only in certain calendar months.
+    """
+    return main._month_year_at(month, datetime.datetime.now())
 
 
 @pytest.fixture
