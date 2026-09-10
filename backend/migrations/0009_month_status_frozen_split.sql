@@ -163,4 +163,23 @@ comment on column public.month_status.year is
 --   select policyname, cmd, roles from pg_policies
 --    where schemaname = 'public' and tablename = 'month_status';     -- expect that 1 policy
 
--- Applied to project vbvsblpyeylnemrecyqv on <date>.
+-- Applied to project vbvsblpyeylnemrecyqv on 2026-09-09.
+--
+-- Verified after applying: month_status now has 8 columns — user_id, month,
+-- closed_at, tithe_given_at unchanged, plus budget_type (text), tithe_enabled
+-- (boolean), tithe_rate (numeric) and year (integer), all four nullable with NO
+-- default, exactly as written above.
+--
+-- Pre-existing rows are unchanged. Counts before and after are identical:
+-- rows_total 5, rows_closed 1, rows_tithe_given 1. The four new columns are NULL
+-- on every row (rows_budget_type / rows_tithe_enabled / rows_tithe_rate / rows_year
+-- all 0), so every already-closed month takes the legacy income-row fallback and
+-- shows exactly the numbers it showed before.
+--
+-- select * from public.month_status limit 1 still works and returns the four new
+-- keys as null. RLS still enabled with its single pre-existing per-user policy
+-- ("Users control their own month status", ALL, {authenticated}) intact.
+--
+-- Type check done before applying: user_settings.tithe_rate and income.tithe_rate
+-- are both `numeric`, budget_type is `text` and tithe_enabled is `boolean` — the
+-- declarations above match the pre-existing columns exactly.
