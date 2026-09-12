@@ -30,7 +30,7 @@ export const RC_ANDROID_API_KEY: string | null = null;
 export const ENTITLEMENT_ID = 'premium';
 
 /** The offering marked "current" in the RevenueCat dashboard. */
-export const OFFERING_ID = 'default';
+export const OFFERING_ID = 'premium-2026';
 
 /**
  * Per-user cache of the last known entitlement, matching the `<prefix>_<userId>`

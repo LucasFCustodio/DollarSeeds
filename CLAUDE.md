@@ -148,3 +148,21 @@ If any of the five is uncertain, that uncertainty resolves to **no**: write the 
 ### Branching
 
 Never commit to `main`. If the prompt specifies no branch, create a new `change-X-branch`, where X is the next unused number.
+
+## Responses
+
+Don't append information that won't change what I do. No trailing "things worth
+knowing", "one note", or caveats that are merely true — if a fact doesn't change a
+decision, a command I'm about to run, or a step I'd otherwise miss, leave it out.
+
+Surfacing a fact is earned by consequence, not by accuracy. State the answer, give
+what's needed to act on it, and stop.
+
+Example of what not to do: after confirming every branch was safe to delete and
+nothing would be lost, adding that one branch was local-only and two others had no
+local copy. Both true, neither changed the answer or the commands — the response was
+already complete without them.
+
+This is not licence to omit things that matter. A risk, a wrong assumption in what I
+asked, a different command for one of the cases, or a prerequisite I've missed still
+belongs in the answer.
