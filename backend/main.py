@@ -184,6 +184,51 @@ def get_current_user_id(
         raise _unauthorized("Token has no subject.")
     return str(user_id)
 
+# ─── Client capability markers ────────────────────────────────────────────────
+# `X-Client-Features` is a LIST of what the calling build understands, one token per
+# capability. The tokens themselves, and the reasoning behind them, live with the rest
+# of the subscription code further down (see PREMIUM_FEATURE) — but the DEPENDENCY has
+# to be defined up here: FastAPI evaluates `Depends(...)` when a handler is defined,
+# and the first handler that takes it is only a few lines below.
+
+# Adoption telemetry for rollout step 3 ("flip once adoption looks reasonable").
+# Counts every request that reaches _client_features, which is now most of the API
+# rather than the lesson routes alone.
+# Logged to Render's stream only — never exposed on /config/, which is public and
+# unauthenticated. In-process and per-instance, reset by every deploy: the question is
+# a ratio, not a total, so that costs nothing and needs no schema.
+_marked_requests = 0
+_unmarked_requests = 0
+_client_mix_logged_at = 0.0
+_CLIENT_MIX_LOG_INTERVAL_SECONDS = 60
+
+
+def _client_features(x_client_features: Optional[str] = Header(default=None)) -> set:
+    """Which capabilities the calling BUILD supports. No header = the shipped binary,
+    which supports none of them."""
+    global _marked_requests, _unmarked_requests
+    if x_client_features:
+        _marked_requests += 1
+        features = {f.strip().lower() for f in x_client_features.split(",") if f.strip()}
+    else:
+        _unmarked_requests += 1
+        features = set()
+    _log_client_mix()
+    return features
+
+
+def _log_client_mix() -> None:
+    global _client_mix_logged_at
+    now = time.monotonic()
+    if now - _client_mix_logged_at < _CLIENT_MIX_LOG_INTERVAL_SECONDS:
+        return
+    _client_mix_logged_at = now
+    total = _marked_requests + _unmarked_requests
+    if total:
+        pct = 100.0 * _marked_requests / total
+        print(f"client-mix: {_marked_requests}/{total} requests on v2+ ({pct:.1f}%)")
+
+
 # NOTE on `user_id` in the models below: it is accepted (older app builds still send
 # it) but NEVER trusted. Every handler overwrites it with the id from the verified
 # token before anything reaches the database. It is Optional so a future client can
@@ -382,16 +427,44 @@ def _frozen(status: Optional[dict], key: str):
     return status.get(key) if _status_locked(status) else None
 
 
-def _frozen_stamp(settings: dict, month: str) -> dict:
+def _live_budget_type(settings: dict, ent=None) -> str:
+    """THE effective LIVE budget type - what an UNCLOSED month resolves to.
+
+    Every request path that reads `user_settings.budget_type` goes through here, so
+    the free-tier fallback lives in ONE place instead of at each reader. Scattered
+    across five readers it gets forgotten at the sixth.
+
+    `ent` is the per-request entitlement object (see _entitlements). None - or the
+    inert object an unmarked caller resolves to - means today's behaviour verbatim,
+    which is why every caller can default it. For an ENFORCED `limits` caller a
+    gated type resolves to `balanced` while the month is still open. The STORED
+    choice is never rewritten, so resubscribing restores it.
+
+    The READ posture is used deliberately: a lookup that could not reach RevenueCat
+    must not drop a paying user to Balanced. It governs _frozen_stamp too, so
+    closing a month freezes exactly what the user was being shown.
+    """
+    key = settings.get("budget_type")
+    if key not in BUDGET_TYPES:
+        key = DEFAULT_BUDGET_TYPE
+    if ent is not None and ent.enforced_on_reads and key not in ent.budget_types:
+        return DEFAULT_BUDGET_TYPE
+    return key
+
+
+def _frozen_stamp(settings: dict, month: str, ent=None) -> dict:
     """The month_status columns written when a month is closed out.
 
     Every value is non-NULL on purpose: a NULL would read back as "closed before
     0009" and send the month down the legacy fallback instead of its own stamp.
+
+    The split comes from _live_budget_type, so a month closes with the type the user
+    was actually shown while it was open - never a gated one they could not see.
     """
-    key = settings.get("budget_type")
+    key = _live_budget_type(settings, ent)
     rate = settings.get("tithe_rate")
     return {
-        "budget_type": key if key in BUDGET_TYPES else DEFAULT_BUDGET_TYPE,
+        "budget_type": key,
         "tithe_enabled": bool(settings.get("tithe_enabled")),
         "tithe_rate": float(rate if rate is not None else DEFAULT_TITHE_RATE),
         "year": _month_year_at(month, datetime.datetime.now()),
@@ -441,7 +514,8 @@ def _month_tithe(total_income: float, income_rows: list, settings: dict,
         "budgetable": total_income - amount,
     }
 
-def _month_budget_type(income_rows: list, settings: dict, status: Optional[dict]) -> str:
+def _month_budget_type(income_rows: list, settings: dict, status: Optional[dict],
+                       ent=None) -> str:
     """Resolve the budget-type KEY governing a month's split — same lifecycle as
     _month_tithe: live setting until the month is closed, frozen afterwards.
 
@@ -459,7 +533,10 @@ def _month_budget_type(income_rows: list, settings: dict, status: Optional[dict]
             else:
                 key = DEFAULT_BUDGET_TYPE
         else:
-            key = settings.get("budget_type") or DEFAULT_BUDGET_TYPE
+            # The LIVE branch is the ONLY one the free-tier fallback may touch: a
+            # CLOSED month keeps the stamp it was frozen with, whatever the caller
+            # is entitled to today.
+            key = _live_budget_type(settings, ent)
     return key if key in BUDGET_TYPES else DEFAULT_BUDGET_TYPE
 
 
@@ -480,7 +557,8 @@ def read_root():
     return {"message": "DollarSeeds Backend is running!"}
 
 @app.get("/dashboard/trends/")
-def get_spending_trends(user_id: str = Depends(get_current_user_id)):
+def get_spending_trends(features: set = Depends(_client_features),
+                        user_id: str = Depends(get_current_user_id)):
     all_months = ["January", "February", "March", "April", "May", "June", "July",
                   "August", "September", "October", "November", "December"]
 
@@ -532,6 +610,9 @@ def get_spending_trends(user_id: str = Depends(get_current_user_id)):
         return quartiles
 
     settings = _get_user_settings(user_id)
+    # Resolved ONCE for the whole request, not once per month - and it issues no
+    # query at all for a caller that does not send `limits`.
+    ent = _entitlements(user_id, features)
 
     # One read for all twelve months, not one per month. select('*') on purpose:
     # a named column list 400s against a database that has not had migration 0009
@@ -560,7 +641,7 @@ def get_spending_trends(user_id: str = Depends(get_current_user_id)):
         month_status = status_by_month.get(month)
         tithe = _month_tithe(total_income, month_income_rows, settings, month_status)
         budgetable = tithe["budgetable"]
-        bt_key = _month_budget_type(month_income_rows, settings, month_status)
+        bt_key = _month_budget_type(month_income_rows, settings, month_status, ent)
         bt = BUDGET_TYPES[bt_key]
 
         results.append({
@@ -587,7 +668,9 @@ def get_spending_trends(user_id: str = Depends(get_current_user_id)):
 
 
 @app.get("/dashboard/{current_month}")
-def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_user_id)):
+def get_dashboard_data(current_month: str,
+                       features: set = Depends(_client_features),
+                       user_id: str = Depends(get_current_user_id)):
     income_response = supabase.table("income").select("amount, day, tithe_enabled, tithe_rate, budget_type").eq("month", current_month).eq("user_id", user_id).execute()
     total_income = sum(item["amount"] for item in income_response.data)
 
@@ -600,9 +683,10 @@ def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_us
     # same row the rollover block below reads — one query, not two.
     settings = _get_user_settings(user_id)
     st = _month_status(user_id, current_month)
+    ent = _entitlements(user_id, features)
     tithe = _month_tithe(total_income, income_response.data, settings, st)
     budgetable = tithe["budgetable"]
-    bt_key = _month_budget_type(income_response.data, settings, st)
+    bt_key = _month_budget_type(income_response.data, settings, st, ent)
     bt = BUDGET_TYPES[bt_key]
 
     needs_budget = budgetable * bt["needs"]
@@ -636,7 +720,7 @@ def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_us
     # number above, so this is purely informational and can never move the score).
     general_id = _ensure_general_savings(user_id)
     roll_entry = _gs_rollover_entry(user_id, current_month, general_id)
-    roll_target, _, _ = _compute_target_rollover(user_id, current_month, settings, st)
+    roll_target, _, _ = _compute_target_rollover(user_id, current_month, settings, st, ent)
     # A row left over from LAST year's same-named month reports as open (see
     # _status_is_current_year), so `closed_at` is suppressed with it — the two must
     # agree or the client shows a "closed on <date>" banner for a month it can edit.
@@ -682,9 +766,7 @@ def get_dashboard_data(current_month: str, user_id: str = Depends(get_current_us
         # on the Reopen button. Every existing key is served unchanged, so binaries
         # already in the App Store read exactly what they read before and simply
         # ignore this one.
-        "live_budget_type": (settings.get("budget_type")
-                             if settings.get("budget_type") in BUDGET_TYPES
-                             else DEFAULT_BUDGET_TYPE),
+        "live_budget_type": _live_budget_type(settings, ent),
         "budgets": {
             "needs": needs_budget,
             "wants": wants_budget,
@@ -712,7 +794,9 @@ def create_expense(expense: Expense, user_id: str = Depends(get_current_user_id)
     return {"message": "Expense successfully added to database!", "data": response.data}
 
 @app.post("/income/")
-def create_income(income: Income, user_id: str = Depends(get_current_user_id)):
+def create_income(income: Income,
+                  features: set = Depends(_client_features),
+                  user_id: str = Depends(get_current_user_id)):
     # Snapshot the user's CURRENT tithe setting onto the row. This freezes the month's
     # split: even if the user later toggles tithing, past income keeps its original
     # treatment. The live current month is still computed from user_settings.
@@ -725,8 +809,8 @@ def create_income(income: Income, user_id: str = Depends(get_current_user_id)):
         settings.get("tithe_rate") if settings.get("tithe_rate") is not None else DEFAULT_TITHE_RATE
     )
     # Snapshot the budget type too, so the month locks to this split once it's past.
-    bt = settings.get("budget_type")
-    payload["budget_type"] = bt if bt in BUDGET_TYPES else DEFAULT_BUDGET_TYPE
+    # Through _live_budget_type, so the row records what the user was actually shown.
+    payload["budget_type"] = _live_budget_type(settings, _entitlements(user_id, features))
     response = supabase.table("income").insert(payload).execute()
     return {"message": "Income successfully added to database!", "data": response.data}
 
@@ -736,7 +820,9 @@ def get_settings(user_id: str = Depends(get_current_user_id)):
     return {"data": _get_user_settings(user_id)}
 
 @app.patch("/settings/")
-def update_settings(update: UserSettings, user_id: str = Depends(get_current_user_id)):
+def update_settings(update: UserSettings,
+                    features: set = Depends(_client_features),
+                    user_id: str = Depends(get_current_user_id)):
     """Update tithe_enabled, tithe_rate, budget_type and/or the firm-foundation
     prompt flag for a user (partial update)."""
     _get_user_settings(user_id)  # ensure a row exists first
@@ -748,6 +834,13 @@ def update_settings(update: UserSettings, user_id: str = Depends(get_current_use
     if update.budget_type is not None:
         if update.budget_type not in BUDGET_TYPES:
             raise HTTPException(status_code=400, detail=f"Unknown budget_type '{update.budget_type}'.")
+        # Raised BEFORE the write, so a rejected request applies NONE of the other
+        # fields it carried - the user never silently gets half of what they asked
+        # for. The stored budget_type is left exactly as it was.
+        # budget_types_for(write=True), not the `budget_types` property: this is a
+        # gate, so it takes the fail-closed posture.
+        if update.budget_type not in _entitlements(user_id, features).budget_types_for(write=True):
+            raise PremiumRequired("budget_type_locked")
         fields["budget_type"] = update.budget_type
     if update.firm_foundation_goals_prompted is not None:
         fields["firm_foundation_goals_prompted"] = update.firm_foundation_goals_prompted
@@ -856,9 +949,13 @@ def get_savings_balance(user_id: str = Depends(get_current_user_id)):
     return {"balance": balance}
 
 @app.post("/savings/transaction/")
-def create_savings_transaction(entry: SavingsEntry, user_id: str = Depends(get_current_user_id)):
+def create_savings_transaction(entry: SavingsEntry,
+                               features: set = Depends(_client_features),
+                               user_id: str = Depends(get_current_user_id)):
     _assert_month_open(user_id, entry.month)
     _assert_owns_goals(user_id, entry.goal_id)
+    # Deposits AND withdrawals: a locked goal is frozen, not read-only-ish.
+    _assert_goals_unlocked(_entitlements(user_id, features), entry.goal_id)
     payload = entry.model_dump()
     payload["user_id"] = user_id  # never trust the body's user_id
     response = supabase.table("savings_transactions").insert(payload).execute()
@@ -899,7 +996,9 @@ def set_starting_balance(entry: StartingBalance, user_id: str = Depends(get_curr
     return {"message": "Starting balance recorded.", "already_set": False}
 
 @app.post("/savings/transfer/")
-def transfer_from_general(transfer: SavingsTransfer, user_id: str = Depends(get_current_user_id)):
+def transfer_from_general(transfer: SavingsTransfer,
+                          features: set = Depends(_client_features),
+                          user_id: str = Depends(get_current_user_id)):
     """Move money from General Savings into a specific goal.
     Creates two transactions with source='transfer' so neither affects the Goals budget.
     Both legs share a `transfer_group` uuid so Recent Activity can collapse them into a
@@ -907,6 +1006,11 @@ def transfer_from_general(transfer: SavingsTransfer, user_id: str = Depends(get_
     get_savings_history / delete_savings_transaction)."""
     _assert_month_open(user_id, transfer.month)
     _assert_owns_goals(user_id, transfer.general_goal_id, transfer.to_goal_id)
+    # BOTH legs. The destination is the one a real client can point at a locked goal,
+    # but this route also writes a withdrawal against `general_goal_id`, and that slot
+    # is client-supplied too - a locked goal there is just as much a write to it.
+    _assert_goals_unlocked(_entitlements(user_id, features),
+                           transfer.to_goal_id, transfer.general_goal_id)
     group = str(uuid.uuid4())
     # Withdrawal from General Savings. Its title is the human-readable label shown for
     # the collapsed transfer entry in Recent Activity.
@@ -970,11 +1074,30 @@ def _collapse_transfers(rows: list) -> list:
     return collapsed
 
 @app.delete("/savings/transaction/{id}")
-def delete_savings_transaction(id: int, user_id: str = Depends(get_current_user_id)):
-    row = supabase.table("savings_transactions").select("month, transfer_group").eq("id", id).eq("user_id", user_id).execute()
+def delete_savings_transaction(id: int,
+                               features: set = Depends(_client_features),
+                               user_id: str = Depends(get_current_user_id)):
+    # `goal_id` is selected ONLY for a caller that can be gated on it, so a request
+    # without `limits` issues the identical query it issues today, right down to the
+    # column list. Same reasoning as the social columns in get_lesson_series.
+    columns = "month, transfer_group"
+    if LIMITS_FEATURE in features:
+        columns += ", goal_id"
+    row = supabase.table("savings_transactions").select(columns).eq("id", id).eq("user_id", user_id).execute()
     if row.data:
         _assert_month_open(user_id, row.data[0].get("month"))
         group = row.data[0].get("transfer_group")
+        ent = _entitlements(user_id, features)
+        if ent.enforced:
+            # EITHER leg counts: deleting one leg of a transfer deletes both, so a
+            # locked destination goal must also refuse the delete aimed at its
+            # General Savings leg.
+            goal_ids = [row.data[0].get("goal_id")]
+            if group:
+                legs = supabase.table("savings_transactions").select("goal_id") \
+                    .eq("transfer_group", group).eq("user_id", user_id).execute().data
+                goal_ids = [r.get("goal_id") for r in legs]
+            _assert_goals_unlocked(ent, *goal_ids)
         if group:
             # This row is one leg of a General Savings transfer. Delete BOTH legs so the
             # money returns to General Savings and leaves the goal atomically — net zero
@@ -1014,6 +1137,31 @@ def _assert_owns_goals(user_id: str, *goal_ids: Optional[int]):
         raise HTTPException(status_code=404, detail="Goal not found.")
 
 
+def _assert_goals_unlocked(ent, *goal_ids: Optional[int]):
+    """Companion to _assert_owns_goals: refuse a WRITE that targets a LOCKED goal.
+
+    A free user keeps ONE active goal - the oldest eligible one - and every other
+    eligible goal is locked (SUBSCRIPTION_REWORK.md section 5). Locked means frozen
+    on the server, not merely grayed in the app: an old build has no lock UI, and a
+    new one can be run against a token from anywhere.
+
+    Call this AFTER the route's ownership / 404 checks, so a goal that does not exist
+    still answers 404 rather than 403.
+
+    DELETING a goal is deliberately not routed through here - see delete_savings_goal.
+    A locked goal the user cannot fund is a goal they must be able to get rid of, and
+    the existing delete already returns its prior-month deposits to General Savings.
+    """
+    if ent is None or not ent.enforced:
+        return
+    ids = [g for g in goal_ids if g is not None]
+    if not ids:
+        return
+    locked = ent.locked_goal_ids(write=True)
+    if any(g in locked for g in ids):
+        raise PremiumRequired("goal_locked")
+
+
 def _ensure_general_savings(user_id: str) -> int:
     """Ensure a General Savings goal exists for this user. Returns its id."""
     gen = supabase.table("savings_goals").select("id").eq("user_id", user_id).eq("is_general", True).execute()
@@ -1028,7 +1176,9 @@ def _ensure_general_savings(user_id: str) -> int:
     return result.data[0]["id"]
 
 @app.get("/savings/goal/")
-def get_savings_goals(goal_type: Optional[str] = None, user_id: str = Depends(get_current_user_id)):
+def get_savings_goals(goal_type: Optional[str] = None,
+                      features: set = Depends(_client_features),
+                      user_id: str = Depends(get_current_user_id)):
     # Lazily seed General Savings for this user if it doesn't exist yet
     _ensure_general_savings(user_id)
     query = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", False)
@@ -1036,7 +1186,22 @@ def get_savings_goals(goal_type: Optional[str] = None, user_id: str = Depends(ge
     if goal_type in ("saving", "debt"):
         query = query.eq("goal_type", goal_type)
     goals_res = query.order("created_at", desc=True).execute()
-    return {"data": _decorate_reconciliation(_with_allocated(goals_res.data, user_id), user_id)}
+    goals = _decorate_reconciliation(_with_allocated(goals_res.data, user_id), user_id)
+
+    if LIMITS_FEATURE in features:
+        # ADDED key, marked clients only, so the response an older build reads is
+        # unchanged. The app gets the verdict rather than re-deriving the rule, and
+        # the SORT ORDER is deliberately untouched - reordering the list is a
+        # frontend decision (SUBSCRIPTION_REWORK.md section 5, and section 13 q1).
+        #
+        # Resolved from the entitlement object's OWN query, not from these rows: the
+        # `goal_type` filter above can hide the oldest goal, which would make the
+        # active one look different depending on which tab asked.
+        locked = _entitlements(user_id, features).locked_goal_ids()
+        for g in goals:
+            g["locked"] = g["id"] in locked
+
+    return {"data": goals}
 
 def _decorate_reconciliation(goals: list, user_id: str) -> list:
     """The Reconciliation goal's funded math is owed/repaid (not the generic
@@ -1064,15 +1229,30 @@ def get_completed_goals(goal_type: Optional[str] = None, user_id: str = Depends(
     return {"data": _with_allocated(goals_res.data, user_id)}
 
 @app.patch("/savings/goal/{id}/complete")
-def complete_savings_goal(id: int, user_id: str = Depends(get_current_user_id)):
+def complete_savings_goal(id: int,
+                          features: set = Depends(_client_features),
+                          user_id: str = Depends(get_current_user_id)):
+    # The lock check needs no extra read of this goal, so a nonexistent id still
+    # behaves exactly as it does today (200 with an empty data list).
+    _assert_goals_unlocked(_entitlements(user_id, features), id)
     response = supabase.table("savings_goals").update({"completed": True}).eq("id", id).eq("user_id", user_id).execute()
     return {"message": "Goal marked as complete.", "data": response.data}
 
 @app.post("/savings/goal/")
-def create_savings_goal(goal: SavingsGoal, user_id: str = Depends(get_current_user_id)):
+def create_savings_goal(goal: SavingsGoal,
+                        features: set = Depends(_client_features),
+                        user_id: str = Depends(get_current_user_id)):
     existing = supabase.table("savings_goals").select("id").eq("user_id", user_id).eq("title", goal.title).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="A goal with this name already exists.")
+    # The duplicate-title check keeps its place: a name clash is the same 400 it has
+    # always been, whether or not the caller is also at the cap.
+    #
+    # Checked for EVERY create by an enforced caller, including one flagged
+    # is_general. No client needs this route for General Savings (the server seeds it
+    # lazily), and exempting the flag would hand a client an unlimited-goals bypass.
+    if _entitlements(user_id, features).at_goal_cap():
+        raise PremiumRequired("goal_limit_reached")
     payload = goal.model_dump()
     payload["user_id"] = user_id  # never trust the body's user_id
     response = supabase.table("savings_goals").insert(payload).execute()
@@ -1091,8 +1271,11 @@ def _editable_goal(id: int, user_id: str) -> dict:
     return goal
 
 @app.patch("/savings/goal/{id}")
-def update_savings_goal(id: int, update: SavingsGoalUpdate, user_id: str = Depends(get_current_user_id)):
+def update_savings_goal(id: int, update: SavingsGoalUpdate,
+                        features: set = Depends(_client_features),
+                        user_id: str = Depends(get_current_user_id)):
     goal = _editable_goal(id, user_id)
+    _assert_goals_unlocked(_entitlements(user_id, features), id)
 
     fields = update.model_dump(exclude={"user_id"}, exclude_none=True)
     if not fields:
@@ -1120,7 +1303,9 @@ def update_savings_goal(id: int, update: SavingsGoalUpdate, user_id: str = Depen
     return {"message": "Goal updated.", "data": response.data}
 
 @app.post("/savings/goal/{id}/finish")
-def finish_savings_goal(id: int, body: SavingsGoalFinish, user_id: str = Depends(get_current_user_id)):
+def finish_savings_goal(id: int, body: SavingsGoalFinish,
+                        features: set = Depends(_client_features),
+                        user_id: str = Depends(get_current_user_id)):
     """One-tap completion. Withdraws exactly what the goal holds — no hand-typed
     amount — and snapshots it, since allocated_amount (deposits − withdrawals) drops
     to 0 the moment the withdrawal lands.
@@ -1130,6 +1315,7 @@ def finish_savings_goal(id: int, body: SavingsGoalFinish, user_id: str = Depends
     means a failure leaves the goal active with its money intact (retry is safe);
     withdrawing first would take the money and leave the goal active at $0."""
     goal = _editable_goal(id, user_id)
+    _assert_goals_unlocked(_entitlements(user_id, features), id)
     if goal.get("completed"):
         raise HTTPException(status_code=400, detail="Goal is already completed.")
     _assert_month_open(user_id, body.month)
@@ -1264,7 +1450,7 @@ def _goal_balance(user_id: str, goal_id: Optional[int]) -> float:
     return _r(sum(t["amount"] if t["type"] == "deposit" else -t["amount"] for t in res.data))
 
 def _compute_target_rollover(user_id: str, month: str, settings: Optional[dict] = None,
-                             status: Optional[dict] = None):
+                             status: Optional[dict] = None, ent=None):
     """Pure function of the month's data: the leftover the dashboard implies.
 
     budgetable is computed with the SAME _month_tithe the dashboard uses (live
@@ -1286,7 +1472,7 @@ def _compute_target_rollover(user_id: str, month: str, settings: Optional[dict] 
     irows = _rollover_income_rows(user_id, month)
     total_income = sum(r["amount"] for r in irows)
     budgetable = _month_tithe(total_income, irows, settings, status)["budgetable"]
-    bt = BUDGET_TYPES[_month_budget_type(irows, settings, status)]
+    bt = BUDGET_TYPES[_month_budget_type(irows, settings, status, ent)]
 
     needs_spent = _sum_expenses(user_id, month, "Needs")
     wants_spent = _sum_expenses(user_id, month, "Wants")
@@ -1383,7 +1569,7 @@ def _recon_summary(user_id: str, recon_id: Optional[int] = None):
     return _r(owed), _r(repaid), _r(max(0.0, owed - repaid)), recon_id
 
 def reconcile_month(user_id: str, month: str, settings: Optional[dict] = None,
-                    status: Optional[dict] = None) -> float:
+                    status: Optional[dict] = None, ent=None) -> float:
     """Single source of truth for a month's rollover. Idempotent and convergent:
     re-running with no data change is a no-op. Drives
         net = (GS rollover entry) − (this month's booked reconciliation debt)
@@ -1399,7 +1585,10 @@ def reconcile_month(user_id: str, month: str, settings: Optional[dict] = None,
     # dict they will stamp with, so a PATCH /settings/ landing mid-close can never
     # make the money moved here disagree with the stamp written after it.
     settings = settings or _get_user_settings(user_id)
-    target, _, _ = _compute_target_rollover(user_id, month, settings, status)
+    # `ent` only reaches the per-category breakdown, which this function discards:
+    # the target is NET leftover and no split can move it. It is threaded anyway so
+    # there is one convention for every caller rather than two.
+    target, _, _ = _compute_target_rollover(user_id, month, settings, status, ent)
 
     general_id = _ensure_general_savings(user_id)
     entry = _gs_rollover_entry(user_id, month, general_id)
@@ -1452,13 +1641,16 @@ def reconcile_month(user_id: str, month: str, settings: Optional[dict] = None,
 
 
 @app.get("/rollover/preview/")
-def rollover_preview(month: str, user_id: str = Depends(get_current_user_id)):
+def rollover_preview(month: str,
+                     features: set = Depends(_client_features),
+                     user_id: str = Depends(get_current_user_id)):
     """Target rollover + per-category breakdown (split used for display only) and
     whether the month is closed. Does not mutate anything."""
     # Read the status first and pass it down: the target depends on whether the
     # month is frozen, and this keeps it to one query rather than two.
     st = _month_status(user_id, month)
-    target, breakdown, budgetable = _compute_target_rollover(user_id, month, None, st)
+    target, breakdown, budgetable = _compute_target_rollover(
+        user_id, month, None, st, _entitlements(user_id, features))
     locked = _status_locked(st)
     return {
         "month": month,
@@ -1474,7 +1666,9 @@ class RolloverAction(BaseModel):
     month: str
 
 @app.post("/rollover/close/")
-def rollover_close(action: RolloverAction, user_id: str = Depends(get_current_user_id)):
+def rollover_close(action: RolloverAction,
+                   features: set = Depends(_client_features),
+                   user_id: str = Depends(get_current_user_id)):
     """Reconcile the month (first close defines the rollover entry) then mark it
     closed, freezing the tithe and budget split it was closed with. Safe to call
     repeatedly — reconcile is idempotent and the freeze happens once.
@@ -1486,7 +1680,10 @@ def rollover_close(action: RolloverAction, user_id: str = Depends(get_current_us
     settings = _get_user_settings(user_id)
     st = _month_status(user_id, action.month)
     already_closed = _status_locked(st)
-    moved = reconcile_month(user_id, action.month, settings, st)
+    # Resolved once and used for both the money and the stamp, for the same reason
+    # `settings` is: the two must not be able to disagree.
+    ent = _entitlements(user_id, features)
+    moved = reconcile_month(user_id, action.month, settings, st, ent)
     payload = {
         "user_id": user_id, "month": action.month,
         "closed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -1498,7 +1695,7 @@ def rollover_close(action: RolloverAction, user_id: str = Depends(get_current_us
         # stamp — correctly does nothing, leaving the month's stored rollover and
         # its displayed budgets permanently disagreeing. A re-close after Reopen
         # IS this transition, so it re-freezes as intended.
-        payload.update(_frozen_stamp(settings, action.month))
+        payload.update(_frozen_stamp(settings, action.month, ent))
     supabase.table("month_status").upsert(payload).execute()
     return {"message": f"{action.month} closed.", "month": action.month, "rolled_over": moved}
 
@@ -1600,6 +1797,8 @@ def create_lesson_rating(entry: LessonRating, user_id: str = Depends(get_current
 # every request the app will ever make, including routes that don't exist yet. A query
 # param would have to be added at each call site and forgotten at the next one.
 
+# The tokens. The `_client_features` dependency that parses the header is defined
+# near the top of the file, for the FastAPI reason noted there.
 PREMIUM_FEATURE = "premium"
 PREMIUM_ENTITLEMENT_ID = "premium"
 
@@ -1614,6 +1813,51 @@ PREMIUM_ENTITLEMENT_ID = "premium"
 # each generation gets exactly the response it was built for, and the question "which
 # build sees this field" stays answerable by reading one line.
 SOCIAL_FEATURE = "social"
+
+# A THIRD capability. A build that sends it understands the free-tier ALLOWANCES:
+# the one-goal cap and its 403, goals it must render locked (the `locked` flag on
+# GET /savings/goal/), a budget-type picker where gated types refuse and unclosed
+# months fall back to Balanced, and the five extra allowance fields on
+# /me/entitlements/. None of that existed when the premium build shipped, and none
+# of it can be inferred from `premium` - that token means "I have a paywall", which
+# is a different claim from "I can draw a locked goal card".
+#
+# This is the token the whole of SUBSCRIPTION_REWORK.md turns on: without it every
+# gate below is inert, which is what lets Phase 1 deploy to production while the
+# current App Store binaries keep calling it.
+LIMITS_FEATURE = "limits"
+
+# Accounts for which the limits are enforced even while app_config.premium_enabled
+# is still false. Comma-separated user ids in the environment, parsed once here.
+#
+# It exists because the two switches cannot be combined: the live premium build
+# reads premium_enabled from /config/ to decide what to lock, so flipping it to test
+# the new rules on a phone would start gating videos for every user on that build.
+# This gives the new rules a way to be exercised against PRODUCTION data from a dev
+# build without touching anyone else.
+#
+# It affects EXACTLY ONE thing - whether _entitlements() treats the limits as switched
+# on. Not _premium_enabled(), not /config/, not /playback/, and nothing at all for a
+# request that does not send `limits`. Unset or empty behaves as if it did not exist.
+# Only the COUNT is logged: the ids are user ids and the log stream is not the place
+# for them.
+def _parse_user_id_list(raw: Optional[str]) -> frozenset:
+    """A comma-separated id list from the environment: whitespace trimmed, blank
+    entries dropped. Unset, empty, and a string of commas all yield the empty set."""
+    return frozenset(part.strip() for part in (raw or "").split(",") if part.strip())
+
+
+LIMITS_TEST_USER_IDS = _parse_user_id_list(os.environ.get("LIMITS_TEST_USER_IDS"))
+if LIMITS_TEST_USER_IDS:
+    print(f"limits: enforced for {len(LIMITS_TEST_USER_IDS)} test account(s)")
+
+# The free tier, in one place. Values, not verdicts - see SUBSCRIPTION_REWORK.md
+# section 6: changing the free cap to two goals is then a one-line server change that
+# every installed build obeys, instead of an App Store update to reword the copy.
+FREE_MAX_GOALS = 1
+FREE_BUDGET_TYPES = (DEFAULT_BUDGET_TYPE,)
+FREE_MAX_BANK_CONNECTIONS = 0
+PAID_MAX_BANK_CONNECTIONS = 1
 
 # Two switches, deliberately not one:
 #   * Hiding premium series from UNMARKED clients is ALWAYS on. It is backward
@@ -1641,14 +1885,18 @@ REVENUECAT_TIMEOUT_SECONDS = 3.0
 _FALLBACK_CACHE_TTL_SECONDS = 60
 _fallback_cache: dict = {}   # user_id -> (monotonic_stamp, bool)
 
-# Adoption telemetry for rollout step 3 ("flip once adoption looks reasonable").
-# Logged to Render's stream only — never exposed on /config/, which is public and
-# unauthenticated. In-process and per-instance, reset by every deploy: the question is
-# a ratio, not a total, so that costs nothing and needs no schema.
-_marked_requests = 0
-_unmarked_requests = 0
-_client_mix_logged_at = 0.0
-_CLIENT_MIX_LOG_INTERVAL_SECONDS = 60
+# The detail sentence per code. Plain English, because it is what the user reads:
+# a video needs the full paywall, while a goal cap wants an inline upsell next to the
+# button it just refused.
+#
+# `premium_required` is FROZEN. The shipped premium build branches on that exact
+# string, so it is reproduced here byte for byte and must never be reworded.
+PREMIUM_REQUIRED_DETAILS = {
+    "premium_required": "This series is part of DollarSeeds Premium.",
+    "goal_limit_reached": "Your free plan keeps one goal at a time. Premium gives you unlimited goals.",
+    "budget_type_locked": "This budget type is part of DollarSeeds Premium. Your free plan uses Balanced.",
+    "goal_locked": "This goal is locked because your free plan keeps one goal active. Premium unlocks it again.",
+}
 
 
 class PremiumRequired(Exception):
@@ -1658,49 +1906,34 @@ class PremiumRequired(Exception):
     screens pass `detail` straight to Alert.alert, so making it an object would break
     them. This adds a TOP-LEVEL `code` instead, which is the one thing the paywall path
     needs: the client must tell "you need to subscribe" apart from any other 403 in
-    order to show a paywall rather than a generic "couldn't load this video"."""
+    order to show a paywall rather than a generic "couldn't load this video".
+
+    Raised with NO ARGUMENTS it is byte-identical to the only response it has ever
+    produced — code `premium_required`, and that exact sentence. The shipped build
+    branches on the string, so the no-argument form is a compatibility contract, not a
+    convenience default: /playback/ still raises it bare."""
+
+    def __init__(self, code: str = "premium_required", detail: Optional[str] = None):
+        self.code = code
+        self.detail = detail or PREMIUM_REQUIRED_DETAILS.get(
+            code, PREMIUM_REQUIRED_DETAILS["premium_required"]
+        )
+        super().__init__(self.detail)
 
 
 @app.exception_handler(PremiumRequired)
 def _premium_required_handler(request: Request, exc: PremiumRequired):
+    # Shape is fixed: a top-level `code`, then a plain-string `detail`. Every code
+    # shares it, so a client that learns one 403 has learned all of them.
     return JSONResponse(
         status_code=403,
-        content={
-            "code": "premium_required",
-            "detail": "This series is part of DollarSeeds Premium.",
-        },
+        content={"code": exc.code, "detail": exc.detail},
     )
 
 
 class _EntitlementLookupUnavailable(Exception):
     """RevenueCat could not be reached inside the timeout. Distinct from "they said no"
     so the caller can choose its own failure posture."""
-
-
-def _client_features(x_client_features: Optional[str] = Header(default=None)) -> set:
-    """Which capabilities the calling BUILD supports. No header = the shipped binary,
-    which supports none of them."""
-    global _marked_requests, _unmarked_requests
-    if x_client_features:
-        _marked_requests += 1
-        features = {f.strip().lower() for f in x_client_features.split(",") if f.strip()}
-    else:
-        _unmarked_requests += 1
-        features = set()
-    _log_client_mix()
-    return features
-
-
-def _log_client_mix() -> None:
-    global _client_mix_logged_at
-    now = time.monotonic()
-    if now - _client_mix_logged_at < _CLIENT_MIX_LOG_INTERVAL_SECONDS:
-        return
-    _client_mix_logged_at = now
-    total = _marked_requests + _unmarked_requests
-    if total:
-        pct = 100.0 * _marked_requests / total
-        print(f"client-mix: {_marked_requests}/{total} lesson requests on v2+ ({pct:.1f}%)")
 
 
 def _app_config() -> dict:
@@ -1845,6 +2078,185 @@ def _is_entitled(user_id: str) -> bool:
     if _has_premium(user_id):
         return True
     return _entitlement_via_revenuecat(user_id)
+
+
+_GOAL_EPOCH = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+
+
+def _goal_age_key(goal: dict):
+    """Sort key deciding WHICH goal is the active one: oldest `created_at` first,
+    `id` as the tiebreak. A row with no parseable timestamp sorts LAST - "we cannot
+    date it" is not evidence that it is the oldest."""
+    stamp = _parse_ts(goal.get("created_at"))
+    return (stamp is None, stamp or _GOAL_EPOCH, goal.get("id") or 0)
+
+
+class _Entitlements:
+    """What ONE caller is allowed, resolved once per request (section 6 of
+    SUBSCRIPTION_REWORK.md). Threaded through the request rather than re-derived at
+    each gate, so the RevenueCat lookup and the goal count happen at most once.
+
+    TWO FAILURE POSTURES, both explicit, because a gate and a status read want
+    different ones when RevenueCat cannot be reached:
+
+      * `enforced`          - WRITE posture. Fails CLOSED, so an unreachable lookup
+                              returns the relevant 403. Same reasoning as /playback/:
+                              a 403 renders something the user can act on.
+      * `enforced_on_reads` - READ posture. Fails OPEN, so a lookup timeout never
+                              drops a paying user's dashboard to Balanced or grays
+                              out goals they are still paying for.
+
+    Everything the server SHOWS (the allowance fields, the `locked` flags, the live
+    budget type) uses the read posture; everything it REFUSES uses the write one.
+    """
+
+    __slots__ = ("user_id", "limits_on", "paid", "lookup_unavailable", "_eligible")
+
+    def __init__(self, user_id: str, *, limits_on: bool, paid: bool,
+                 lookup_unavailable: bool):
+        self.user_id = user_id
+        self.limits_on = limits_on
+        self.paid = paid
+        self.lookup_unavailable = lookup_unavailable
+        self._eligible: Optional[list] = None
+
+    # ── the two postures ──────────────────────────────────────────────────────
+    @property
+    def enforced(self) -> bool:
+        """Write posture. `paid` is already False when the lookup failed."""
+        return not self.paid
+
+    @property
+    def enforced_on_reads(self) -> bool:
+        return not self.paid and not self.lookup_unavailable
+
+    # ── allowances: VALUES the client renders, never verdicts ────────────────
+    @property
+    def max_goals(self) -> Optional[int]:
+        """None means unlimited."""
+        return FREE_MAX_GOALS if self.enforced_on_reads else None
+
+    def budget_types_for(self, *, write: bool = False) -> tuple:
+        """The budget types this caller may use. `write=True` selects the fail-closed
+        posture, so an unreachable RevenueCat refuses a gated type instead of letting
+        it through; the default is the fail-open one the dashboard reads.
+
+        A GATE MUST PASS write=True. Comparing a requested type against the read
+        posture would accept wealth_builder during a lookup outage while
+        _live_budget_type went on resolving the month to balanced - the stored choice
+        and the shown split would disagree, with nothing to explain it."""
+        enforced = self.enforced if write else self.enforced_on_reads
+        return FREE_BUDGET_TYPES if enforced else tuple(BUDGET_TYPES)
+
+    @property
+    def budget_types(self) -> tuple:
+        """Read posture - what the client is TOLD it may choose."""
+        return self.budget_types_for()
+
+    @property
+    def video_series(self) -> str:
+        return "free_only" if self.enforced_on_reads else "all"
+
+    @property
+    def max_bank_connections(self) -> int:
+        return (FREE_MAX_BANK_CONNECTIONS if self.enforced_on_reads
+                else PAID_MAX_BANK_CONNECTIONS)
+
+    def allowances(self) -> dict:
+        """The additive half of /me/entitlements/. Read posture throughout, so the
+        numbers a paying user sees never move because of a lookup blip."""
+        return {
+            "max_goals": self.max_goals,
+            "goals_used": self.goals_used(),
+            "budget_types": list(self.budget_types),
+            "video_series": self.video_series,
+            "max_bank_connections": self.max_bank_connections,
+        }
+
+    # ── goals ─────────────────────────────────────────────────────────────────
+    def _eligible_goals(self) -> list:
+        """The user's ELIGIBLE goals, oldest first. Eligible = user-created and still
+        running: `is_general` (General Savings) and `is_reconciliation` (created by
+        the app at month close) are excluded, because nobody may be locked out of
+        their one free goal by a goal the app made for them, and completed goals are
+        excluded so finishing one frees the slot.
+
+        Read at most once per request, and never at all unless something actually
+        asks. Filtered in Python, matching the house style and treating a NULL flag
+        as "not true" without relying on PostgREST NULL semantics."""
+        if self._eligible is None:
+            rows = supabase.table("savings_goals") \
+                .select("id, created_at, is_general, is_reconciliation, completed") \
+                .eq("user_id", self.user_id).execute().data
+            self._eligible = sorted(
+                (r for r in rows
+                 if not r.get("is_general")
+                 and not r.get("is_reconciliation")
+                 and not r.get("completed")),
+                key=_goal_age_key,
+            )
+        return self._eligible
+
+    def goals_used(self) -> int:
+        return len(self._eligible_goals())
+
+    def active_goal_id(self) -> Optional[int]:
+        """The one goal a free user keeps: the OLDEST eligible one. Deliberately a
+        query and not stored state - no schema change, no promotion logic, no
+        backfill. Delete or complete it and the next-oldest simply IS the active one
+        on the next read."""
+        goals = self._eligible_goals()
+        return goals[0]["id"] if goals else None
+
+    def locked_goal_ids(self, *, write: bool = False) -> frozenset:
+        """Every eligible goal EXCEPT the active one - and only when the limits are
+        actually being enforced for this caller. Nothing is locked otherwise, so a
+        paid or unmarked caller costs no query here.
+
+        `write=True` selects the fail-closed posture for a gate; the default is the
+        fail-open one used to tell the app what to draw."""
+        if not (self.enforced if write else self.enforced_on_reads):
+            return frozenset()
+        return frozenset(g["id"] for g in self._eligible_goals()[1:])
+
+    def at_goal_cap(self) -> bool:
+        """Write posture: an unreachable RevenueCat refuses a new goal rather than
+        handing out an unlimited one."""
+        return self.enforced and self.goals_used() >= FREE_MAX_GOALS
+
+
+def _entitlements(user_id: str, features: set) -> _Entitlements:
+    """Resolve what this caller is allowed. ONE function, called once per request.
+
+    THE MARKER IS CHECKED FIRST, and that ordering is the whole backward-compatibility
+    guarantee — the same rule as the /playback/ gate. A request that does not advertise
+    `limits` leaves this function having issued not one query: no app_config read, no
+    subscriptions scan, no goal count. It comes from a binary with no paywall, no
+    purchase path and no lock UI, so every allowance below is inert for it.
+
+    The check lives HERE rather than at each call site on purpose. Spread across a
+    dozen routes it gets forgotten at the thirteenth, and the forgotten one is a live
+    app that cannot be rolled back.
+    """
+    if LIMITS_FEATURE not in features:
+        return _Entitlements(user_id, limits_on=False, paid=True, lookup_unavailable=False)
+
+    # The kill switch, plus the test-account escape hatch. Everyone is treated as paid
+    # while premium_enabled is false, which is how this ships: the release goes out
+    # dark and the flag is flipped afterwards (Phase 3).
+    limits_on = _premium_enabled() or user_id in LIMITS_TEST_USER_IDS
+    if not limits_on:
+        return _Entitlements(user_id, limits_on=False, paid=True, lookup_unavailable=False)
+
+    try:
+        paid = _is_entitled(user_id)
+        unavailable = False
+    except _EntitlementLookupUnavailable:
+        # Not "they said no" — we could not ask. The two postures above split on this.
+        paid = False
+        unavailable = True
+    return _Entitlements(user_id, limits_on=True, paid=paid,
+                         lookup_unavailable=unavailable)
 
 
 def _series_is_premium(series_id: Optional[str]) -> bool:
@@ -2097,7 +2509,8 @@ def get_client_config():
 
 
 @app.get("/me/entitlements/")
-def get_my_entitlements(user_id: str = Depends(get_current_user_id)):
+def get_my_entitlements(features: set = Depends(_client_features),
+                        user_id: str = Depends(get_current_user_id)):
     """The CALLER'S OWN subscription state. Server-side truth: the client never asserts
     its entitlement to us, it asks.
 
@@ -2106,7 +2519,15 @@ def get_my_entitlements(user_id: str = Depends(get_current_user_id)):
     <expires_at>". Safe to be generous — this route is new, so it has no old clients.
 
     product_id is REPORTING ONLY. Every tier grants the same entitlement; nothing
-    downstream may branch on it."""
+    downstream may branch on it.
+
+    THE SIX ORIGINAL KEYS ARE FROZEN — premium_active, expires_at, product_id,
+    pending_product_id, store, auto_renew — because the shipped premium build reads
+    them. A `limits` build additionally gets the ALLOWANCES (max_goals, goals_used,
+    budget_types, video_series, max_bank_connections), which are values rather than
+    verdicts so the free tier can be changed server-side without an app update. They
+    state what this server will actually enforce for THIS caller: with
+    premium_enabled still false that means unlimited, for everyone."""
     try:
         rows = supabase.table("subscriptions").select(
             "store, product_id, pending_product_id, expires_at, revoked_at, auto_renew, status"
@@ -2128,14 +2549,14 @@ def get_my_entitlements(user_id: str = Depends(get_current_user_id)):
         # Furthest-out subscription wins — a user holding both an App Store and a Play
         # Store row (rare, but possible) should see the one that actually governs access.
         _, row = max(live, key=lambda pair: pair[0])
-        return {
+        return _with_allowances({
             "premium_active": True,
             "expires_at": row.get("expires_at"),
             "product_id": row.get("product_id"),
             "pending_product_id": row.get("pending_product_id"),
             "store": row.get("store"),
             "auto_renew": bool(row.get("auto_renew", True)),
-        }
+        }, user_id, features)
 
     # No live local row. Ask RevenueCat before answering no: the webhook may simply not
     # have landed yet. This is a status read rather than a gate, so an unreachable
@@ -2145,14 +2566,24 @@ def get_my_entitlements(user_id: str = Depends(get_current_user_id)):
     except _EntitlementLookupUnavailable:
         fallback_active = False
 
-    return {
+    return _with_allowances({
         "premium_active": fallback_active,
         "expires_at": None,
         "product_id": None,
         "pending_product_id": None,
         "store": None,
         "auto_renew": False,
-    }
+    }, user_id, features)
+
+
+def _with_allowances(body: dict, user_id: str, features: set) -> dict:
+    """Append the allowance fields for a `limits` caller, and nothing otherwise.
+
+    Additive only, and marked-only: a caller without the token gets exactly the six
+    keys it got before this existed. The six are never touched either way."""
+    if LIMITS_FEATURE not in features:
+        return body
+    return {**body, **_entitlements(user_id, features).allowances()}
 
 
 # ─── Announcements (the in-app News modal) ────────────────────────────────────
