@@ -21,7 +21,9 @@ import {
     IconTransactionsMascot,
     IconGoalsMascot,
     IconLessonsMascot,
+    IconDebtsTab,
 } from '../icons';
+import { DEBT_FREEDOM_ENABLED } from '../../constants/features';
 
 // Icons accept `paper` (the container background) so their light fills read as
 // negative space, while the linework tints via `color` across light/dark + states.
@@ -39,7 +41,12 @@ const TAB_ICONS: Record<string, TabIconComponent> = {
     transactions: IconTransactionsMascot,
     piggyBank: IconGoalsMascot,
     lessons: IconLessonsMascot,
+    debts: IconDebtsTab,
 };
+
+// Routes that exist in the file tree but are not shown yet. The Debts tab is built
+// but stays out of production until DEBT_FREEDOM_ENABLED is approved.
+const HIDDEN_ROUTES = new Set<string>(DEBT_FREEDOM_ENABLED ? [] : ['debts']);
 
 // Labels come from `common:tabs.<routeName>`, keyed by the Expo Router route name.
 // The route name is the canonical identifier and is never translated — only the label
@@ -63,8 +70,8 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                 },
             ]}
         >
-            {state.routes.map((route, index) => {
-                const isFocused = state.index === index;
+            {state.routes.filter(route => !HIDDEN_ROUTES.has(route.name)).map(route => {
+                const isFocused = state.routes[state.index]?.key === route.key;
                 const IconComp = TAB_ICONS[route.name] ?? IconHomeMascot;
                 const label = t(`tabs.${route.name}`, { defaultValue: route.name });
 

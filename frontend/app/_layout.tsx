@@ -119,6 +119,8 @@ function RootLayoutNav() {
                 <Stack.Screen name="lessonSeries/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="lessonPlayer" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
+                <Stack.Screen name="debtDetail" options={{ headerShown: false }} />
+                <Stack.Screen name="debtForm" options={{ headerShown: false }} />
             </Stack>
             <OnboardingTour />
             <StartingBalanceGate />

@@ -9,6 +9,7 @@ import Svg, {
     Defs, LinearGradient as LG, Stop, ClipPath, G,
     Rect as SvgRect,
 } from 'react-native-svg';
+import { IconDebtMascot as DebtMascotForTab } from './categoryIcons';
 
 // Hand-drawn mascot tab icons (theme-adaptive duotone)
 export {
@@ -27,6 +28,13 @@ export {
     IconDebtMascot,
 } from './categoryIcons';
 export type { CategoryIconProps } from './categoryIcons';
+
+/** Debts tab: the hand-drawn debt mascot in tab-bar form. The tab bar passes
+ *  `accent` for its active tint, which the category icon would take over `color`;
+ *  the other tab mascots tint from `color`, so this does too. */
+export const IconDebtsTab = ({ size = 24, color, paper }: { size?: number; color?: string; paper?: string; accent?: string; filled?: boolean }) => (
+    <DebtMascotForTab size={size} color={color} paper={paper} />
+);
 
 // Hand-drawn hero icons (dashboard logo + gear)
 export {

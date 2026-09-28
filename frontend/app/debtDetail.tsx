@@ -1,0 +1,262 @@
+/**
+ * debtDetail — everything about one Debt Freedom debt, opened by tapping its plant
+ * or card. Edit, Log payment, Delete (confirmed). All figures are server-computed.
+ */
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import * as WebBrowser from 'expo-web-browser';
+import * as Haptics from 'expo-haptics';
+import { Fonts, useTheme } from '../context/ThemeContext';
+import { useLocale } from '../context/LocaleContext';
+import { DEBT_FREEDOM_ENABLED } from '../constants/features';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import BackHeader from '../components/debts/BackHeader';
+import LogPaymentSheet from '../components/debts/LogPaymentSheet';
+import { useDebtFormat } from '../components/debts/format';
+import { useAnalytics } from '../lib/analytics';
+import { queueGardenAnimation } from '../lib/debtFreedomEvents';
+import { deleteDebt, fetchDebt, type DebtDetail, type PaymentResult } from '../lib/debtFreedom';
+
+const VERSE_COUNT = 5;
+
+export default function DebtDetailRoute() {
+    if (!DEBT_FREEDOM_ENABLED) return <Redirect href="/(tabs)" />;
+    return <DebtDetailScreen />;
+}
+
+function DebtDetailScreen() {
+    const { t } = useTranslation('debts');
+    const { theme } = useTheme();
+    const { formatNumber } = useLocale();
+    const f = useDebtFormat();
+    const router = useRouter();
+    const insets = useSafeAreaInsets();
+    const analytics = useAnalytics();
+    const { id: idParam } = useLocalSearchParams<{ id: string }>();
+    const id = Number(idParam);
+
+    const [data, setData] = useState<DebtDetail | null>(null);
+    const [error, setError] = useState(false);
+    const [paying, setPaying] = useState(false);
+    const [verse] = useState(() => Math.floor(Math.random() * VERSE_COUNT));
+
+    const load = useCallback(() => {
+        fetchDebt(id)
+            .then(d => { setData(d); setError(false); })
+            .catch(e => { console.error('fetchDebt failed', e); setError(true); });
+    }, [id]);
+
+    useFocusEffect(load);
+
+    const onLogged = (result: PaymentResult, extra: boolean) => {
+        setPaying(false);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        const kinds = result.transactions.map(tx => tx.kind);
+        analytics.debtPaymentLogged({
+            debt_id: result.debt.id,
+            kind: kinds.includes('payment_minimum') && kinds.includes('payment_extra')
+                ? 'minimum_extra' : kinds.includes('payment_extra') ? 'extra' : 'minimum',
+            growth_step: result.debt.growth_step,
+        });
+        // The drops play in the garden, on this plant, when the user goes back.
+        queueGardenAnimation({ kind: 'payment', debtId: result.debt.id, extra });
+        load();
+    };
+
+    const confirmDelete = () => {
+        if (!data) return;
+        Alert.alert(t('detail.deleteTitle', { name: data.debt.name }), t('detail.deleteBody'), [
+            { text: t('detail.cancel'), style: 'cancel' },
+            {
+                text: t('detail.delete'),
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await deleteDebt(id);
+                        router.back();
+                    } catch (e) {
+                        console.error('deleteDebt failed', e);
+                        Alert.alert(t('detail.errDelete'));
+                    }
+                },
+            },
+        ]);
+    };
+
+    if (!data) {
+        return (
+            <View style={[styles.fill, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
+                <BackHeader title="" backLabel={t('actions.back')} />
+                {error ? (
+                    <Text style={[styles.center, { color: theme.ink2, fontFamily: Fonts.sans }]}>{t('detail.errLoad')}</Text>
+                ) : (
+                    <ActivityIndicator color={theme.brand} style={{ marginTop: 40 }} />
+                )}
+            </View>
+        );
+    }
+
+    const d = data.debt;
+    const paidOff = d.status === 'paid_off';
+    const missing = t('label.missing');
+    const rollover = Math.max(0, d.suggested_payment - d.min_payment);
+    const usage = d.debt_type === 'credit_card' && d.credit_limit ? d.current_balance / d.credit_limit : null;
+
+    return (
+        <View style={[styles.fill, { backgroundColor: theme.bg }]}>
+            <View style={{ paddingTop: insets.top }}>
+                <BackHeader
+                    eyebrow={t('detail.position', { position: d.position, total: d.total })}
+                    title={d.name}
+                    backLabel={t('actions.back')}
+                />
+            </View>
+            <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}>
+                <Card theme={theme} padding={18}>
+                    <Text style={[styles.eyebrow, { color: theme.ink3, fontFamily: Fonts.monoSemiBold }]}>
+                        {paidOff ? t('detail.paidOffOn', { date: f.fullDate(d.paid_off_at) }) : t('detail.balance')}
+                    </Text>
+                    {!paidOff ? (
+                        <Text style={[styles.big, { color: theme.ink, fontFamily: Fonts.serif }]}>{f.money(d.current_balance)}</Text>
+                    ) : null}
+                    <Text style={{ color: theme.ink2, fontFamily: Fonts.sansSemiBold, fontSize: 14 }}>
+                        {t('label.pctPaid', { pct: f.pct(d.pct_paid) })}
+                        {!paidOff ? `  ·  ${t('detail.estPayoff')} ` : ''}
+                        {!paidOff ? (
+                            <Text style={{ color: d.est_payoff_month ? theme.ink2 : theme.danger }}>{f.monthYear(d.est_payoff_month)}</Text>
+                        ) : null}
+                    </Text>
+                    {!paidOff ? (
+                        <View style={styles.actions}>
+                            <View style={styles.flex}><Button color={theme.brand} label={t('actions.logPayment')} variant="primary" fullWidth onPress={() => setPaying(true)} /></View>
+                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={() => router.push({ pathname: '/debtForm', params: { id: String(d.id) } })} /></View>
+                        </View>
+                    ) : (
+                        <View style={styles.actions}>
+                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={() => router.push({ pathname: '/debtForm', params: { id: String(d.id) } })} /></View>
+                        </View>
+                    )}
+                </Card>
+
+                <Card theme={theme} padding={6} style={styles.card}>
+                    <Row label={t('detail.type')} value={d.debt_type ? t(`type.${d.debt_type}`) : missing} dim={!d.debt_type} />
+                    <Row label={t('detail.lender')} value={d.lender ?? missing} dim={!d.lender} />
+                    {d.pay_url ? (
+                        <Pressable onPress={() => WebBrowser.openBrowserAsync(d.pay_url as string)} accessibilityRole="link">
+                            <Row label={t('detail.payOnline')} value={d.pay_url.replace(/^https?:\/\//, '')} link />
+                        </Pressable>
+                    ) : null}
+                    <Row label={t('detail.original')} value={f.money(d.original_balance)} />
+                    <Row label={t('detail.started')} value={f.fullDate(d.created_at)} />
+                    <Row label={t('detail.apr')} value={t('detail.aprValue', { apr: formatNumber(d.apr, d.apr % 1 ? 2 : 0) })} />
+                    <Row label={t('detail.minimum')} value={f.money(d.min_payment)} />
+                    {!paidOff ? (
+                        <Row label={t('detail.suggested')} value={f.money(d.suggested_payment)}
+                            hint={rollover > 0 ? t('detail.suggestedHint', { amount: f.money(rollover) }) : undefined} />
+                    ) : null}
+                    <Row label={t('detail.due')} value={d.due_day ? t('detail.dueValue', { day: d.due_day }) : missing} danger={!d.due_day && !paidOff} />
+                    <Row label={t('detail.autopay')} value={d.autopay == null ? missing : d.autopay ? t('form.yes') : t('form.no')} dim={d.autopay == null} />
+                    {!paidOff ? (
+                        <>
+                            <Row label={t('detail.monthlyInterest')} value={f.money(d.monthly_interest)} />
+                            <Row label={t('detail.interestRemaining')} value={d.interest_remaining == null ? missing : f.money(d.interest_remaining)} danger={d.interest_remaining == null} />
+                        </>
+                    ) : null}
+                    {d.debt_type === 'credit_card' ? (
+                        <>
+                            <Row label={t('detail.creditLimit')} value={d.credit_limit != null ? f.money(d.credit_limit) : missing} dim={d.credit_limit == null} />
+                            {usage != null ? <Row label={t('detail.usage')} value={t('detail.usageValue', { pct: Math.round(usage * 100) })} /> : null}
+                        </>
+                    ) : null}
+                    {!paidOff ? (
+                        <Row label={t('detail.rollsInto')} value={data.rolls_into ? data.rolls_into.name : t('detail.rollsIntoNone')} last />
+                    ) : null}
+                </Card>
+
+                <Text style={[styles.section, { color: theme.ink2, fontFamily: Fonts.monoSemiBold }]}>{t('detail.history')}</Text>
+                <Card theme={theme} padding={6}>
+                    {data.transactions.length === 0 ? (
+                        <Text style={[styles.empty, { color: theme.ink3, fontFamily: Fonts.sans }]}>{t('detail.historyEmpty')}</Text>
+                    ) : data.transactions.map((tx, i) => (
+                        <View key={tx.id} style={[styles.tx, i < data.transactions.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.borderSoft }]}>
+                            <View style={styles.flex}>
+                                <Text style={{ color: theme.ink, fontFamily: Fonts.sansSemiBold, fontSize: 14 }}>{t(`kind.${tx.kind}`)}</Text>
+                                <Text style={{ color: theme.ink3, fontFamily: Fonts.mono, fontSize: 11, marginTop: 2 }}>{f.fullDate(tx.occurred_on)}</Text>
+                            </View>
+                            <Text style={{
+                                color: tx.kind === 'interest' ? theme.danger : tx.kind === 'balance_edit' ? theme.ink2 : theme.success,
+                                fontFamily: Fonts.sansSemiBold, fontSize: 15,
+                            }}>
+                                {tx.kind === 'interest' || (tx.kind === 'balance_edit' && tx.amount > 0) ? '+' : '−'}
+                                {f.money(Math.abs(tx.amount))}
+                            </Text>
+                        </View>
+                    ))}
+                </Card>
+
+                {d.notes ? (
+                    <>
+                        <Text style={[styles.section, { color: theme.ink2, fontFamily: Fonts.monoSemiBold }]}>{t('detail.notes')}</Text>
+                        <Card theme={theme} padding={16}>
+                            <Text style={{ color: theme.ink, fontFamily: Fonts.sans, fontSize: 15, lineHeight: 21 }}>{d.notes}</Text>
+                        </Card>
+                    </>
+                ) : null}
+
+                <View style={[styles.verse, { backgroundColor: theme.harvestSoft, borderColor: theme.harvest }]}>
+                    <Text style={{ color: theme.ink, fontFamily: Fonts.serifItalic, fontSize: 18, lineHeight: 24 }}>
+                        {t(`verse.${verse}.text`)}
+                    </Text>
+                    <Text style={{ color: theme.ink2, fontFamily: Fonts.monoSemiBold, fontSize: 11, marginTop: 8, letterSpacing: 1 }}>
+                        {t(`verse.${verse}.ref`)}
+                    </Text>
+                </View>
+
+                <View style={styles.delete}>
+                    <Button color={theme.danger} label={t('detail.delete')} variant="dangerSoft" fullWidth onPress={confirmDelete} />
+                </View>
+            </ScrollView>
+            <LogPaymentSheet debt={paying ? d : null} onClose={() => setPaying(false)} onLogged={onLogged} />
+        </View>
+    );
+}
+
+function Row({ label, value, hint, danger, dim, link, last }: {
+    label: string; value: string; hint?: string; danger?: boolean; dim?: boolean; link?: boolean; last?: boolean;
+}) {
+    const { theme } = useTheme();
+    const color = danger ? theme.danger : link ? theme.brand : dim ? theme.ink3 : theme.ink;
+    return (
+        <View style={[styles.row, !last && { borderBottomWidth: 1, borderBottomColor: theme.borderSoft }]}>
+            <View style={styles.rowTop}>
+                <Text style={{ color: theme.ink2, fontFamily: Fonts.sans, fontSize: 14 }}>{label}</Text>
+                <Text numberOfLines={1} style={{ color, fontFamily: Fonts.sansSemiBold, fontSize: 14, flexShrink: 1, textAlign: 'right', textDecorationLine: link ? 'underline' : 'none' }}>
+                    {value}
+                </Text>
+            </View>
+            {hint ? <Text style={{ color: theme.ink3, fontFamily: Fonts.sans, fontSize: 12, marginTop: 4 }}>{hint}</Text> : null}
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    fill: { flex: 1 },
+    flex: { flex: 1 },
+    center: { textAlign: 'center', marginTop: 40 },
+    body: { paddingHorizontal: 16, paddingTop: 4, gap: 12 },
+    eyebrow: { fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase' },
+    big: { fontSize: 48, lineHeight: 56 },
+    actions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+    card: {},
+    section: { fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginTop: 8, marginLeft: 4 },
+    row: { paddingHorizontal: 12, paddingVertical: 12 },
+    rowTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+    tx: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12 },
+    empty: { padding: 14, fontSize: 14 },
+    verse: { borderRadius: 18, borderWidth: 1, padding: 18, marginTop: 8 },
+    delete: { marginTop: 8 },
+});
