@@ -104,8 +104,8 @@
   "goalCap": {
     "reached": "Seu plano gratuito inclui {{count}} meta, e ela está em uso. Conclua ou exclua essa meta para começar outra, ou assine o Premium para ter metas ilimitadas.",
     "reached_plural": "Seu plano gratuito inclui {{count}} metas, e todas estão em uso. Conclua ou exclua uma para começar outra, ou assine o Premium para ter metas ilimitadas.",
-    "over": "{{count}} meta está bloqueada porque seu plano gratuito mantém {{max}} ativa. Exclua essa meta, ou assine o Premium para desbloquear todas.",
-    "over_plural": "{{count}} metas estão bloqueadas porque seu plano gratuito mantém {{max}} ativa. Exclua essas metas, ou assine o Premium para desbloquear todas.",
+    "over": "{{count}} meta está bloqueada porque o limite de metas ativas do plano gratuito é {{max}}. Exclua essa meta, ou assine o Premium para desbloquear todas.",
+    "over_plural": "{{count}} metas estão bloqueadas porque o limite de metas ativas do plano gratuito é {{max}}. Exclua essas metas, ou assine o Premium para desbloquear todas.",
     "cta": "Ver o Premium ›"
   },
   "budgetLock": {
