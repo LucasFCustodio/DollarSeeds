@@ -1,0 +1,157 @@
+{
+  "header": {
+    "eyebrow": "Dívida {{position}} de {{total}}",
+    "left": "Faltam {{amount}}",
+    "paidOff": "Quitada",
+    "freeBy": "Livre em {{date}}",
+    "freeSince": "Livre desde {{date}}",
+    "planFreeBy": "Sem dívidas em {{date}}"
+  },
+  "actions": {
+    "add": "Adicionar dívida",
+    "showCards": "Ver como cartões",
+    "showPlants": "Ver como plantas",
+    "logPayment": "Registrar pagamento",
+    "markPaidOff": "Marcar como quitada",
+    "skip": "Toque para pular",
+    "retry": "Tentar de novo",
+    "back": "Voltar"
+  },
+  "label": {
+    "minDue": "{{min}} mín · vence {{date}}",
+    "pctPaid": "{{pct}}% pago",
+    "missing": "--",
+    "paidOffOn": "Quitada · {{date}}",
+    "focus": "Foco"
+  },
+  "a11y": {
+    "plant": "{{name}}, {{pct}}% pago, etapa {{step}} de 10, dívida {{position}} de {{total}}",
+    "plantPaidOff": "{{name}}, quitada, dívida {{position}} de {{total}}"
+  },
+  "empty": {
+    "title": "Seu jardim está vazio",
+    "body": "Cada dívida vira uma planta que cresce conforme você paga. Menor saldo primeiro — cada dívida quitada rega a próxima.",
+    "cta": "Plante sua primeira dívida"
+  },
+  "form": {
+    "titleNew": "Nova dívida",
+    "titleEdit": "Editar dívida",
+    "name": "Nome",
+    "namePlaceholder": "ex.: Cartão Nubank",
+    "original": "Saldo original",
+    "originalHint": "Se não tiver certeza, use o saldo de hoje.",
+    "current": "Saldo atual",
+    "minPayment": "Pagamento mínimo",
+    "apr": "Taxa de juros (% a.a.)",
+    "moreDetails": "Mais detalhes",
+    "fewerDetails": "Menos detalhes",
+    "type": "Tipo",
+    "lender": "Credor",
+    "dueDay": "Dia do vencimento",
+    "dueDayPlaceholder": "1–31",
+    "payUrl": "Link de pagamento",
+    "payUrlPlaceholder": "nubank.com.br",
+    "autopay": "Débito automático",
+    "creditLimit": "Limite de crédito",
+    "notes": "Anotações",
+    "yes": "Sim",
+    "no": "Não",
+    "notSet": "Não informado",
+    "save": "Plantar",
+    "saveEdit": "Salvar alterações",
+    "errRequired": "Preencha os cinco campos obrigatórios.",
+    "errNumber": "{{field}} precisa ser um número.",
+    "errDueDay": "O dia do vencimento deve ser entre 1 e 31.",
+    "errSave": "Não foi possível salvar. Verifique sua conexão e tente de novo."
+  },
+  "type": {
+    "credit_card": "Cartão de crédito",
+    "student_loan": "Financiamento estudantil",
+    "medical": "Despesa médica",
+    "auto": "Financiamento de veículo",
+    "personal": "Empréstimo pessoal",
+    "bnpl": "Parcelado",
+    "family": "Família ou amigo",
+    "other": "Outro"
+  },
+  "payment": {
+    "title": "Registrar pagamento",
+    "paidMinimum": "Paguei o mínimo ({{amount}})",
+    "extra": "Valor extra",
+    "extraHint": "O extra vai para a dívida em foco, a mais perto de acabar.",
+    "submit": "Registrar",
+    "errNothing": "Marque o mínimo ou informe um valor extra.",
+    "errFailed": "Não foi possível registrar o pagamento. Tente de novo.",
+    "cancel": "Cancelar"
+  },
+  "complete": {
+    "errFailed": "Não foi possível marcar como quitada. Tente de novo."
+  },
+  "detail": {
+    "position": "Dívida {{position}} de {{total}}",
+    "balance": "Saldo restante",
+    "estPayoff": "Previsão de quitação",
+    "paidOffOn": "Quitada em {{date}}",
+    "type": "Tipo",
+    "lender": "Credor",
+    "payOnline": "Pagar online",
+    "original": "Saldo original",
+    "started": "Início",
+    "apr": "Taxa de juros",
+    "aprValue": "{{apr}}% a.a.",
+    "minimum": "Pagamento mínimo",
+    "suggested": "Pagamento sugerido",
+    "suggestedHint": "Inclui {{amount}} vindos das dívidas que você já quitou.",
+    "due": "Vencimento",
+    "dueValue": "Dia {{day}} de cada mês",
+    "autopay": "Débito automático",
+    "monthlyInterest": "Juros por mês",
+    "interestRemaining": "Juros restantes",
+    "creditLimit": "Limite de crédito",
+    "usage": "Uso",
+    "usageValue": "{{pct}}% usado",
+    "history": "Histórico de pagamentos",
+    "historyEmpty": "Nenhum pagamento ainda.",
+    "notes": "Anotações",
+    "rollsInto": "Depois vai para",
+    "rollsIntoNone": "Nada — esta é a última. Depois dela, liberdade.",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "deleteTitle": "Excluir {{name}}?",
+    "deleteBody": "Isso remove a dívida e o histórico de pagamentos. Não dá para desfazer.",
+    "cancel": "Cancelar",
+    "errLoad": "Não foi possível carregar esta dívida.",
+    "errDelete": "Não foi possível excluir esta dívida. Tente de novo."
+  },
+  "kind": {
+    "payment_minimum": "Pagamento mínimo",
+    "payment_extra": "Pagamento extra",
+    "interest": "Juros (pagamento atrasado)",
+    "balance_edit": "Saldo atualizado"
+  },
+  "date": {
+    "monthYearShort": "{{month}} de {{year}}"
+  },
+  "verse": {
+    "0": {
+      "text": "O rico domina sobre os pobres, e o que toma emprestado é servo do que empresta.",
+      "ref": "Provérbios 22:7"
+    },
+    "1": {
+      "text": "A ninguém devais coisa alguma, a não ser o amor com que vos ameis uns aos outros.",
+      "ref": "Romanos 13:8"
+    },
+    "2": {
+      "text": "E não nos cansemos de fazer o bem, porque a seu tempo ceifaremos, se não houvermos desfalecido.",
+      "ref": "Gálatas 6:9"
+    },
+    "3": {
+      "text": "Os pensamentos do diligente tendem só à abundância, porém os de todo apressado, tão somente à pobreza.",
+      "ref": "Provérbios 21:5"
+    },
+    "4": {
+      "text": "Posso todas as coisas naquele que me fortalece.",
+      "ref": "Filipenses 4:13"
+    }
+  }
+}

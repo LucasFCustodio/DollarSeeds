@@ -27,6 +27,9 @@ export type AnalyticsEvent =
     | 'savings_goal_funded'
     | 'debt_goal_funded'
     | 'goal_completed'
+    | 'debt_created'
+    | 'debt_payment_logged'
+    | 'debt_paid_off'
     | 'series_explore_clicked'
     | 'lesson_video_clicked'
     | 'written_lesson_opened'
@@ -64,6 +67,14 @@ export function useAnalytics() {
         debtGoalFunded: (p: { goal_id: number }) => capture('debt_goal_funded', p),
         goalCompleted: (p: { goal_id: number; goal_type: string }) =>
             capture('goal_completed', p),
+
+        // ── Debt Freedom (the Debts tab — ids / positions / kinds only) ──────────
+        debtCreated: (p: { debt_id: number; debt_type: string; position: number; total: number }) =>
+            capture('debt_created', p),
+        debtPaymentLogged: (p: { debt_id: number; kind: 'minimum' | 'extra' | 'minimum_extra'; growth_step: number }) =>
+            capture('debt_payment_logged', p),
+        debtPaidOff: (p: { debt_id: number; position: number; total: number }) =>
+            capture('debt_paid_off', p),
 
         // ── Lessons (ids / titles / video timing only) ───────────────────────────
         seriesExploreClicked: (p: { series_id: string; title: string }) =>

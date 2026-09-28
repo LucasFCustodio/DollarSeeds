@@ -14,5 +14,6 @@ import dashboard from './dashboard.json';
 import details from './details.json';
 import lessons from './lessons.json';
 import news from './news.json';
+import debts from './debts.json';
 
-export default { common, auth, settings, onboarding, premium, notifications, transactions, goals, dashboard, details, lessons, news } as const;
+export default { common, auth, settings, onboarding, premium, notifications, transactions, goals, dashboard, details, lessons, news, debts } as const;

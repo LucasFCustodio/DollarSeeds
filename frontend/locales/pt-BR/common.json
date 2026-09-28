@@ -51,7 +51,8 @@
     "index": "Painel",
     "transactions": "Transações",
     "piggyBank": "Metas",
-    "lessons": "Séries"
+    "lessons": "Séries",
+    "debts": "Dívidas"
   },
   "serverTitle": {
     "General Savings": "Poupança Geral",
