@@ -437,7 +437,7 @@ Locked/grayed goal states, goal-cap messaging, budget-type lock.
 Test the dev build against production (Phase 1 is deployed by then), signed in as an account
 listed in `LIMITS_TEST_USER_IDS`. Purchases go through RevenueCat sandbox.
 
-### Phase 3 — Release
+### Phase 3 — Release. NEEDS REWRITING — its premise no longer holds.
 
 Ship with `app_config.premium_enabled` still `false`, so the new binary installs and
 behaves free. Once approved and rolling out, flip it to `true` in the Supabase dashboard —
@@ -445,6 +445,25 @@ no redeploy, no app update, and it still works when a bad deploy is what broke t
 Flipping it back is the rollback.
 
 Products must be **Approved** before this, plus up to 24h of store propagation.
+
+> **Two things have changed underneath the paragraph above** (both confirmed against
+> production on 2026-09-28):
+>
+> 1. **`premium_enabled` is already `true`.** "Ship with it still false" is not the
+>    current state, so as things stand the limits activate the moment a Phase 2 build
+>    installs. There is no dark ship and no flag to flip at release.
+> 2. **It is no longer a limits-only lever.** The same row gates premium video series,
+>    and "The Truth on Generosity" is now deliberately `is_premium = true`. So flipping
+>    it to `false` to roll the limits back would also hand that series to every marked
+>    client, and access given away is awkward to take back.
+>
+> Three ways out, to be decided before Phase 2 ships:
+>
+> | Option | What happens | Cost |
+> |---|---|---|
+> | **A. Second flag (recommended)** | Add an `app_config` row `limits_enabled`, default `false`, read by `_entitlements()` instead of `premium_enabled` | One new row plus a few lines in `main.py`. Restores the dark ship AND an independent rollback, and leaves video gating alone |
+> | **B. Flip it false now** | Ship dark as originally planned, flip to `true` at release | Premium videos are free to marked clients until release day |
+> | **C. Leave it true** | Limits go live as each user installs the Phase 2 build | No staged rollout and no flag rollback. Backing out means pulling the build |
 
 ### Phase 4 — Contract
 
