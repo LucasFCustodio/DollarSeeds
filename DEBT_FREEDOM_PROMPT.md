@@ -6,6 +6,7 @@ Read `CLAUDE.md` and every doc it points to before writing code. Follow its rule
 
 ## 0. Ground rules for this build
 
+- **Branch: `plant-branch`, based on the latest `change-12-branch`.** Before any work, run `git fetch origin`, `git checkout change-12-branch`, `git pull origin change-12-branch`, then `git checkout -b plant-branch`. Every commit for this feature goes on `plant-branch` and is pushed there. Never commit to `main` or `change-12-branch`, and don't merge anything.
 - **The existing debt system stays exactly as it is.** Debt goals (`savings_goals.goal_type = 'debt'`) on the Goals tab, their routes, their math and their UI must not change. Don't read from or write to `savings_goals` or `savings_transactions`. This feature is completely separate, with its own tables, routes and screens. We'll decide what happens to the old system once this one is proven.
 - **Hide it behind a flag.** Add `DEBT_FREEDOM_ENABLED` in a new `frontend/constants/features.ts`, set to `__DEV__`. The Debts tab and every entry point render only when it's true, so production builds don't show it until I approve.
 - **No new native dependencies.** Use what's already installed: `react-native-svg`, `react-native-svg-transformer`, `react-native-reanimated`, `react-native-gesture-handler`, `expo-haptics`. Rive comes later (see section 6). This means no dev-build rebuild is needed.
