@@ -11,13 +11,35 @@
 | Phase | What | State |
 |---|---|---|
 | 0 | App Store Connect products + RevenueCat wiring | **DONE — verified end to end** |
-| 1 | Backend: capability token, entitlements resolver, gates | **Decided and specified — ready to implement** |
+| 1 | Backend: capability token, entitlements resolver, gates | **BUILT on `subscription` — 432 tests green, ready to merge and deploy** |
 | 2a | Frontend: paywall (products, prices, trial, purchase) | **Unblocked — can start now** |
-| 2b | Frontend: gating UI (locked goals, grayed states, favourite picker, budget lock) | Blocked on Phase 1 landing |
+| 2b | Frontend: gating UI (locked goals, grayed states, budget lock) | Blocked on Phase 1 landing |
 | 3 | Release: flip `premium_enabled` | After 2 ships and is approved |
 | 4 | Contract: retire old products | Much later |
 
 All blocking decisions are settled. Remaining questions in §13 are non-blocking.
+
+### Branching and deployment
+
+- Every change gets its own branch, **chained**: the first branches off `main`, each later
+  one branches off the previous. Phase 1 lives on **`subscription`**.
+- **Phase 1 merges into `main` as soon as it's done, and Render deploys it to production.**
+  That's safe because old builds never send `limits`: current users get exactly today's
+  behaviour. The Phase 2 branch is then created off the merged `main`, and the frontend
+  branches merge later, for the final build.
+- **Testing on a phone happens against production**, which the dev build already points at
+  (`https://dollarseeds-1.onrender.com`). Two things make it work:
+  - The dev build sends `limits` (added to `CLIENT_FEATURES` in Phase 2).
+  - Test accounts are listed in the `LIMITS_TEST_USER_IDS` environment variable on Render.
+    For those accounts only, on `limits` requests only, the limits are enforced as if
+    `premium_enabled` were on. It never touches `/config/`, `/playback/`, or anyone else.
+- **Never flip `app_config.premium_enabled` to test.** The shipped premium build reads it from
+  `/config/` to decide what to lock. It flips at release (Phase 3).
+- Test accounts: `custodiolucas555` (`44776d06-9114-48ce-95b6-40c58ce6c033`) and
+  `appletester` (`63103554-5b72-4d59-9168-9968b559142b`). Anything created while testing is
+  a real row in the production database.
+- (CLAUDE.md's note that the frontend hardcodes `10.0.0.13:8000` is out of date — screens
+  hardcode the Render address.)
 
 ---
 
@@ -113,7 +135,14 @@ Premium limits the amount of a feature; it does not hide the feature.
 **Goal-cap rules:** goals flagged `is_general` (General Savings) and `is_reconciliation`
 (auto-created at month close) **do NOT count toward the cap**. Only user-created savings
 and debt goals count. A user must never be locked out of their one free goal by a goal the
-app created for them.
+app created for them. **Completed goals don't count either** — a free user who completes
+their goal can create a new one.
+
+**No grandfathering.** The rules apply to every user once all three hold: the new backend
+is deployed, the user is on a build that sends the `limits` token, and `premium_enabled`
+is `true`. Users still on an older build never send `limits`, so they keep today's
+behaviour (unlimited goals, any budget type) until they update. At the time of deciding,
+7 users had 2+ active goals and 9 were on a gated budget type.
 
 ---
 
@@ -131,8 +160,18 @@ When a subscriber lapses:
 
 ### Which goal stays active (DECIDED)
 
-**The oldest eligible goal by `created_at`.** Eligible means user-created — `is_general`
-and `is_reconciliation` are excluded, as they are from the cap.
+**The oldest eligible goal by `created_at`.** Eligible means user-created and not
+completed — `is_general`, `is_reconciliation` and completed goals are excluded, as they
+are from the cap. Every other eligible goal is **locked**.
+
+**Locked goals are enforced by the server, not just grayed in the UI.** For a `limits`
+client that isn't entitled, any write that targets a locked goal is refused with
+`goal_locked` (§7): deposits or withdrawals, transfers from General Savings, editing,
+completing, finishing, and deleting its transactions. **Deleting the goal itself is always
+allowed** — the existing delete already returns prior-month deposits to General Savings.
+
+`GET /savings/goal/` adds a `locked` boolean to each goal for `limits` clients, so the
+app doesn't have to re-derive the rule.
 
 Deliberately chosen over a user-nominated "favourite" for simplicity. Consequences:
 
@@ -203,7 +242,17 @@ def _entitlements(user_id: str, features: set) -> dict:
 
 `LIMITS_FEATURE in features` is what protects shipped binaries. Scattered across six
 routes it gets forgotten at the seventh — which is what this whole architecture exists to
-prevent.
+prevent. Check the marker **first**, so a request without `limits` issues no extra queries.
+
+> **As built** (see Phase 1 in §8): the resolver returns an `_Entitlements` object rather
+> than a dict, and the marker check is the first thing *inside* it rather than at each
+> gate. The two failure postures below are two separate things to ask it — `enforced` for
+> a write, `enforced_on_reads` for a read — because a gate that reads the wrong one is a
+> silent bug rather than a loud one.
+
+**Failure posture when RevenueCat can't be reached:** gates on writes fail closed to the
+relevant 403 (same reasoning as `/playback/`); reads never downgrade — a dashboard doesn't
+drop a paying user to Balanced because a lookup timed out.
 
 ---
 
@@ -225,6 +274,8 @@ alongside it:
 |---|---|
 | `premium_required` | **unchanged.** Premium series playback, unentitled |
 | `goal_limit_reached` | `POST /savings/goal/` at the cap |
+| `budget_type_locked` | `PATCH /settings/` choosing a gated budget type |
+| `goal_locked` | Any write targeting a locked goal, except deleting it (§5) |
 
 The detail string differs per code; a video needs the full paywall, a goal cap needs an
 inline upsell next to the button.
@@ -261,25 +312,88 @@ access for existing subscribers.
 > **Never put new products in `default`.** Doing so makes shipped binaries render them on
 > the old four-tier paywall, mislabelled, purchasable, and granting nothing new.
 
-### Phase 1 — Backend. Decided, ready to implement.
+### Phase 1 — Backend. BUILT.
+
+All in `backend/main.py`, on branch `subscription`. Everything below is implemented and
+tested; nothing activates without the `limits` token, so it merges into `main` and
+deploys to production as it stands.
 
 - New capability token `limits`, alongside `PREMIUM_FEATURE` and `SOCIAL_FEATURE`
-- The `_entitlements()` resolver (§6), replacing the single `_is_entitled()` call site
-- Goal-cap enforcement on `POST /savings/goal/` → `goal_limit_reached`
-- Budget-type gating in `_month_budget_type`'s **live branch only**
-- `/me/entitlements/` extended with the Style A fields
-- Back-compat tests asserting unmarked and `premium`-only requests reach goals and
-  settings exactly as they do today
+- The `_entitlements()` resolver (§6)
+- `PremiumRequired` generalized to carry a code and detail (§7)
+- Goal cap on `POST /savings/goal/` → `goal_limit_reached`
+- Locked-goal enforcement on every goal write except deleting the goal → `goal_locked`;
+  `locked` flag on `GET /savings/goal/` (§5)
+- `PATCH /settings/` refuses a gated budget type → `budget_type_locked`
+- One "effective budget type" rule (`_live_budget_type`) used everywhere the live setting
+  is read: unclosed months resolve to `balanced` for an unentitled `limits` client. That
+  includes `_frozen_stamp()`, so closing a month freezes what was shown, and the
+  per-income-row snapshot. The stored `user_settings.budget_type` is never rewritten, so
+  resubscribing restores it
+- `/me/entitlements/` extended with the Style A fields, for `limits` clients only
+- `LIMITS_TEST_USER_IDS` env var for testing against production (see Branching and deployment)
+- Back-compat tests asserting unmarked, `premium` and `premium, social` requests behave
+  exactly as they do today
 
-**One migration is required** — `savings_goals.is_favorite` (§5). Nullable, additive, plus
-a partial unique index; it passes CLAUDE.md's five-point gate. Goal counts stay derivable
-and budget types read existing columns, so nothing else needs schema.
+**No migration.** Goal counts are derivable, the active-goal rule is a query over
+`created_at` (§5), and budget types read existing columns.
 
-Also required with it: the no-favourite fallback (oldest eligible goal) and auto-promotion
-on delete/completion — both in §5.
+**Tests:** 432 green, 147 of them new. `backend/tests/test_backcompat_limits.py` is the
+back-compat half (every assertion parametrized over all three shipped generations, with
+the kill switch on and no subscription, so the state *would* be enforced for a `limits`
+caller); `backend/tests/test_limits.py` is the enforcement half. No existing test was
+modified.
 
-**Deployable to production the day it is written** — nothing activates without the `limits`
-token, so it is invisible to every shipped binary.
+#### What came out different from the spec above
+
+Eight things, none of them a change of behaviour the spec described — but each is a place
+where reading §6 or §7 alone would leave you expecting something else.
+
+1. **The resolver returns an object, not a dict.** §6 sketched
+   `_entitlements() -> dict`. It returns an `_Entitlements` instance instead, because the
+   two failure postures need to be *askable* rather than baked into one number: `enforced`
+   (writes, fail closed) and `enforced_on_reads` (reads, fail open), plus
+   `budget_types_for(write=…)` and `locked_goal_ids(write=…)` which select between them.
+   The goal rows are loaded lazily and at most once per request.
+2. **The marker check moved inside the resolver.** §6 wrote
+   `enforced = LIMITS_FEATURE in features and not paid`, i.e. at each gate. It is now the
+   first two lines of `_entitlements()`, which returns an inert object having issued no
+   query at all. Same guarantee, but it cannot be forgotten at the thirteenth call site —
+   which is the argument §6 makes for having a resolver in the first place.
+3. **A gate must ask for the write posture explicitly, and one initially did not.**
+   `PATCH /settings/` first compared the requested type against the fail-*open*
+   allowance list, so during a RevenueCat outage `wealth_builder` was accepted while
+   `_live_budget_type` went on resolving the month to `balanced` — a stored choice the
+   dashboard ignored, with nothing to explain it. Found by the "writes fail closed" test.
+   Hence `budget_types_for(write=True)`, and a test asserting both postures on one
+   resolver.
+4. **`POST /savings/transfer/` checks both goal ids.** §5 named the destination
+   (`to_goal_id`). The route also writes a withdrawal against the client-supplied
+   `general_goal_id`, and a locked goal in that slot is just as much a write to it. No
+   legitimate client is affected — that slot always holds General Savings.
+5. **The goal cap applies to *every* create by an enforced caller**, including one
+   flagged `is_general`. Exempting the flag would have handed any client an
+   unlimited-goals bypass, and no client needs the route for General Savings (the server
+   seeds it lazily).
+6. **`_live_budget_type` reaches two more request paths** than §7's "at least" list:
+   `GET /dashboard/trends/` and `GET /rollover/preview/`. Both read the live setting for
+   unclosed months, so leaving them out would have made them disagree with the dashboard.
+   `reconcile_month` takes the argument too, though it can't move money with it — the
+   rollover target is *net* leftover and no split affects it.
+7. **`_client_features` moved to the top of `main.py`.** FastAPI evaluates `Depends(...)`
+   when a handler is *defined*, and the first handler that needs it is now the dashboard,
+   hundreds of lines above the subscription section. The tokens themselves stay put. A
+   side effect: the client-mix counters now see most of the API rather than the lesson
+   routes alone, so the log line reads `requests` instead of `lesson requests`.
+8. **Closing a month freezes the *read* posture.** `_frozen_stamp` goes through
+   `_live_budget_type`, which fails open — so in the middle of a RevenueCat outage an
+   unpaid user closing a month freezes the gated split they were still being shown.
+   That is the intended reading of "freezes what the user was shown", and the alternative
+   (freezing `balanced` for someone whose dashboard said Wealth Builder) is worse.
+
+Two things deliberately left alone: `GET /settings/` still returns the raw row, and
+`GET /savings/goal/` still sorts `created_at` descending — so the active goal is still at
+the bottom of the list, which is §13 q1 and a Phase 2b decision.
 
 ### Phase 2a — Paywall. Unblocked.
 
@@ -290,8 +404,8 @@ plan" label. Needs only RevenueCat, which is done.
 
 Locked/grayed goal states, goal-cap messaging, budget-type lock.
 
-Test on TestFlight **against production** — that build sends `limits` and gets the new
-behaviour with real data. Purchases go through RevenueCat sandbox.
+Test the dev build against production (Phase 1 is deployed by then), signed in as an account
+listed in `LIMITS_TEST_USER_IDS`. Purchases go through RevenueCat sandbox.
 
 ### Phase 3 — Release
 
@@ -380,7 +494,7 @@ Scheduled for after the subscription frontend is finalised.
 
 ## 13. Open questions
 
-1. Where reconciliation goals sort relative to the favourite (§5). Minor; decide when building.
+1. How the goals list reorders so the active goal isn't buried under grayed ones (§5).
 2. How bank sync gates in practice, beyond the 0/1 connection cap.
 3. Whether the paywall leads with Yearly or presents both equally.
 4. How consumer pricing interacts with the B2B partner track — partner seats were quoted

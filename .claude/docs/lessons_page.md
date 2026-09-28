@@ -127,6 +127,34 @@ Enforcement lives *only* on `/playback/`. The list and detail routes expose `is_
 to marked clients so the app can lock a card before the tap — the 403 is the backstop,
 not the UX trigger.
 
+**`LIMITS_TEST_USER_IDS` never reaches any of this.** That environment variable makes
+the free-tier limits apply to listed accounts while `premium_enabled` is still false,
+and it is read in exactly one place — the `_entitlements()` resolver. It does not move
+`_premium_enabled()`, `/config/` or this gate, so a listed test account still plays
+every video for free. Conflating the two would start locking videos for every user on
+the live premium build, which reads `premium_enabled` from `/config/` to decide what
+to lock.
+
+### `PremiumRequired` — one exception, four codes
+
+`PremiumRequired` is the only error in `main.py` that answers with a top-level `code`
+beside `detail`; everything else is `{"detail": "..."}`, because screens pass `detail`
+straight to `Alert.alert`. It now carries a code and a plain-English sentence per code:
+
+| Code | Raised by |
+|---|---|
+| `premium_required` | `/lessons/{id}/playback/` on a premium series, unentitled |
+| `goal_limit_reached` | `POST /savings/goal/` at the free cap |
+| `budget_type_locked` | `PATCH /settings/` choosing a gated budget type |
+| `goal_locked` | any write to a locked goal, except deleting the goal |
+
+**`premium_required` is frozen.** Raised with no arguments the exception still produces
+`{"code": "premium_required", "detail": "This series is part of DollarSeeds Premium."}`
+byte for byte, because the shipped premium build branches on that exact string.
+`/playback/` still raises it bare, and `test_limits.py` pins the pair. The sentences for
+the other three are in `PREMIUM_REQUIRED_DETAILS` and may be reworded freely; no shipped
+build has ever seen them.
+
 > **The rule that governs any change here:** an unmarked request must issue exactly the
 > queries it issued before this feature existed — no `app_config` read, no
 > `lesson_series` lookup, no `subscriptions` scan. `test_backcompat_lessons.py` asserts
@@ -135,25 +163,45 @@ not the UX trigger.
 
 ### `X-Client-Features` is a LIST, one token per capability
 
-`premium` was the first; `social` (creator links, migration `0006`) is the second. They
-are independent on purpose — a build that ships a paywall was not thereby written to
-render a link row, and by now the premium build is *itself* a shipped generation that
+`premium` was the first; `social` (creator links, migration `0006`) is the second;
+`limits` (the free-tier allowances) is the third. They are independent on purpose — a
+build that ships a paywall was not thereby written to render a link row or a locked
+goal card, and by now two of those builds are *themselves* shipped generations that
 cannot be patched. Each generation gets exactly the response it was built against:
 
-| | No marker (first binary) | `premium` only | `premium, social` |
-|---|---|---|---|
-| `is_premium` on the detail route | absent | present | present |
-| `instagram_url` / `linkedin_url` / `website_url` | absent | absent | present (null when unset) |
+| | No marker (first binary) | `premium` only | `premium, social` | `+ limits` |
+|---|---|---|---|---|
+| `is_premium` on the detail route | absent | present | present | present |
+| `instagram_url` / `linkedin_url` / `website_url` | absent | absent | present (null when unset) | present |
+| `locked` on `GET /savings/goal/` | absent | absent | absent | present |
+| the five allowance fields on `/me/entitlements/` | absent | absent | absent | present |
+| goal cap, locked goals, budget-type lock | never | never | never | enforced |
 
-Two consequences worth keeping:
+`limits` is the widest of the three: it reaches most of the API rather than the lesson
+routes, so `_client_features` is now a dependency on the dashboard, income, settings,
+savings, goal and rollover routes too. Everything it governs is in
+[SUBSCRIPTION_REWORK.md](../../SUBSCRIPTION_REWORK.md) §4–§8; the back-compat half is
+`test_backcompat_limits.py`, which asserts the other three generations cannot tell it
+shipped, and the enforcement half is `test_limits.py`.
+
+Three consequences worth keeping:
 
 - **Add a token, never repurpose one.** The frontend list lives in `CLIENT_FEATURES` in
   [frontend/lib/axiosConfig.ts](../../frontend/lib/axiosConfig.ts); the backend constants
-  sit together near `PREMIUM_FEATURE` in `main.py`.
+  sit together near `PREMIUM_FEATURE` in `main.py`. (The `_client_features` *dependency*
+  sits near the top of the file instead — FastAPI evaluates `Depends(...)` when a handler
+  is defined, so it has to exist before the first route that takes it.)
 - **Gate the `select()`, not just the response.** `get_lesson_series` only *selects* the
   social columns when the caller asked for them, so a stale PostgREST schema cache after
   a column-adding migration can break social builds and never the App Store binary.
   `test_an_unmarked_request_does_not_even_select_the_new_columns` pins that.
+  `delete_savings_transaction` does the same with `goal_id`, which it needs only to
+  decide whether a goal is locked.
+- **Check the marker before anything else.** `_entitlements()` does it in one place
+  rather than at each of a dozen call sites, so a request without `limits` issues no
+  `app_config` read, no `subscriptions` scan and no goal count. Spread across the routes
+  it gets forgotten at the thirteenth, and the forgotten one is a live app that cannot
+  be rolled back.
 
 Entitlement, the RevenueCat webhook and the `subscriptions` schema are in
 [data_model.md](data_model.md#subscriptions).

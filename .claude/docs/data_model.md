@@ -66,6 +66,20 @@ A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdraw
 
 **Editing a goal** (`PATCH /savings/goal/{id}`) can change `title`, `target_amount`, `target_month`, `target_year`. Since `savings_transactions.title` is a denormalized copy of the goal title, a rename also rewrites the titles of that goal's transactions so Recent Activity doesn't show the old name. General Savings and the Reconciliation goal are auto-managed and reject both routes.
 
+**The free-tier goal cap is derived, not stored.** A free user (a client sending
+`X-Client-Features: limits`, with `premium_enabled` on and no entitlement) keeps one
+**eligible** goal. Eligible means `is_general` is not true, `is_reconciliation` is not
+true and `completed` is not true — nobody may be locked out of their one free goal by a
+goal the app created for them, and finishing a goal frees the slot. The **active** goal
+is the oldest eligible one by `created_at`, `id` as the tiebreak; every other eligible
+goal is **locked** and the server refuses writes to it with `goal_locked`. Deleting a
+locked goal is always allowed.
+
+No schema supports any of that: it is a query in `_Entitlements._eligible_goals`, which
+is why the rule needed no migration, no promotion logic and no backfill. `goal_type`,
+`is_general` and `is_reconciliation` are the only columns it reads. See
+[SUBSCRIPTION_REWORK.md](../../SUBSCRIPTION_REWORK.md) §5.
+
 ### `subscriptions`
 
 One row per **store subscription**, not per user — a user can hold an App Store and a
@@ -86,6 +100,22 @@ ones. Written **only** by `POST /webhooks/revenuecat`. Migration:
 | `revoked_at` | timestamptz | Set on refund/pause; kills access immediately |
 | `auto_renew` / `cancelled_at` / `status` | bool / timestamptz / text | **Descriptive only** — support and the paywall's "Current: …" line. Access never reads them. |
 | `last_event_id` / `last_event_at` | text / timestamptz | Newest event applied; `last_event_at` is what makes the write monotonic |
+
+**`GET /me/entitlements/` is the only way this table reaches a client**, and its shape
+is two halves:
+
+| Half | Keys | Who gets them |
+|------|------|---------------|
+| Frozen | `premium_active`, `expires_at`, `product_id`, `pending_product_id`, `store`, `auto_renew` | **everyone** — the shipped premium build reads them, so they are never removed, renamed or retyped |
+| Allowances | `max_goals`, `goals_used`, `budget_types`, `video_series`, `max_bank_connections` | only clients sending `X-Client-Features: limits` |
+
+The allowances are **values, not verdicts** — the server states what the user is allowed
+and the client renders whatever it says. That is deliberate: with un-updatable binaries,
+changing the free tier to two goals is then a one-line server change every installed
+build obeys, where a boolean would put the number in the app's copy and need an App
+Store release. `null` means unlimited. They report what this server will actually
+enforce for that caller, so while `premium_enabled` is false everyone is unlimited. See
+[SUBSCRIPTION_REWORK.md](../../SUBSCRIPTION_REWORK.md) §6.
 
 `unique (store, environment, store_txn_id)` is the identity. `environment` is in the key
 because Apple's sandbox and production transaction-id namespaces **overlap** — without
@@ -177,7 +207,7 @@ closed** — not on where the calendar is:
 
 | Month state | Source |
 |-------------|--------|
-| Not closed (past, current or future) | The **live** `user_settings` row. The month is still the user's to correct, so changing the setting updates it. |
+| Not closed (past, current or future) | The **live** `user_settings` row, through `_live_budget_type`. The month is still the user's to correct, so changing the setting updates it. |
 | Closed | The values frozen onto `month_status` at close-out. Permanent, and clock-independent. |
 | Closed before migration `0009` | Falls back to the per-row snapshot on that month's `income` rows (`income.budget_type` / `.tithe_enabled` / `.tithe_rate`, most recent `day` wins for the split), so months already closed keep exactly the numbers they had. |
 
@@ -189,6 +219,21 @@ snapping back to 50/30/20.
 `income.budget_type` / `.tithe_enabled` / `.tithe_rate` are still stamped on every
 `POST /income/` and still needed for that third row. They are not the month's answer
 while it is open.
+
+**`_live_budget_type` is the single reader of the live setting**, and the only place the
+free-tier fallback exists. For a `limits` client that is not entitled, a gated type
+resolves to `balanced` while the month is open; `user_settings.budget_type` is **never**
+rewritten, so resubscribing restores the user's choice with no action from them. Every
+request path that reads the live setting goes through that helper — the live branch of
+`_month_budget_type` (dashboard, trends, rollover preview), the `POST /income/` row
+snapshot, `live_budget_type` on the dashboard, and `_frozen_stamp`, so closing a month
+freezes what the user was actually shown rather than a split they could not see. Closed
+months are untouched: a subscriber who lapses does not have their history rewritten.
+
+The fallback uses the **fail-open** posture — a RevenueCat lookup that times out never
+drops a paying user to Balanced. The gate on `PATCH /settings/` uses the fail-closed one
+(`budget_types_for(write=True)`), so the same outage refuses a gated type rather than
+storing a choice the dashboard would then ignore.
 
 ## Category Name Mismatch
 
