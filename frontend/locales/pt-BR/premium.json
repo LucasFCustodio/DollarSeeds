@@ -107,5 +107,9 @@
     "over": "{{count}} meta está bloqueada porque seu plano gratuito mantém {{max}} ativa. Exclua essa meta, ou assine o Premium para desbloquear todas.",
     "over_plural": "{{count}} metas estão bloqueadas porque seu plano gratuito mantém {{max}} ativa. Exclua essas metas, ou assine o Premium para desbloquear todas.",
     "cta": "Ver o Premium ›"
+  },
+  "budgetLock": {
+    "savedChoice": "Sua escolha salva. Ela faz parte do Premium, então os meses abertos usam {{fallback}} por enquanto — assine de novo e {{name}} volta na hora.",
+    "inUse": "EM USO ESTE MÊS"
   }
 }

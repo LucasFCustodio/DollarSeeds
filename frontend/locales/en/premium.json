@@ -107,5 +107,9 @@
     "over": "{{count}} goal is locked because your free plan keeps {{max}} active. Delete it, or go Premium to unlock every goal.",
     "over_plural": "{{count}} goals are locked because your free plan keeps {{max}} active. Delete them, or go Premium to unlock every goal.",
     "cta": "See Premium ›"
+  },
+  "budgetLock": {
+    "savedChoice": "Your saved choice. It's part of Premium, so open months use {{fallback}} for now — resubscribe and {{name}} comes straight back.",
+    "inUse": "IN USE THIS MONTH"
   }
 }
