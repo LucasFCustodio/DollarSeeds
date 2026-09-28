@@ -347,6 +347,27 @@ deploys to production as it stands.
 **No migration.** Goal counts are derivable, the active-goal rule is a query over
 `created_at` (§5), and budget types read existing columns.
 
+**Verified against PRODUCTION on 2026-09-28**, end to end, by `verify_limits.py` at the
+repo root. It signs up a throwaway account, drives every gate through the live API, then
+deletes the account and everything it wrote. All checks passed: the cap and its 403, the
+locked/active split and every refused write, deleting a locked goal, finishing the one
+goal to free the slot, the budget-type lock and its all-or-nothing patch, the balanced
+fallback on an unclosed month against an unmarked caller still seeing Wealth Builder, the
+income-row snapshot, the frozen stamp at close-out, and the untouched `premium_required`
+body. Re-run it after Phase 2 ships.
+
+Two things that verification turned up, neither caused by Phase 1:
+
+- **`premium_enabled` is already `true`** in `app_config`. The plan in Phase 3 below
+  assumes it is `false` until release, so re-read that step before relying on it. While it
+  is true, the limits apply to any client sending `limits` and `LIMITS_TEST_USER_IDS` adds
+  nothing.
+- **A stale RevenueCat entitlement makes an account untestable.** `appletester` reports
+  `premium_active: true` with a null `expires_at`, `product_id` and `store`, which means
+  no live `subscriptions` row and a `true` coming from the RevenueCat fallback. That is
+  §11's TRANSFER bug, and its unrecorded consequence is that it silently exempts the
+  account from the video gate and from the limits.
+
 **Tests:** 432 green, 147 of them new. `backend/tests/test_backcompat_limits.py` is the
 back-compat half (every assertion parametrized over all three shipped generations, with
 the kill switch on and no subscription, so the state *would* be enforced for a `limits`
@@ -492,9 +513,10 @@ Scheduled for after the subscription frontend is finalised.
   `select()`, not just the response shape. `test_backcompat_lessons.py` asserts this.
 - **Hiding premium content from unmarked clients is backward compatibility, not a business
   rule.** Not behind the kill switch; must survive every rollback.
-- **No published series is ever retro-paywalled.** "The Truth on Generosity" is
-  `is_premium = false` permanently. Premium video value must come from series not yet
-  shipped.
+- **Access level is the content owner's call, per series.** "The Truth on Generosity" is
+  `is_premium = true`, set deliberately. `is_premium` defaults to `true` since migration
+  `0005`. Remember that premium series are invisible to unmarked clients, so while every
+  published series is premium the original App Store binary shows an empty video list.
 - **Expand → contract.** See [CLAUDE.md](CLAUDE.md). Additive only; two releases for any
   reshape.
 - **Never commit to `main`.**

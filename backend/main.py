@@ -1884,8 +1884,13 @@ PAID_MAX_BANK_CONNECTIONS = 1
 #   * Hiding premium series from UNMARKED clients is ALWAYS on. It is backward
 #     compatibility, not a business rule, and must survive every rollback.
 #   * premium_enabled gates only MARKED clients. Flipping it off hands v2 users free
-#     access without ever exposing premium content to an old binary — which matters,
-#     because content given away cannot be taken back (no series is ever retro-paywalled).
+#     access without ever exposing premium content to an old binary, which is the whole
+#     point: the rollback lever must never widen who can see paid content.
+#
+# Note that premium_enabled now governs the FREE-TIER LIMITS as well (see _entitlements).
+# One flip therefore moves both, and there is no way to enable one without the other. If
+# they ever need to move independently, add a second app_config row rather than
+# overloading this one.
 APP_CONFIG_DEFAULTS = {
     "premium_enabled": "false",
     "min_supported_version": "0.0.0",
