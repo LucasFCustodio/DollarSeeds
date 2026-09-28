@@ -102,9 +102,18 @@ All in [backend/main.py](../../backend/main.py). None return raw video paths/URL
 ## Premium gating
 
 Video series can be paid; written lessons and everything else stay free. The one
-currently published series, **"The Truth on Generosity"**, is `is_premium = false`
-**permanently** — no published series is ever retro-paywalled, because access given away
-cannot be taken back.
+currently published series, **"The Truth on Generosity"**, is `is_premium = true` — set
+deliberately, so the video library is a paid feature rather than a sample. `is_premium`
+has defaulted to `true` since migration `0005`, so a new series is paid unless it is
+deliberately made free.
+
+**Consequence worth knowing before you publish anything.** Premium series are hidden
+outright from unmarked clients, so with every published series premium, the binaries
+already in the App Store receive an **empty** video list. Verified against production on
+2026-09-28: `GET /lessons/series/` returns one series for a marked client and zero for an
+unmarked one. That is not a bug — an old binary has no paywall and no purchase path, so a
+locked card would be a dead end — but it does mean the original build shows no video
+content at all until a free series is published or those users update.
 
 **Clients are told apart by the `X-Client-Features: premium` header**, attached once in
 the app's axios request interceptor. Requests without it come from a binary already in
@@ -174,6 +183,7 @@ cannot be patched. Each generation gets exactly the response it was built agains
 | `is_premium` on the detail route | absent | present | present | present |
 | `instagram_url` / `linkedin_url` / `website_url` | absent | absent | present (null when unset) | present |
 | `locked` on `GET /savings/goal/` | absent | absent | absent | present |
+| `GET /savings/goal/` sort order | newest first | newest first | newest first | **oldest first**, `id` breaking ties |
 | the five allowance fields on `/me/entitlements/` | absent | absent | absent | present |
 | goal cap, locked goals, budget-type lock | never | never | never | enforced |
 

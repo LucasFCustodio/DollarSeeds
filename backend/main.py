@@ -1185,7 +1185,28 @@ def get_savings_goals(goal_type: Optional[str] = None,
     # Optional filter: "saving" | "debt". Allocation math is identical for both.
     if goal_type in ("saving", "debt"):
         query = query.eq("goal_type", goal_type)
-    goals_res = query.order("created_at", desc=True).execute()
+    # ORDER. Oldest first for a `limits` build, newest first for everybody else.
+    #
+    # Oldest-first is the order the free tier needs: the ACTIVE goal is the oldest
+    # eligible one, so under the old newest-first order it landed at the BOTTOM of the
+    # list, under every grayed goal, and the feature read as broken
+    # (SUBSCRIPTION_REWORK.md section 5, and section 13 q1). It is also the better
+    # order on its own merits — a goal set long ago has usually had the most put into
+    # it. General Savings is seeded before a user's first goal, so it stays at the top
+    # and the active goal sits directly below it, which is what section 5 asked for.
+    #
+    # It is NOT flipped for everyone, even though a reordered list crashes nothing.
+    # The rule is that a request without `limits` gets the response it gets today, and
+    # "today's response, but in a different order" is not that. The App Store binaries
+    # keep the order they were designed around; every build from here on gets this one.
+    #
+    # `id` breaks ties, matching _goal_age_key exactly — created_at defaults to now()
+    # and two goals can share it to the microsecond, so without it the list and the
+    # active-goal rule could disagree about which goal comes first.
+    if LIMITS_FEATURE in features:
+        goals_res = query.order("created_at").order("id").execute()
+    else:
+        goals_res = query.order("created_at", desc=True).execute()
     goals = _decorate_reconciliation(_with_allocated(goals_res.data, user_id), user_id)
 
     if LIMITS_FEATURE in features:
@@ -1863,8 +1884,13 @@ PAID_MAX_BANK_CONNECTIONS = 1
 #   * Hiding premium series from UNMARKED clients is ALWAYS on. It is backward
 #     compatibility, not a business rule, and must survive every rollback.
 #   * premium_enabled gates only MARKED clients. Flipping it off hands v2 users free
-#     access without ever exposing premium content to an old binary — which matters,
-#     because content given away cannot be taken back (no series is ever retro-paywalled).
+#     access without ever exposing premium content to an old binary, which is the whole
+#     point: the rollback lever must never widen who can see paid content.
+#
+# Note that premium_enabled now governs the FREE-TIER LIMITS as well (see _entitlements).
+# One flip therefore moves both, and there is no way to enable one without the other. If
+# they ever need to move independently, add a second app_config row rather than
+# overloading this one.
 APP_CONFIG_DEFAULTS = {
     "premium_enabled": "false",
     "min_supported_version": "0.0.0",

@@ -397,11 +397,29 @@ def test_another_users_goal_is_still_a_404(client, free, current_month):
 
 # ══ The `locked` flag on GET /savings/goal/ ════════════════════════════════════
 
-def test_the_goals_list_flags_the_locked_ones_without_reordering(client, free):
+def test_the_goals_list_is_oldest_first_and_flags_the_locked_ones(client, free):
+    """OLDEST first for a `limits` build. The active goal is the oldest eligible one,
+    so newest-first buried it at the bottom under every grayed goal. General Savings is
+    seeded before a user's first goal, so it heads the list and the active goal sits
+    directly below it."""
     data = client.get("/savings/goal/", headers=LIMITS).json()["data"]
-    # created_at DESC, exactly as before: newest first, General Savings last.
-    assert [g["title"] for g in data] == ["New car", "Emergency fund", "General Savings"]
-    assert [g["locked"] for g in data] == [True, False, False]
+    assert [g["title"] for g in data] == ["General Savings", "Emergency fund", "New car"]
+    assert [g["locked"] for g in data] == [False, False, True]
+
+
+def test_goals_created_in_the_same_instant_order_by_id(client, supabase_db, premium_on):
+    """The list and the active-goal rule must agree on which goal comes first, and
+    `created_at` defaults to now() — two goals can share it to the microsecond."""
+    same = "2026-05-01T00:00:00+00:00"
+    second = goal(supabase_db, "Second", created_at=same)
+    first = goal(supabase_db, "First", created_at=same)
+
+    data = client.get("/savings/goal/", headers=LIMITS).json()["data"]
+    # General Savings is seeded by the route itself and is older than both, so it
+    # heads the list; the tiebreak decides the two that share a timestamp.
+    tied = [g for g in data if g["id"] in (first["id"], second["id"])]
+    assert [g["id"] for g in tied] == [second["id"], first["id"]]
+    assert [g["locked"] for g in tied] == [False, True], "the first of them is active"
 
 
 def test_the_locked_flag_is_the_same_whichever_tab_asks(client, free):

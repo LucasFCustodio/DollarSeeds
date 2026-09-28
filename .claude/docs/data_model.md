@@ -75,6 +75,11 @@ is the oldest eligible one by `created_at`, `id` as the tiebreak; every other el
 goal is **locked** and the server refuses writes to it with `goal_locked`. Deleting a
 locked goal is always allowed.
 
+`GET /savings/goal/` sorts **oldest first** (`id` breaking ties, the same key that picks
+the active goal) for a `limits` client, so the active goal sits at the top under General
+Savings instead of below every grayed one. Every other client keeps the newest-first
+order it was built against. `GET /savings/goal/completed/` is newest-first for everyone.
+
 No schema supports any of that: it is a query in `_Entitlements._eligible_goals`, which
 is why the rule needed no migration, no promotion logic and no backfill. `goal_type`,
 `is_general` and `is_reconciliation` are the only columns it reads. See

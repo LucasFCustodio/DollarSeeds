@@ -182,9 +182,18 @@ Deliberately chosen over a user-nominated "favourite" for simplicity. Consequenc
 - **Accepted trade-off:** the user has no say. If their oldest goal is minor and their
   newest is the one that matters, the important one grays out.
 
-> **Ordering.** `GET /savings/goal/` currently sorts `created_at` **descending** — newest
-> first — so the active goal lands at the *bottom* of the list, under every grayed one.
-> Pin it directly below General Savings, or the feature reads as broken.
+> **Ordering — DECIDED and BUILT.** `GET /savings/goal/` used to sort `created_at`
+> **descending**, so the active goal landed at the *bottom* of the list, under every
+> grayed one. For a `limits` client it now sorts **oldest first**, `id` breaking ties
+> (the same key that picks the active goal). General Savings is seeded before a user's
+> first goal, so it heads the list and the active goal sits directly below it — which
+> is what this note asked for. It is also the better order on its own merits: a goal
+> set long ago has usually had the most put into it.
+>
+> **Only for `limits` clients.** A reordered list crashes nothing, but "today's
+> response in a different order" is not today's response, so the App Store binaries
+> keep newest-first. `GET /savings/goal/completed/` is untouched — most recent
+> achievement first is right for that tab.
 
 ---
 
@@ -338,6 +347,27 @@ deploys to production as it stands.
 **No migration.** Goal counts are derivable, the active-goal rule is a query over
 `created_at` (§5), and budget types read existing columns.
 
+**Verified against PRODUCTION on 2026-09-28**, end to end, by `verify_limits.py` at the
+repo root. It signs up a throwaway account, drives every gate through the live API, then
+deletes the account and everything it wrote. All checks passed: the cap and its 403, the
+locked/active split and every refused write, deleting a locked goal, finishing the one
+goal to free the slot, the budget-type lock and its all-or-nothing patch, the balanced
+fallback on an unclosed month against an unmarked caller still seeing Wealth Builder, the
+income-row snapshot, the frozen stamp at close-out, and the untouched `premium_required`
+body. Re-run it after Phase 2 ships.
+
+Two things that verification turned up, neither caused by Phase 1:
+
+- **`premium_enabled` is already `true`** in `app_config`. The plan in Phase 3 below
+  assumes it is `false` until release, so re-read that step before relying on it. While it
+  is true, the limits apply to any client sending `limits` and `LIMITS_TEST_USER_IDS` adds
+  nothing.
+- **A stale RevenueCat entitlement makes an account untestable.** `appletester` reports
+  `premium_active: true` with a null `expires_at`, `product_id` and `store`, which means
+  no live `subscriptions` row and a `true` coming from the RevenueCat fallback. That is
+  §11's TRANSFER bug, and its unrecorded consequence is that it silently exempts the
+  account from the video gate and from the limits.
+
 **Tests:** 432 green, 147 of them new. `backend/tests/test_backcompat_limits.py` is the
 back-compat half (every assertion parametrized over all three shipped generations, with
 the kill switch on and no subscription, so the state *would* be enforced for a `limits`
@@ -392,8 +422,8 @@ where reading §6 or §7 alone would leave you expecting something else.
    (freezing `balanced` for someone whose dashboard said Wealth Builder) is worse.
 
 Two things deliberately left alone: `GET /settings/` still returns the raw row, and
-`GET /savings/goal/` still sorts `created_at` descending — so the active goal is still at
-the bottom of the list, which is §13 q1 and a Phase 2b decision.
+`GET /savings/goal/` kept its newest-first sort at the time of writing; §13 q1 has since
+been decided and the oldest-first order is built (see §5).
 
 ### Phase 2a — Paywall. Unblocked.
 
@@ -407,7 +437,7 @@ Locked/grayed goal states, goal-cap messaging, budget-type lock.
 Test the dev build against production (Phase 1 is deployed by then), signed in as an account
 listed in `LIMITS_TEST_USER_IDS`. Purchases go through RevenueCat sandbox.
 
-### Phase 3 — Release
+### Phase 3 — Release. NEEDS REWRITING — its premise no longer holds.
 
 Ship with `app_config.premium_enabled` still `false`, so the new binary installs and
 behaves free. Once approved and rolling out, flip it to `true` in the Supabase dashboard —
@@ -415,6 +445,25 @@ no redeploy, no app update, and it still works when a bad deploy is what broke t
 Flipping it back is the rollback.
 
 Products must be **Approved** before this, plus up to 24h of store propagation.
+
+> **Two things have changed underneath the paragraph above** (both confirmed against
+> production on 2026-09-28):
+>
+> 1. **`premium_enabled` is already `true`.** "Ship with it still false" is not the
+>    current state, so as things stand the limits activate the moment a Phase 2 build
+>    installs. There is no dark ship and no flag to flip at release.
+> 2. **It is no longer a limits-only lever.** The same row gates premium video series,
+>    and "The Truth on Generosity" is now deliberately `is_premium = true`. So flipping
+>    it to `false` to roll the limits back would also hand that series to every marked
+>    client, and access given away is awkward to take back.
+>
+> Three ways out, to be decided before Phase 2 ships:
+>
+> | Option | What happens | Cost |
+> |---|---|---|
+> | **A. Second flag (recommended)** | Add an `app_config` row `limits_enabled`, default `false`, read by `_entitlements()` instead of `premium_enabled` | One new row plus a few lines in `main.py`. Restores the dark ship AND an independent rollback, and leaves video gating alone |
+> | **B. Flip it false now** | Ship dark as originally planned, flip to `true` at release | Premium videos are free to marked clients until release day |
+> | **C. Leave it true** | Limits go live as each user installs the Phase 2 build | No staged rollout and no flag rollback. Backing out means pulling the build |
 
 ### Phase 4 — Contract
 
@@ -483,9 +532,10 @@ Scheduled for after the subscription frontend is finalised.
   `select()`, not just the response shape. `test_backcompat_lessons.py` asserts this.
 - **Hiding premium content from unmarked clients is backward compatibility, not a business
   rule.** Not behind the kill switch; must survive every rollback.
-- **No published series is ever retro-paywalled.** "The Truth on Generosity" is
-  `is_premium = false` permanently. Premium video value must come from series not yet
-  shipped.
+- **Access level is the content owner's call, per series.** "The Truth on Generosity" is
+  `is_premium = true`, set deliberately. `is_premium` defaults to `true` since migration
+  `0005`. Remember that premium series are invisible to unmarked clients, so while every
+  published series is premium the original App Store binary shows an empty video list.
 - **Expand → contract.** See [CLAUDE.md](CLAUDE.md). Additive only; two releases for any
   reshape.
 - **Never commit to `main`.**
@@ -494,8 +544,13 @@ Scheduled for after the subscription frontend is finalised.
 
 ## 13. Open questions
 
-1. How the goals list reorders so the active goal isn't buried under grayed ones (§5).
-2. How bank sync gates in practice, beyond the 0/1 connection cap.
-3. Whether the paywall leads with Yearly or presents both equally.
+1. ~~How the goals list reorders so the active goal isn't buried under grayed ones.~~
+   **DECIDED 2026-09-28: oldest first, newest last, for `limits` clients only. Built —
+   see §5.**
+2. How bank sync gates in practice, beyond the 0/1 connection cap. **Deferred — after
+   the subscription frontend ships.**
+3. Whether the paywall leads with Yearly or presents both equally. **Deferred to the
+   paywall design, in Phase 2a.**
 4. How consumer pricing interacts with the B2B partner track — partner seats were quoted
-   at $6 each, below the $9.99 consumer price, leaving no rev-share margin.
+   at $6 each, below the $9.99 consumer price, leaving no rev-share margin. **Deferred —
+   there is no partner to price for yet.**
