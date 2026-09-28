@@ -82,5 +82,30 @@
     "seriesBanner": "Subscribe to unlock this series",
     "playerLocked": "This lesson is part of Premium.",
     "playerCta": "View subscription options"
+  },
+  "upsell": {
+    "title": "Part of DollarSeeds Premium",
+    "seePremium": "See Premium",
+    "notNow": "Not now"
+  },
+  "errors": {
+    "premium_required": "This series is part of DollarSeeds Premium.",
+    "goal_limit_reached": "Your free plan is at its goal limit. Premium gives you unlimited goals.",
+    "goal_locked": "This goal is locked on the free plan. You can still delete it, or go Premium to unlock it.",
+    "budget_type_locked": "This budget split is part of DollarSeeds Premium.",
+    "fallback": "This is part of DollarSeeds Premium."
+  },
+  "goalLock": {
+    "badge": "LOCKED",
+    "meta": "Locked on the free plan",
+    "unlock": "Unlock with Premium ›",
+    "a11y": "Locked goal"
+  },
+  "goalCap": {
+    "reached": "Your free plan includes {{count}} goal, and it's in use. Complete or delete it to start another, or go Premium for unlimited goals.",
+    "reached_plural": "Your free plan includes {{count}} goals, and they're all in use. Complete or delete one to start another, or go Premium for unlimited goals.",
+    "over": "{{count}} goal is locked because your free plan keeps {{max}} active. Delete it, or go Premium to unlock every goal.",
+    "over_plural": "{{count}} goals are locked because your free plan keeps {{max}} active. Delete them, or go Premium to unlock every goal.",
+    "cta": "See Premium ›"
   }
 }

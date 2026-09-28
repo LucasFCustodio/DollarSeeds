@@ -82,5 +82,30 @@
     "seriesBanner": "Assine para desbloquear esta série",
     "playerLocked": "Esta aula faz parte do Premium.",
     "playerCta": "Ver opções de assinatura"
+  },
+  "upsell": {
+    "title": "Parte do DollarSeeds Premium",
+    "seePremium": "Ver o Premium",
+    "notNow": "Agora não"
+  },
+  "errors": {
+    "premium_required": "Esta série faz parte do DollarSeeds Premium.",
+    "goal_limit_reached": "Seu plano gratuito chegou ao limite de metas. O Premium oferece metas ilimitadas.",
+    "goal_locked": "Esta meta está bloqueada no plano gratuito. Você ainda pode excluí-la, ou assinar o Premium para desbloqueá-la.",
+    "budget_type_locked": "Esta divisão de orçamento faz parte do DollarSeeds Premium.",
+    "fallback": "Isto faz parte do DollarSeeds Premium."
+  },
+  "goalLock": {
+    "badge": "BLOQUEADA",
+    "meta": "Bloqueada no plano gratuito",
+    "unlock": "Desbloquear com o Premium ›",
+    "a11y": "Meta bloqueada"
+  },
+  "goalCap": {
+    "reached": "Seu plano gratuito inclui {{count}} meta, e ela está em uso. Conclua ou exclua essa meta para começar outra, ou assine o Premium para ter metas ilimitadas.",
+    "reached_plural": "Seu plano gratuito inclui {{count}} metas, e todas estão em uso. Conclua ou exclua uma para começar outra, ou assine o Premium para ter metas ilimitadas.",
+    "over": "{{count}} meta está bloqueada porque seu plano gratuito mantém {{max}} ativa. Exclua essa meta, ou assine o Premium para desbloquear todas.",
+    "over_plural": "{{count}} metas estão bloqueadas porque seu plano gratuito mantém {{max}} ativa. Exclua essas metas, ou assine o Premium para desbloquear todas.",
+    "cta": "Ver o Premium ›"
   }
 }

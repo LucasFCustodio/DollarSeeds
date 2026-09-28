@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLocale } from '../context/LocaleContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { premiumErrorCode, usePremiumUpsell } from '../lib/premiumErrors';
 
 interface Expense {
     id: number; title: string; amount: number; day: number; category: string; month: string;
@@ -43,6 +44,7 @@ export default function DetailsScreen() {
     } = useLocale();
     const { t } = useTranslation('details');
     const { t: tc } = useTranslation('common');
+    const { showUpsell } = usePremiumUpsell();
     const { category, month, type } = useLocalSearchParams();
     const monthLabel = Array.isArray(month) ? month[0] : month;
 
@@ -114,7 +116,10 @@ export default function DetailsScreen() {
             }
             setExpenses(prev => prev.filter(e => !(e.id === item.id && e.kind === item.kind)));
         } catch (e) {
-            if (isClosedMonthError(e)) showClosedMonthAlert();
+            // A set-aside row on a goal the free tier has locked: 403 goal_locked.
+            const code = premiumErrorCode(e);
+            if (code) showUpsell(code);
+            else if (isClosedMonthError(e)) showClosedMonthAlert();
             else console.error('Error deleting item:', e);
         }
     };

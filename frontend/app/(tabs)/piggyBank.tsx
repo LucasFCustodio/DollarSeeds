@@ -11,6 +11,17 @@
  * ✅ One-tap completion (arrow on the card) → POST /savings/goal/{id}/finish
  * ✅ DELETE transaction + DELETE goal (with current_month redistribution)
  * ✅ Confirmations on complete + delete · Active / Completed tabs
+ * ✅ Free tier: locked goals render grayed (delete only), the add-goal affordance shows
+ *    an inline upsell at the cap, and every goal write handles the premium 403s
+ *
+ * FREE TIER. Two server answers drive it, and neither is re-derived here:
+ *  - `locked` on each goal from GET /savings/goal/ — which goal is the active one is
+ *    the server's rule (the oldest eligible goal), not ours. The list already arrives
+ *    oldest-first for this build, so it is rendered in the order it comes.
+ *  - `max_goals` / `goals_used` from GET /me/entitlements/ — the cap message states
+ *    those numbers and no others, so changing the free allowance needs no release.
+ * The UI prevents what it knows is refused; the 403s (goal_limit_reached, goal_locked)
+ * are handled anyway, because entitlement can change between render and tap.
  *
  * A deposit is the ONLY transaction the user writes by hand. Money leaves savings by
  * completing a goal, which withdraws that goal's balance server-side — so to spend from
@@ -29,6 +40,8 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../context/AuthContext';
+import { useSubscription } from '../../context/SubscriptionContext';
+import { premiumErrorCode, usePremiumUpsell } from '../../lib/premiumErrors';
 import { useLocale } from '../../context/LocaleContext';
 import { MONTHS, monthEndDate } from '../../constants/months';
 import { CURRENCIES } from '../../constants/currencies';
@@ -43,7 +56,7 @@ import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
 import Card from '../../components/ui/Card';
 import {
     SavingsJar, IconPlus, IconArrow, IconSavingsGoalMascot, IconDebtMascot,
-    IconTrash, IconCheck, IconSavings, IconGearMascot,
+    IconTrash, IconCheck, IconSavings, IconGearMascot, IconLock,
 } from '../../components/icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -76,6 +89,11 @@ type Goal = {
     // column existed, hence the allocated_amount fallback in the Completed tab.
     completed_amount?: number | null;
     completed_at?: string | null;
+    // Free tier (`limits` builds only): true = this goal is past the free allowance.
+    // It can be deleted and nothing else — the server refuses every other write with
+    // 403 goal_locked. Absent means unlocked. Never true for General Savings or the
+    // Reconciliation goal.
+    locked?: boolean;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -184,6 +202,9 @@ export default function PiggyBankScreen() {
     } = useLocale();
     const { t } = useTranslation('goals');
     const { t: tc } = useTranslation('common');
+    const { t: tp } = useTranslation('premium');
+    const { allowances, premiumActive, refreshEntitlement, openPaywall } = useSubscription();
+    const { showUpsell, message: premiumMessage } = usePremiumUpsell();
     const currencySymbol = CURRENCIES[currency].symbol;
     const today = new Date();
     const currentMonth: string = MONTHS[today.getMonth()];
@@ -231,7 +252,16 @@ export default function PiggyBankScreen() {
     const [editError,   setEditError]   = useState('');
 
     // ── Fetch ─────────────────────────────────────────────────────────────────
+    const scrollRef = useRef<ScrollView>(null);
+    // Where the cap upsell sits: its own y inside the content column, plus the column's
+    // y inside the ScrollView (onLayout is relative to the parent, not the scroller).
+    const contentY = useRef(0);
+    const capY = useRef(0);
+
     const fetchData = async () => {
+        // goals_used moves with every create / delete / complete, and the cap message
+        // renders it, so re-read the allowances alongside the list. Never throws.
+        void refreshEntitlement();
         try {
             const [balRes, histRes, goalRes, completedRes] = await Promise.all([
                 axios.get(`${BASE}/savings/balance/?user_id=${user?.id}`),
@@ -263,6 +293,16 @@ export default function PiggyBankScreen() {
 
     useFocusEffect(useCallback(() => { fetchData(); }, []));
 
+    // A purchase (or a lapse noticed on foreground) changes which goals are locked, and
+    // the paywall is a modal over this screen, so no focus event follows it.
+    const seenPremium = useRef(premiumActive);
+    useEffect(() => {
+        if (seenPremium.current === premiumActive) return;
+        seenPremium.current = premiumActive;
+        fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [premiumActive]);
+
     // Pre-fill + open the goal form when arriving from a suggestion
     // (e.g. Firm Foundation "Set these up" in Settings). Fires once per arrival.
     const params = useLocalSearchParams();
@@ -285,9 +325,10 @@ export default function PiggyBankScreen() {
     const reconOutstanding = reconGoal?.outstanding ?? 0;
     const reconActive = !!reconGoal && reconOutstanding > 0;
 
+    // A locked goal can't receive money, so it is never offered as a destination.
     const goalChips: Goal[] = [
         ...(generalGoal ? [generalGoal] : []),
-        ...goals,
+        ...goals.filter(g => !g.locked),
         // Allow paying down the Reconciliation debt like any other goal — repaying it is
         // a plain deposit (see _recon_summary: repaid = Σ deposits).
         ...(reconActive ? [reconGoal as Goal] : []),
@@ -301,6 +342,29 @@ export default function PiggyBankScreen() {
     const firstGoalWithTarget = goals.find(g => g.target_amount);
     const jarMax = firstGoalWithTarget?.target_amount ?? 3000;
     const jarFill = balance > 0 ? Math.min(1, balance / jarMax) : 0.05;
+
+    // ── Free-tier cap ─────────────────────────────────────────────────────────
+    // Unknown allowances (not loaded, or an older backend) mean no cap on screen; the
+    // server still refuses with goal_limit_reached, handled in submitGoal.
+    const maxGoals = allowances?.maxGoals ?? null;
+    const goalsUsed = allowances?.goalsUsed ?? 0;
+    const atGoalCap = maxGoals !== null && goalsUsed >= maxGoals;
+    const capMessage = maxGoals === null ? '' : goalsUsed > maxGoals
+        ? tp('goalCap.over', { count: goalsUsed - maxGoals, max: maxGoals })
+        : tp('goalCap.reached', { count: maxGoals });
+
+    // Both "new goal" buttons land here. At the cap there is no form to open, so show
+    // where the upsell is instead of pushing the paywall over the screen.
+    const openGoalForm = (toggle: boolean) => {
+        setGoalError('');
+        if (atGoalCap) {
+            setActiveTab('active');
+            setShowGoalForm(false);
+            scrollRef.current?.scrollTo({ y: Math.max(0, contentY.current + capY.current - 160), animated: true });
+            return;
+        }
+        setShowGoalForm(toggle ? !showGoalForm : true);
+    };
 
     // Is the currently-selected goal the General Savings pool?
     const isGeneralSelected = txGoalId !== null && txGoalId === generalGoal?.id;
@@ -408,7 +472,14 @@ export default function PiggyBankScreen() {
             }
             closeTxForm();
             fetchData();
-        } catch (err) { console.error('Transaction error:', err); }
+        } catch (err) {
+            const code = premiumErrorCode(err);
+            if (code) {
+                // The goal locked between render and tap. Refresh so it grays out.
+                showUpsell(code);
+                fetchData();
+            } else console.error('Transaction error:', err);
+        }
     };
 
     const submitGoal = async () => {
@@ -430,7 +501,14 @@ export default function PiggyBankScreen() {
             setShowGoalForm(false); setGoalTitle(''); setGoalAmount(''); setGoalType('saving');
             fetchData();
         } catch (error: any) {
-            if (error?.response?.status === 400) {
+            const code = premiumErrorCode(error);
+            if (code) {
+                // At the cap after all (the allowances were unknown or stale). Say so
+                // in place, and refresh — once goals_used lands, the form gives way to
+                // the cap message with the server's numbers.
+                setGoalError(premiumMessage(code));
+                fetchData();
+            } else if (error?.response?.status === 400) {
                 // The server's own wording when it sent one, our catalogue otherwise.
                 setGoalError(serverError(error.response.data?.detail ?? tc('serverError.goalNameTaken')));
             }
@@ -450,7 +528,11 @@ export default function PiggyBankScreen() {
             const balRes = await axios.get(`${BASE}/savings/balance/?user_id=${user?.id}`);
             setBalance(balRes.data.balance);
         } catch (e: any) {
-            if (e?.response?.status === 409) {
+            const code = premiumErrorCode(e);
+            if (code) {
+                // A transaction on a locked goal. The goal itself can still be deleted.
+                showUpsell(code);
+            } else if (e?.response?.status === 409) {
                 Alert.alert(t('alert.monthClosedTitle'), t('alert.cannotDelete', { month: monthLabel(tx.month) }));
             } else { console.error('Delete transaction error:', e); }
         }
@@ -508,7 +590,11 @@ export default function PiggyBankScreen() {
             // above is what the user is waiting on.
             void maybeRequestReview('goal_completed');
         } catch (e: any) {
-            if (e?.response?.status === 409) {
+            const code = premiumErrorCode(e);
+            if (code) {
+                showUpsell(code);
+                fetchData();
+            } else if (e?.response?.status === 409) {
                 Alert.alert(t('alert.monthClosedTitle'), t('alert.cannotComplete', { month: monthLabel(currentMonth) }));
             } else {
                 // Don't fail silently — a swallowed error here looks like the button did
@@ -577,7 +663,12 @@ export default function PiggyBankScreen() {
             setEditingGoal(null);
             fetchData();
         } catch (e: any) {
-            if (e?.response?.status === 400) {
+            const code = premiumErrorCode(e);
+            if (code) {
+                setEditingGoal(null);
+                showUpsell(code);
+                fetchData();
+            } else if (e?.response?.status === 400) {
                 setEditError(serverError(e.response.data?.detail ?? tc('serverError.goalNameTaken')));
             } else {
                 console.error('Edit goal error:', e);
@@ -627,7 +718,74 @@ export default function PiggyBankScreen() {
     // Renders one active goal card. Savings and debt goals use identical mechanics
     // (progress = allocated / target, complete when fully funded); only the accent
     // color and verb differ so debt reads as "paying down" rather than "saving up".
+    // A LOCKED goal (free tier) renders grayed: no pace, no gear, no completion arrow,
+    // and it is left out of the deposit chips. Its trash stays at full strength — a goal
+    // the user can't fund has to be one they can obviously get rid of.
+    const renderLockedGoalCard = (g: Goal) => {
+        const isDebt = g.goal_type === 'debt';
+        const target = g.target_amount ?? 0;
+        const pct = target > 0 ? Math.min(100, (g.allocated_amount / target) * 100) : 0;
+        return (
+            <Card
+                key={g.id}
+                theme={theme}
+                depth={2}
+                padding={16}
+                style={{ marginBottom: 12, backgroundColor: theme.surfaceSoft }}
+            >
+                <View style={styles.goalHeader} accessibilityLabel={tp('goalLock.a11y')}>
+                    <View style={[styles.goalIconTile, styles.lockedDim, { backgroundColor: theme.borderSoft }]}>
+                        {isDebt ? (
+                            <IconDebtMascot size={22} accent={theme.ink3} paper={theme.borderSoft} />
+                        ) : (
+                            <IconSavingsGoalMascot size={22} accent={theme.ink3} paper={theme.borderSoft} />
+                        )}
+                    </View>
+                    <View style={[{ flex: 1 }, styles.lockedDim]}>
+                        <View style={styles.lockedTitleRow}>
+                            <Text style={[styles.goalTitle, { color: theme.ink2, flexShrink: 1 }]}>{serverTitle(g.title)}</Text>
+                            <View style={[styles.lockBadge, { backgroundColor: theme.border }]}>
+                                <IconLock size={10} color={theme.ink2} />
+                                <Text style={[styles.lockBadgeText, { color: theme.ink2 }]}>{tp('goalLock.badge')}</Text>
+                            </View>
+                        </View>
+                        <Text style={[styles.goalMeta, { color: theme.ink3 }]}>{tp('goalLock.meta')}</Text>
+                    </View>
+                    <View style={styles.goalActions}>
+                        <Pressable
+                            onPress={() => deleteGoal(g)}
+                            hitSlop={10}
+                            accessibilityLabel={isDebt ? t('alert.removeDebtTitle') : t('alert.removeGoalTitle')}
+                        >
+                            <IconTrash size={16} color={theme.danger} />
+                        </Pressable>
+                    </View>
+                </View>
+
+                <View style={[styles.goalAmtRow, styles.lockedDim]}>
+                    <Text style={[styles.goalSaved, { color: theme.ink2 }]}>
+                        {fmtMoney(g.allocated_amount)}
+                    </Text>
+                    <Text style={[styles.goalOf, { color: theme.ink3 }]}>
+                        {isDebt
+                            ? t('card.ofTargetDebt', { target: fmtMoney(target) })
+                            : t('card.ofTargetSaving', { target: fmtMoney(target) })}
+                    </Text>
+                </View>
+
+                <View style={styles.lockedDim}>
+                    <AnimatedProgressBar value={pct} color={theme.ink3} bg={theme.border} height={7} />
+                </View>
+
+                <Pressable onPress={openPaywall} hitSlop={8} style={({ pressed }) => [styles.unlockLink, pressed && { opacity: 0.6 }]}>
+                    <Text style={[styles.unlockText, { color: theme.brand }]}>{tp('goalLock.unlock')}</Text>
+                </Pressable>
+            </Card>
+        );
+    };
+
     const renderGoalCard = (g: Goal) => {
+        if (g.locked) return renderLockedGoalCard(g);
         const isDebt = g.goal_type === 'debt';
         const accent     = isDebt ? theme.danger : theme.goals;
         const accentSoft = isDebt ? theme.dangerSoft : theme.goalsSoft;
@@ -716,6 +874,7 @@ export default function PiggyBankScreen() {
     return (
         <>
         <ScrollView
+            ref={scrollRef}
             style={{ flex: 1, backgroundColor: theme.bg }}
             contentContainerStyle={{ paddingBottom: 120 }}
             showsVerticalScrollIndicator={false}
@@ -730,7 +889,7 @@ export default function PiggyBankScreen() {
                         <Text style={styles.heroEyebrow}>{t('hero.eyebrow')}</Text>
                         <Pressable
                             onPress={() => {
-                                setShowGoalForm(true);
+                                openGoalForm(false);
                                 closeTxForm();
                             }}
                             style={({ pressed }) => [styles.circleBtn, pressed && { opacity: 0.7 }]}
@@ -772,7 +931,7 @@ export default function PiggyBankScreen() {
                 </View>
             </HeroBg>
 
-            <View style={styles.content}>
+            <View style={styles.content} onLayout={e => { contentY.current = e.nativeEvent.layout.y; }}>
 
                 {/* ── Inline deposit form ───────────────────────────── */}
                 {showTxForm && (
@@ -1073,22 +1232,38 @@ export default function PiggyBankScreen() {
                             </Text>
                         ) : debtGoals.map(renderGoalCard)}
 
-                        {/* Plant new goal */}
-                        <Pressable
-                            onPress={() => { setShowGoalForm(!showGoalForm); setGoalError(''); }}
-                            style={({ pressed }) => [
-                                styles.plantBtn, { borderColor: theme.border },
-                                pressed && { opacity: 0.7 },
-                            ]}
-                        >
-                            <IconPlus size={16} color={theme.brand} />
-                            <Text style={[styles.plantBtnText, { color: theme.brand }]}>
-                                {t('newGoal.button')}
-                            </Text>
-                        </Pressable>
+                        {/* Plant new goal. At the free cap it stays visible but inert, with
+                            the upsell right under it — the numbers are the server's. */}
+                        <View onLayout={e => { capY.current = e.nativeEvent.layout.y; }}>
+                            <Pressable
+                                onPress={() => openGoalForm(true)}
+                                style={({ pressed }) => [
+                                    styles.plantBtn, { borderColor: theme.border },
+                                    atGoalCap && { marginBottom: 10 },
+                                    pressed && { opacity: 0.7 },
+                                ]}
+                            >
+                                {atGoalCap
+                                    ? <IconLock size={15} color={theme.ink3} />
+                                    : <IconPlus size={16} color={theme.brand} />}
+                                <Text style={[styles.plantBtnText, { color: atGoalCap ? theme.ink3 : theme.brand }]}>
+                                    {t('newGoal.button')}
+                                </Text>
+                            </Pressable>
 
-                        {/* Goal creation form */}
-                        {showGoalForm && (
+                            {atGoalCap && (
+                                <View style={[styles.capCard, { backgroundColor: theme.harvestSoft }]}>
+                                    <Text style={[styles.capText, { color: theme.ink }]}>{capMessage}</Text>
+                                    <Pressable onPress={openPaywall} hitSlop={8} style={({ pressed }) => pressed && { opacity: 0.6 }}>
+                                        <Text style={[styles.unlockText, { color: theme.brand }]}>{tp('goalCap.cta')}</Text>
+                                    </Pressable>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Goal creation form — never at the cap, including when a deep
+                            link (the Firm Foundation suggestion) asked for it. */}
+                        {showGoalForm && !atGoalCap && (
                             <Card theme={theme} depth={4} padding={18} style={{ marginBottom: 16 }}>
                                 <Text style={[styles.formTitle, { color: theme.ink }]}>
                                     {goalType === 'debt' ? t('newGoal.titleDebt') : t('newGoal.titleSaving')}
@@ -1598,6 +1773,26 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 14,
     },
+
+    // Locked goal (free tier). The dim applies to the content only — never to the
+    // trash, which has to stay an obvious way out.
+    lockedDim: { opacity: 0.55 },
+    lockedTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    lockBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    lockBadgeText: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: ft(8, 1.2), letterSpacing: 1 },
+    unlockLink: { alignSelf: 'flex-start', marginTop: 12 },
+    unlockText: { fontFamily: 'Geist-SemiBold', fontSize: ft(13, 1.18) },
+
+    // Inline upsell under "new goal" at the free cap
+    capCard: { borderRadius: 14, padding: 14, gap: 8, marginBottom: 16 },
+    capText: { fontFamily: 'Geist-Regular', fontSize: ft(13, 1.18), lineHeight: ft(19, 1.18) },
     // Sits in the baseline-aligned amount row, so it opts out with alignSelf.
     completeBtn: {
         width: tv(44, 54),
