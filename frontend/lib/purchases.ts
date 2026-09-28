@@ -13,6 +13,8 @@
 import { Platform } from 'react-native';
 import Purchases, {
     CustomerInfo,
+    INTRO_ELIGIBILITY_STATUS,
+    PACKAGE_TYPE,
     PurchasesOffering,
     PurchasesPackage,
 } from 'react-native-purchases';
@@ -20,27 +22,35 @@ import Purchases, {
 import {
     ENTITLEMENT_ID,
     OFFERING_ID,
-    PACKAGE_MAP,
+    PERIOD_ORDER,
     RC_ANDROID_API_KEY,
     RC_IOS_API_KEY,
-    TIER_ORDER,
+    describeProduct,
     type BillingPeriod,
-    type TierKey,
 } from '../constants/premium';
 
-export type TierOption = {
-    key: string;              // RevenueCat package identifier
-    tier: TierKey | null;     // null for a package we don't recognise
-    /**
-     * LAST-RESORT English fallback, derived from the package identifier. The label a
-     * user actually sees comes from `premium:tier.<tier>`, with this as the
-     * `defaultValue` — so it only surfaces for a tier added in the RevenueCat
-     * dashboard that has no catalogue entry yet.
-     */
-    label: string;
+/**
+ * One purchasable plan: Premium Monthly or Premium Yearly. There is one tier now, so an
+ * option is identified by its billing period alone.
+ */
+export type PlanOption = {
+    key: string;              // RevenueCat package identifier ($rc_annual / $rc_monthly)
     period: BillingPeriod;
+    /**
+     * The store's own localised product name. Only ever shown for a product this build
+     * does not recognise (see loadPlanOptions); known plans are labelled from the
+     * catalogue via planLabelKey.
+     */
+    storeTitle: string;
+    known: boolean;
     priceString: string;      // ALWAYS from the store — never computed or hardcoded
     productId: string;
+    /**
+     * The introductory offer configured on the product, if any — NOT a promise the user
+     * gets it. Apple grants one per Apple ID per subscription group, so whether THIS
+     * user may have it is a separate question: see checkTrialEligibility.
+     */
+    freeTrial: { unit: string; units: number } | null;
     pkg: PurchasesPackage;
 };
 
@@ -158,54 +168,89 @@ async function currentOffering(): Promise<PurchasesOffering | null> {
 }
 
 /**
- * The eight purchasable options, grouped by billing period and ordered
- * Basic → Intermediate → High → Max.
+ * Billing period of a package. The package TYPE comes first: RevenueCat's predefined
+ * `$rc_annual` / `$rc_monthly` identifiers carry it, and the identifier itself does not
+ * end in `_yearly` — the old suffix test filed the annual plan under monthly. The
+ * product map and the identifier are fallbacks for a custom package.
+ */
+function periodOf(pkg: PurchasesPackage): BillingPeriod {
+    if (pkg.packageType === PACKAGE_TYPE.ANNUAL) return 'yearly';
+    if (pkg.packageType === PACKAGE_TYPE.MONTHLY) return 'monthly';
+    const mapped = describeProduct(pkg.product.identifier);
+    if (mapped) return mapped.period;
+    return /annual|year/i.test(pkg.identifier) ? 'yearly' : 'monthly';
+}
+
+/** A zero-price introductory offer, i.e. a free trial. A paid intro is not one. */
+function freeTrialOf(pkg: PurchasesPackage): PlanOption['freeTrial'] {
+    const intro = pkg.product.introPrice;
+    if (!intro || intro.price !== 0) return null;
+    return { unit: intro.periodUnit, units: intro.periodNumberOfUnits * Math.max(1, intro.cycles) };
+}
+
+/**
+ * The purchasable plans, yearly first.
  *
  * `priceString` is taken straight from the store, already localised and
  * currency-correct. Nothing here derives a price, and nothing may: the app is sold in
- * the US, Canada and Brazil, so a hardcoded "$5" would be wrong in two of three.
+ * the US, Canada and Brazil, so a hardcoded "$9.99" would be wrong in two of three.
+ *
+ * Legacy support-tier products are never offered here, even if an offering serves
+ * them — `currentOffering()` falls back to `default` when `premium-2026` is missing,
+ * and that holds only the eight legacy packages. Selling those from the new paywall
+ * would be mislabelled and pointless. A product we don't recognise at all IS shown
+ * (under the store's own title), because a plan someone can buy must never be
+ * invisible.
  */
-export async function loadTierOptions(): Promise<Record<BillingPeriod, TierOption[]>> {
-    const empty: Record<BillingPeriod, TierOption[]> = { monthly: [], yearly: [] };
+export async function loadPlanOptions(): Promise<PlanOption[]> {
     const offering = await currentOffering();
-    if (!offering) return empty;
+    if (!offering) return [];
 
-    const grouped: Record<BillingPeriod, TierOption[]> = { monthly: [], yearly: [] };
-
+    const options: PlanOption[] = [];
     for (const pkg of offering.availablePackages) {
-        const mapped = PACKAGE_MAP[pkg.identifier];
-        // Fall back on the identifier's suffix so a tier added in the dashboard shows
-        // up (unordered, humanised) instead of vanishing — a product someone can buy
-        // must never be invisible.
-        const period: BillingPeriod =
-            mapped?.period ?? (pkg.identifier.endsWith('_yearly') ? 'yearly' : 'monthly');
-        const tier = mapped?.tier ?? null;
-
-        grouped[period].push({
+        const mapped = describeProduct(pkg.product.identifier);
+        if (mapped?.plan === 'legacy') continue;
+        options.push({
             key: pkg.identifier,
-            tier,
-            label: humanise(pkg.identifier, period),
-            period,
+            period: periodOf(pkg),
+            storeTitle: pkg.product.title,
+            known: !!mapped,
             priceString: pkg.product.priceString,
             productId: pkg.product.identifier,
+            freeTrial: freeTrialOf(pkg),
             pkg,
         });
     }
+    // Known plans first, in PERIOD_ORDER; anything unrecognised after them.
+    const rank = (o: PlanOption) =>
+        (o.known ? 0 : PERIOD_ORDER.length) + PERIOD_ORDER.indexOf(o.period);
+    return options.sort((a, b) => rank(a) - rank(b));
+}
 
-    for (const period of ['monthly', 'yearly'] as BillingPeriod[]) {
-        grouped[period].sort((a, b) => rank(a.tier) - rank(b.tier));
+/**
+ * Which of these products THIS Apple ID may still take the introductory offer on.
+ *
+ * Apple grants one introductory offer per Apple ID per subscription group, and "DS
+ * Subscriptions" holds all ten products — so anyone who took a trial on a legacy tier
+ * is ineligible for the new one. Only an explicit ELIGIBLE answer counts: UNKNOWN (which
+ * is all Android ever returns), INELIGIBLE, an error, or an unconfigured SDK all mean
+ * "don't mention a trial". Promising a free month that doesn't arrive is a refund and a
+ * one-star review; leaving out a trial that does arrive costs nothing.
+ */
+export async function checkTrialEligibility(productIds: string[]): Promise<Record<string, boolean>> {
+    const none: Record<string, boolean> = {};
+    if (!productIds.length || Platform.OS !== 'ios' || !configurePurchases()) return none;
+    try {
+        const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIds);
+        const out: Record<string, boolean> = {};
+        for (const id of productIds) {
+            out[id] = result[id]?.status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE;
+        }
+        return out;
+    } catch (err) {
+        console.warn('RevenueCat trial eligibility check failed:', err);
+        return none;
     }
-    return grouped;
-}
-
-function rank(tier: TierKey | null): number {
-    const i = tier ? TIER_ORDER.indexOf(tier) : -1;
-    return i === -1 ? TIER_ORDER.length : i;   // unknown tiers sort last
-}
-
-function humanise(identifier: string, period: BillingPeriod): string {
-    const base = identifier.replace(`_${period}`, '').replace(/[_-]+/g, ' ').trim();
-    return base ? base.charAt(0).toUpperCase() + base.slice(1) : identifier;
 }
 
 export type PurchaseResult =
@@ -218,7 +263,7 @@ export type PurchaseResult =
  * Buy a package. A user cancelling is a NORMAL outcome, not an error — surfacing an
  * alert for it is the classic IAP annoyance, so it gets its own status.
  */
-export async function purchaseTier(option: TierOption): Promise<PurchaseResult> {
+export async function purchasePlan(option: PlanOption): Promise<PurchaseResult> {
     if (!configurePurchases()) return { status: 'unavailable' };
     try {
         const { customerInfo } = await Purchases.purchasePackage(option.pkg);

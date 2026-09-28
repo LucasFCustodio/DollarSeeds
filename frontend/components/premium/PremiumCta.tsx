@@ -25,7 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { ft } from '../../constants/responsive';
 import {
-    MANAGE_SUBSCRIPTION_URL, describeProduct,
+    MANAGE_SUBSCRIPTION_URL, describeProduct, planLabelKey,
 } from '../../constants/premium';
 import { IconChevronRight, IconSparkle } from '../icons';
 
@@ -50,18 +50,13 @@ export default function PremiumCta({ placement, style }: Props) {
     if (premiumActive && placement === 'lessons') return null;
 
     const isManage = premiumActive && placement === 'settings';
-    // describeProduct returns the tier/period pair; the label is composed from the
-    // catalogue so a subscriber sees their tier in their own language.
+    // describeProduct returns the plan/period pair; the label comes from the catalogue
+    // so a subscriber sees their plan in their own language — legacy tiers included.
     const current = describeProduct(productId);
-    const currentTier = current
-        ? t('tierPeriod', {
-            tier: t(`tier.${current.tier}`),
-            period: t(current.period === 'monthly' ? 'paywall.monthly' : 'paywall.yearly'),
-        })
-        : null;
+    const currentPlan = current ? t(planLabelKey(current)) : null;
 
     const body = isManage
-        ? (currentTier ?? t('cta.activeFallback'))
+        ? (currentPlan ?? t('cta.activeFallback'))
         : t('cta.body');
 
     return (

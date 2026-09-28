@@ -8,14 +8,17 @@
   },
   "paywall": {
     "heading": "Assine o DollarSeeds Premium",
-    "description": "O DollarSeeds quer dar a todo mundo as ferramentas para se organizar financeiramente de graça. Por isso, o único recurso premium são as aulas em vídeo. Tenha acesso a séries em vídeo com empreendedores cristãos bem-sucedidos. Conheça suas lutas e conquistas, e como eles mantêm Deus em primeiro lugar na carreira",
-    "equalTiers": "Todos os níveis de assinatura oferecem <bold>exatamente os mesmos</bold> benefícios — o desbloqueio das séries em vídeo exclusivas premium. Qualquer que seja o valor com que você escolha apoiar, somos gratos por ele!",
-    "monthly": "Mensal",
-    "yearly": "Anual",
-    "yearlyNote": "Mesmo preço do mensal — só que pago uma vez por ano.",
+    "description": "Tudo o que você precisa para se organizar bem continua de graça. O Premium tira os limites para quando você estiver pronto para crescer.",
+    "benefitGoals": "Metas de poupança e de dívida ilimitadas",
+    "benefitBudgets": "Todas as divisões de orçamento: {{names}}",
+    "benefitVideos": "Séries em vídeo exclusivas premium com empreendedores cristãos",
+    "alwaysFree": "O dízimo e a Poupança Geral são gratuitos para todos, sempre.",
     "perMonth": "por mês",
     "perYear": "por ano",
-    "current": "Atual: {{tier}}",
+    "current": "Plano atual: {{plan}}",
+    "currentTag": "PLANO ATUAL",
+    "startsOn": "COMEÇA EM {{date}}",
+    "startsLater": "COMEÇA NA RENOVAÇÃO",
     "autoRenew": "As assinaturas são renovadas automaticamente ao fim de cada período de cobrança, a não ser que sejam canceladas com pelo menos 24 horas de antecedência. Gerencie ou cancele quando quiser nas configurações da sua conta na App Store.",
     "restore": "Restaurar compras",
     "terms": "Termos de Serviço",
@@ -23,16 +26,35 @@
     "loadFailed": "Não foi possível carregar as opções de assinatura. Tente novamente em instantes.",
     "unavailable": "As assinaturas ainda não estão disponíveis neste dispositivo."
   },
-  "tier": {
-    "basic": "Básico",
-    "intermediate": "Intermediário",
-    "high": "Alto",
-    "max": "Máximo"
+  "plan": {
+    "premiumMonthly": "Premium Mensal",
+    "premiumYearly": "Premium Anual",
+    "legacyMonthly": "Nível de apoio mensal",
+    "legacyYearly": "Nível de apoio anual"
+  },
+  "trial": {
+    "unit": {
+      "day": "{{count}} dia",
+      "day_plural": "{{count}} dias",
+      "week": "{{count}} semana",
+      "week_plural": "{{count}} semanas",
+      "month": "{{count}} mês",
+      "month_plural": "{{count}} meses",
+      "year": "{{count}} ano",
+      "year_plural": "{{count}} anos"
+    },
+    "then": "{{duration}} grátis, depois {{price}} {{per}}",
+    "disclosure": "Seu período de teste grátis começa hoje. A não ser que você cancele pelo menos 24 horas antes do fim, ele vira uma assinatura paga pelo preço mostrado e sua conta da App Store é cobrada."
   },
   "switch": {
-    "title": "Alterar seu nível de apoio?",
-    "bodyWithDate": "Seu novo nível começa em {{date}}, quando o período atual terminar. Você mantém o acesso completo até lá.",
-    "bodyNoDate": "Seu novo nível começa quando o período atual terminar. Você mantém o acesso completo até lá."
+    "title": "Mudar para {{plan}}?",
+    "upgradeBody": "O {{plan}} começa na hora. A App Store reembolsa a parte não usada do seu plano atual.",
+    "downgradeBodyWithDate": "Seu plano muda para {{plan}} em {{date}}, quando o seu ano atual terminar. Você mantém o plano atual até lá.",
+    "downgradeBodyNoDate": "Seu plano muda para {{plan}} quando o seu ano atual terminar. Você mantém o plano atual até lá.",
+    "unknownBody": "A App Store aplica a mudança à sua assinatura atual. Você mantém o acesso completo o tempo todo.",
+    "scheduledTitle": "Mudança de plano agendada",
+    "scheduledBodyWithDate": "Seu plano muda para {{plan}} em {{date}}.",
+    "scheduledBodyNoDate": "Seu plano muda para {{plan}} quando o período atual terminar."
   },
   "purchase": {
     "failedTitle": "Compra não concluída",
@@ -60,6 +82,5 @@
     "seriesBanner": "Assine para desbloquear esta série",
     "playerLocked": "Esta aula faz parte do Premium.",
     "playerCta": "Ver opções de assinatura"
-  },
-  "tierPeriod": "{{tier}} · {{period}}"
+  }
 }

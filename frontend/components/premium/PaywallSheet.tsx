@@ -2,20 +2,26 @@
  * PaywallSheet — the subscription screen.
  *
  * A modal, not a route: it opens over whatever the user was doing (a locked series, a
- * settings row, a 403 from the player) and returns them there. Built on RN's `Modal`
- * with a `theme.surface` card and `shadow(10)`, matching the four modals already in
- * the app — no sheet library, no new dependency.
+ * locked goal, a settings row, a 403 from the player) and returns them there. Built on
+ * RN's `Modal` with a `theme.surface` card and `shadow(10)`, matching the app's other
+ * modals — no sheet library, no new dependency.
  *
  * It MUST scroll. There is more here than fits a phone screen, and everything App
  * Review requires has to be reachable: per-option price and period, an auto-renewal
- * disclosure, Restore Purchases, and links to Terms and Privacy.
+ * disclosure, the trial terms when a trial is offered, Restore Purchases, and links to
+ * Terms and Privacy.
  *
- * PRICES COME FROM THE STORE. Every amount rendered is `option.priceString` off the
- * RevenueCat package — already localised for the US, Canada and Brazil. Nothing here
- * hardcodes or computes a price.
+ * ONE TIER, TWO PERIODS. Premium Yearly and Premium Monthly, both on screen at once and
+ * yearly first. There is no "best value" badge and no computed saving: every amount
+ * rendered is `option.priceString` off the RevenueCat package — already localised for
+ * the US, Canada and Brazil — and nothing here computes a price or a percentage.
  *
- * THE TIERS ARE IDENTICAL. No feature lists, no "most popular" badge, no comparison
- * table. The UI must not imply a difference that does not exist.
+ * NO FREE-TIER NUMBERS. The benefit list says "unlimited goals", never "1 goal on the
+ * free plan": the free allowance is a server value that can change without a release.
+ *
+ * THE TRIAL IS CHECKED, NOT PROMISED. Trial copy renders only for a product RevenueCat
+ * says this Apple ID is eligible for (`trialEligible`). Anyone who took a trial on a
+ * legacy tier is ineligible, because all ten products share one subscription group.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -23,37 +29,55 @@ import {
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 
-import { useTranslation, Trans } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
 import { useSubscription } from '../../context/SubscriptionContext';
+import { useLocale } from '../../context/LocaleContext';
 import { useAnalytics } from '../../lib/analytics';
 import { ft } from '../../constants/responsive';
+import { MONTHS } from '../../constants/months';
 import { PRIVACY_URL, TERMS_URL } from '../../constants/legal';
-import { IconClose } from '../icons';
+import { BUDGET_TYPE_ORDER } from '../../constants/budgetTypes';
+import { IconCheck, IconClose } from '../icons';
 import {
     describeProduct,
-    type BillingPeriod,
+    planLabelKey,
+    type PlanInfo,
 } from '../../constants/premium';
-import type { TierOption } from '../../lib/purchases';
+import type { PlanOption } from '../../lib/purchases';
 
-/** "14 March 2027" — the crossgrade effective date. */
-function formatDate(iso?: string | null): string | null {
-    if (!iso) return null;
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+/**
+ * What buying `target` does to the subscription the user already holds, per the
+ * service levels in App Store Connect (SUBSCRIPTION_REWORK.md §3): Premium Yearly is
+ * level 1, Premium Monthly level 2, the legacy tiers level 3.
+ *
+ *  - upgrade   — legacy → either Premium plan, or Monthly → Yearly. Immediate; Apple
+ *                refunds the unused part of the old plan.
+ *  - downgrade — Yearly → Monthly. Apple never refuses it; it DEFERS it to the end of
+ *                the annual term. Copy must say when, never read as an error.
+ *  - unknown   — subscribed, but we can't tell to what (no product id reported).
+ */
+type Change = 'new' | 'upgrade' | 'downgrade' | 'unknown';
+
+function changeKind(active: boolean, current: PlanInfo | null, target: PlanOption): Change {
+    if (!active) return 'new';
+    if (!current) return 'unknown';
+    if (current.plan === 'legacy') return 'upgrade';
+    if (current.period === 'monthly' && target.period === 'yearly') return 'upgrade';
+    if (current.period === 'yearly' && target.period === 'monthly') return 'downgrade';
+    return 'unknown';
 }
 
 export default function PaywallSheet() {
     const { theme } = useTheme();
     const { t } = useTranslation(['premium', 'common']);
+    const { dayMonthYear } = useLocale();
     const analytics = useAnalytics();
     const {
         paywallVisible, closePaywall, options, optionsLoading, canPurchase,
-        premiumActive, productId, expiresAt, buy, restore,
+        premiumActive, productId, pendingProductId, expiresAt, trialEligible, buy, restore,
     } = useSubscription();
 
-    const [period, setPeriod] = useState<BillingPeriod>('monthly');
     const [busyKey, setBusyKey] = useState<string | null>(null);
     const [restoring, setRestoring] = useState(false);
 
@@ -64,14 +88,26 @@ export default function PaywallSheet() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [paywallVisible]);
 
+    /** "14 March 2027", in the app's language rather than the device's. */
+    const formatDate = (iso?: string | null): string | null => {
+        if (!iso) return null;
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return null;
+        return dayMonthYear(MONTHS[d.getMonth()], d.getDate(), d.getFullYear());
+    };
+
     const current = useMemo(() => describeProduct(productId), [productId]);
-    const currentTier = current
-        ? t('premium:tierPeriod', {
-            tier: t(`premium:tier.${current.tier}`),
-            period: t(current.period === 'monthly' ? 'premium:paywall.monthly' : 'premium:paywall.yearly'),
-        })
-        : null;
-    const shown = options[period] ?? [];
+    const pending = useMemo(() => describeProduct(pendingProductId), [pendingProductId]);
+    const planName = (info: PlanInfo | null, option?: PlanOption) =>
+        info ? t(planLabelKey(info)) : (option?.storeTitle ?? '');
+    const optionName = (o: PlanOption) => planName(describeProduct(o.productId), o);
+
+    const trialFor = (o: PlanOption) =>
+        !premiumActive && o.freeTrial && trialEligible[o.productId] ? o.freeTrial : null;
+    // RevenueCat's periodUnit is one of DAY / WEEK / MONTH / YEAR; each has a key.
+    const trialLabel = (trial: { unit: string; units: number }) =>
+        t(`premium:trial.unit.${trial.unit.toLowerCase()}`, { count: trial.units });
+    const anyTrialShown = options.some(o => trialFor(o));
 
     const handleClose = () => {
         if (busyKey || restoring) return;   // never yank the sheet mid-purchase
@@ -79,17 +115,19 @@ export default function PaywallSheet() {
         closePaywall();
     };
 
-    const confirmSwitch = (option: TierOption) => new Promise<boolean>(resolve => {
+    const confirmChange = (option: PlanOption, kind: Change) => new Promise<boolean>(resolve => {
+        const plan = optionName(option);
         const on = formatDate(expiresAt);
-        // Every product sits at Level 1 in one subscription group, so a switch is a
-        // CROSSGRADE that takes effect at the next renewal — in both directions, never
-        // prorated, never immediate. Saying so is the difference between "working as
-        // designed" and "I paid and nothing happened".
+        const body = kind === 'upgrade'
+            ? t('premium:switch.upgradeBody', { plan })
+            : kind === 'downgrade'
+                ? (on
+                    ? t('premium:switch.downgradeBodyWithDate', { plan, date: on })
+                    : t('premium:switch.downgradeBodyNoDate', { plan }))
+                : t('premium:switch.unknownBody');
         Alert.alert(
-            t('premium:switch.title'),
-            on
-                ? t('premium:switch.bodyWithDate', { date: on })
-                : t('premium:switch.bodyNoDate'),
+            t('premium:switch.title', { plan }),
+            body,
             [
                 { text: t('common:action.cancel'), style: 'cancel', onPress: () => resolve(false) },
                 { text: t('common:action.confirm'), onPress: () => resolve(true) },
@@ -97,10 +135,11 @@ export default function PaywallSheet() {
         );
     });
 
-    const handleBuy = async (option: TierOption) => {
+    const handleBuy = async (option: PlanOption) => {
         if (busyKey) return;
-        if (premiumActive && option.productId !== productId) {
-            const ok = await confirmSwitch(option);
+        const kind = changeKind(premiumActive, current, option);
+        if (kind !== 'new') {
+            const ok = await confirmChange(option, kind);
             if (!ok) return;
         }
 
@@ -112,6 +151,18 @@ export default function PaywallSheet() {
         if (result.status === 'purchased') {
             analytics.purchaseCompleted({ product_id: option.productId });
             closePaywall();
+            // A downgrade the store has ACCEPTED but deferred. Saying when it happens is
+            // the difference between "working as designed" and "I paid and nothing
+            // changed" — and it must never read as a failure.
+            if (kind === 'downgrade') {
+                const on = formatDate(expiresAt);
+                Alert.alert(
+                    t('premium:switch.scheduledTitle'),
+                    on
+                        ? t('premium:switch.scheduledBodyWithDate', { plan: optionName(option), date: on })
+                        : t('premium:switch.scheduledBodyNoDate', { plan: optionName(option) }),
+                );
+            }
             return;
         }
         // Cancelling is a normal outcome, not an error — no alert for it.
@@ -141,6 +192,16 @@ export default function PaywallSheet() {
             Alert.alert(t('premium:restore.failedTitle'), result.message);
         }
     };
+
+    const pendingDate = formatDate(expiresAt);
+    const benefits = [
+        t('premium:paywall.benefitGoals'),
+        // Names from the catalogue, so they match Settings and the dashboard exactly.
+        t('premium:paywall.benefitBudgets', {
+            names: BUDGET_TYPE_ORDER.map(k => t(`common:budgetType.${k}.name`)).join(' · '),
+        }),
+        t('premium:paywall.benefitVideos'),
+    ];
 
     return (
         <Modal
@@ -176,110 +237,127 @@ export default function PaywallSheet() {
                             {t('premium:paywall.description')}
                         </Text>
 
-                        {/* Equal-tiers callout. Harvest, NOT danger: red means overspending
-                            and errors everywhere else in this app, and this is the warmest
-                            message on the screen. */}
+                        {/* What Premium adds. No free-tier numbers — see the header. */}
+                        <View style={styles.benefits}>
+                            {benefits.map(line => (
+                                <View key={line} style={styles.benefitRow}>
+                                    <View style={[styles.benefitTick, { backgroundColor: theme.brandSoft }]}>
+                                        <IconCheck size={12} color={theme.brand} />
+                                    </View>
+                                    <Text style={[styles.benefitText, { color: theme.ink }]}>{line}</Text>
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* What stays free. Harvest, NOT danger: this is the warmest
+                            message on the screen, and the tithing envelope is the part
+                            of the app that is never gated. */}
                         <View style={[styles.callout, { backgroundColor: theme.harvestSoft }]}>
                             <Text style={[styles.calloutText, { color: theme.ink }]}>
-                                <Trans
-                                    i18nKey="premium:paywall.equalTiers"
-                                    components={{ bold: <Text style={styles.calloutBold} /> }}
-                                />
+                                {t('premium:paywall.alwaysFree')}
                             </Text>
                         </View>
 
-                        {/* Current subscription, when there is one */}
-                        {premiumActive && currentTier && (
+                        {/* Current subscription, and a change the store has scheduled */}
+                        {premiumActive && current && (
                             <View style={[styles.currentRow, { backgroundColor: theme.brandSoft }]}>
                                 <Text style={[styles.currentText, { color: theme.brand }]}>
-                                    {t('premium:paywall.current', { tier: currentTier })}
+                                    {t('premium:paywall.current', { plan: t(planLabelKey(current)) })}
                                 </Text>
+                                {pending && pendingProductId !== productId && (
+                                    <Text style={[styles.pendingText, { color: theme.ink2 }]}>
+                                        {pendingDate
+                                            ? t('premium:switch.scheduledBodyWithDate', { plan: t(planLabelKey(pending)), date: pendingDate })
+                                            : t('premium:switch.scheduledBodyNoDate', { plan: t(planLabelKey(pending)) })}
+                                    </Text>
+                                )}
                             </View>
                         )}
 
-                        {/* Billing period */}
-                        <View style={[styles.segment, { backgroundColor: theme.surfaceSoft }]}>
-                            {(['monthly', 'yearly'] as BillingPeriod[]).map(p => {
-                                const active = period === p;
-                                return (
-                                    <Pressable
-                                        key={p}
-                                        onPress={() => setPeriod(p)}
-                                        style={[
-                                            styles.segmentBtn,
-                                            active && { backgroundColor: theme.brand },
-                                        ]}
-                                    >
-                                        <Text style={[
-                                            styles.segmentText,
-                                            { color: active ? theme.onBrand : theme.ink2 },
-                                        ]}>
-                                            {p === 'monthly' ? t('premium:paywall.monthly') : t('premium:paywall.yearly')}
-                                        </Text>
-                                    </Pressable>
-                                );
-                            })}
-                        </View>
-
-                        {/* Yearly is exactly 12x monthly by design. Without this line a
-                            no-discount annual reads as a mistake or a trap. */}
-                        {period === 'yearly' && (
-                            <Text style={[styles.yearlyNote, { color: theme.ink2 }]}>
-                                {t('premium:paywall.yearlyNote')}
-                            </Text>
-                        )}
-
-                        {/* Tier grid — two rows of two */}
+                        {/* Plans */}
                         {optionsLoading ? (
-                            <View style={styles.tierLoading}>
+                            <View style={styles.planLoading}>
                                 <ActivityIndicator color={theme.brand} />
                             </View>
-                        ) : shown.length === 0 ? (
+                        ) : options.length === 0 ? (
                             <Text style={[styles.unavailable, { color: theme.ink3 }]}>
                                 {canPurchase
                                     ? t('premium:paywall.loadFailed')
                                     : t('premium:paywall.unavailable')}
                             </Text>
                         ) : (
-                            <View style={styles.tierGrid}>
-                                {shown.map(option => {
+                            <View style={styles.planList}>
+                                {options.map(option => {
                                     const isCurrent = premiumActive && option.productId === productId;
+                                    const isPending = premiumActive && option.productId === pendingProductId
+                                        && pendingProductId !== productId;
                                     const busy = busyKey === option.key;
+                                    const trial = trialFor(option);
+                                    const per = option.period === 'monthly'
+                                        ? t('premium:paywall.perMonth')
+                                        : t('premium:paywall.perYear');
                                     return (
                                         <Pressable
                                             key={option.key}
                                             onPress={() => handleBuy(option)}
-                                            disabled={!!busyKey || isCurrent}
+                                            disabled={!!busyKey || isCurrent || isPending}
                                             style={({ pressed }) => [
-                                                styles.tierCard,
+                                                styles.planCard,
                                                 {
-                                                    backgroundColor: theme.surface,
+                                                    backgroundColor: isCurrent ? theme.brandSoft : theme.surface,
                                                     borderColor: isCurrent ? theme.brand : theme.border,
                                                 },
-                                                isCurrent && { backgroundColor: theme.brandSoft },
                                                 pressed && { transform: [{ scale: 0.98 }] },
                                                 !!busyKey && !busy && { opacity: 0.5 },
                                             ]}
                                         >
                                             {busy ? (
-                                                <ActivityIndicator color={theme.brand} />
+                                                <ActivityIndicator color={theme.brand} style={{ flex: 1 }} />
                                             ) : (
                                                 <>
-                                                    <Text style={[styles.tierName, { color: theme.ink }]}>
-                                                        {t(`premium:tier.${option.tier ?? 'basic'}`, { defaultValue: option.label })}
-                                                    </Text>
-                                                    <Text style={[styles.tierPrice, { color: theme.brand }]}>
-                                                        {option.priceString}
-                                                    </Text>
-                                                    <Text style={[styles.tierPeriod, { color: theme.ink3 }]}>
-                                                        {option.period === 'monthly' ? t('premium:paywall.perMonth') : t('premium:paywall.perYear')}
-                                                    </Text>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={[styles.planName, { color: theme.ink }]}>
+                                                            {optionName(option)}
+                                                        </Text>
+                                                        {trial ? (
+                                                            <Text style={[styles.planTrial, { color: theme.brand }]}>
+                                                                {t('premium:trial.then', {
+                                                                    duration: trialLabel(trial),
+                                                                    price: option.priceString,
+                                                                    per,
+                                                                })}
+                                                            </Text>
+                                                        ) : isCurrent ? (
+                                                            <Text style={[styles.planTag, { color: theme.brand }]}>
+                                                                {t('premium:paywall.currentTag')}
+                                                            </Text>
+                                                        ) : isPending ? (
+                                                            <Text style={[styles.planTag, { color: theme.ink2 }]}>
+                                                                {pendingDate
+                                                                    ? t('premium:paywall.startsOn', { date: pendingDate })
+                                                                    : t('premium:paywall.startsLater')}
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+                                                    <View style={styles.planPriceCol}>
+                                                        <Text style={[styles.planPrice, { color: theme.brand }]}>
+                                                            {option.priceString}
+                                                        </Text>
+                                                        <Text style={[styles.planPer, { color: theme.ink3 }]}>{per}</Text>
+                                                    </View>
                                                 </>
                                             )}
                                         </Pressable>
                                     );
                                 })}
                             </View>
+                        )}
+
+                        {/* App Review: the trial's terms, whenever a trial is on screen */}
+                        {anyTrialShown && (
+                            <Text style={[styles.disclosure, { color: theme.ink3 }]}>
+                                {t('premium:trial.disclosure')}
+                            </Text>
                         )}
 
                         {/* App Review: auto-renewal disclosure */}
@@ -366,7 +444,30 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.sans,
         fontSize: ft(13, 1.18),
         lineHeight: ft(20, 1.18),
+        marginBottom: 14,
+    },
+    benefits: {
+        gap: 10,
         marginBottom: 16,
+    },
+    benefitRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+    },
+    benefitTick: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 1,
+    },
+    benefitText: {
+        flex: 1,
+        fontFamily: Fonts.sansMedium,
+        fontSize: ft(14, 1.18),
+        lineHeight: ft(20, 1.18),
     },
     callout: {
         borderRadius: 14,
@@ -378,44 +479,23 @@ const styles = StyleSheet.create({
         fontSize: ft(13, 1.18),
         lineHeight: ft(20, 1.18),
     },
-    calloutBold: {
-        fontFamily: Fonts.sansBold,
-    },
     currentRow: {
         borderRadius: 10,
         paddingVertical: 8,
         paddingHorizontal: 12,
         marginBottom: 14,
-        alignSelf: 'flex-start',
+        gap: 3,
     },
     currentText: {
         fontFamily: Fonts.sansSemiBold,
         fontSize: ft(12, 1.18),
     },
-    segment: {
-        flexDirection: 'row',
-        borderRadius: 12,
-        padding: 4,
-        gap: 4,
-    },
-    segmentBtn: {
-        flex: 1,
-        paddingVertical: 10,
-        borderRadius: 9,
-        alignItems: 'center',
-    },
-    segmentText: {
-        fontFamily: Fonts.sansSemiBold,
-        fontSize: ft(13, 1.2),
-    },
-    yearlyNote: {
+    pendingText: {
         fontFamily: Fonts.sans,
         fontSize: ft(12, 1.18),
-        lineHeight: ft(18, 1.18),
-        marginTop: 10,
-        textAlign: 'center',
+        lineHeight: ft(17, 1.18),
     },
-    tierLoading: {
+    planLoading: {
         paddingVertical: 40,
         alignItems: 'center',
     },
@@ -426,35 +506,44 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         paddingVertical: 28,
     },
-    tierGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
+    planList: {
         gap: 12,
-        marginTop: 16,
     },
-    tierCard: {
-        // Two per row: half the width minus half the gap.
-        width: '47.5%',
-        flexGrow: 1,
-        minHeight: 92,
+    planCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        minHeight: 76,
         borderRadius: 14,
         borderWidth: 1.5,
         paddingVertical: 14,
-        paddingHorizontal: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 2,
+        paddingHorizontal: 16,
     },
-    tierName: {
+    planName: {
         fontFamily: Fonts.sansSemiBold,
-        fontSize: ft(14, 1.2),
+        fontSize: ft(15, 1.2),
     },
-    tierPrice: {
+    planTrial: {
+        fontFamily: Fonts.sansMedium,
+        fontSize: ft(12, 1.18),
+        lineHeight: ft(17, 1.18),
+        marginTop: 3,
+    },
+    planTag: {
+        fontFamily: Fonts.monoSemiBold,
+        fontSize: ft(10, 1.18),
+        letterSpacing: 1,
+        marginTop: 4,
+    },
+    planPriceCol: {
+        alignItems: 'flex-end',
+    },
+    planPrice: {
         fontFamily: Fonts.serif,
         fontSize: ft(24, 1.25),
         lineHeight: ft(28, 1.25),
     },
-    tierPeriod: {
+    planPer: {
         fontFamily: Fonts.mono,
         fontSize: ft(10, 1.18),
     },
