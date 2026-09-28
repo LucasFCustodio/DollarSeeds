@@ -29,6 +29,8 @@ interface Props {
     height: number;
     /** The settled, on-screen section. Only it animates and shows its action. */
     settled: boolean;
+    /** A request or sequence is running for this debt: hide its action. */
+    busy: boolean;
     registerPlant: (id: number, handle: PlantViewHandle | null) => void;
     onOpen: (id: number) => void;
     onLogPayment: (id: number) => void;
@@ -42,7 +44,7 @@ export function canvasWidthFor(width: number, height: number) {
 }
 
 function PlantSection({
-    debt, hasNext, width, height, settled, registerPlant, onOpen, onLogPayment, onComplete,
+    debt, hasNext, width, height, settled, busy, registerPlant, onOpen, onLogPayment, onComplete,
     streamAnimateIn, onStreamRevealed,
 }: Props) {
     const { t } = useTranslation('debts');
@@ -65,14 +67,16 @@ function PlantSection({
             position: debt.position, total: debt.total,
         });
 
+    // The stake's tag is small (~200 × 130 canvas units): the name on one line, and
+    // "Paid off · Aug 2026" allowed to wrap at its natural break.
     const stakeLabel = debt.paid_off_at ? (
         <View style={styles.stake}>
-            <Text numberOfLines={1} adjustsFontSizeToFit
-                style={{ color: theme.ink, fontFamily: Fonts.sansBold, fontSize: Math.max(8, 26 * s) }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
+                style={{ color: theme.ink, fontFamily: Fonts.sansBold, fontSize: Math.max(8, 25 * s), textAlign: 'center' }}>
                 {debt.name}
             </Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit
-                style={{ color: theme.ink2, fontFamily: Fonts.sansSemiBold, fontSize: Math.max(7, 21 * s) }}>
+            <Text numberOfLines={2}
+                style={{ color: theme.ink2, fontFamily: Fonts.sansSemiBold, fontSize: Math.max(7, 19 * s), lineHeight: Math.max(9, 23 * s), textAlign: 'center' }}>
                 {t('label.paidOffOn', { date: f.monthYear(debt.paid_off_at.slice(0, 7)) })}
             </Text>
         </View>
@@ -117,7 +121,7 @@ function PlantSection({
                 />
             </Pressable>
 
-            {settled && (debt.ready_to_complete || (debt.is_focus && state !== 'paid_off')) ? (
+            {settled && !busy && (debt.ready_to_complete || (debt.is_focus && state !== 'paid_off')) ? (
                 <View style={[styles.action, { top: ch + 4, left: left + cw * 0.18, width: cw * 0.64 }]}>
                     {debt.ready_to_complete ? (
                         <Button color={theme.brand} label={t('actions.markPaidOff')} variant="primary" size="md" fullWidth
@@ -135,6 +139,6 @@ function PlantSection({
 export default memo(PlantSection);
 
 const styles = StyleSheet.create({
-    stake: { flex: 1, width: '88%', alignItems: 'center', justifyContent: 'center' },
+    stake: { flex: 1, width: '90%', alignItems: 'center', justifyContent: 'center' },
     action: { position: 'absolute' },
 });

@@ -28,6 +28,8 @@ interface Props {
     focusId: number | null;
     active: boolean;
     streamAnimId: number | null;
+    /** The debt a completion is running for; its action button hides. */
+    busyId: number | null;
     onSettledChange: (debt: Debt | null) => void;
     onOpen: (id: number) => void;
     onLogPayment: (id: number) => void;
@@ -38,7 +40,7 @@ interface Props {
 const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
 const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
-    { debts, focusId, active, streamAnimId, onSettledChange, onOpen, onLogPayment, onComplete, onStreamRevealed },
+    { debts, focusId, active, streamAnimId, busyId, onSettledChange, onOpen, onLogPayment, onComplete, onStreamRevealed },
     ref,
 ) {
     const listRef = useRef<FlatList<Debt>>(null);
@@ -91,6 +93,7 @@ const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
             width={size?.w ?? 0}
             height={sectionH}
             settled={active && item.id === settledId}
+            busy={item.id === busyId}
             registerPlant={registerPlant}
             onOpen={onOpen}
             onLogPayment={onLogPayment}
@@ -98,7 +101,7 @@ const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
             streamAnimateIn={streamAnimId === item.id}
             onStreamRevealed={onStreamRevealed}
         />
-    ), [size?.w, sectionH, active, settledId, registerPlant, onOpen, onLogPayment, onComplete, streamAnimId, onStreamRevealed]);
+    ), [size?.w, sectionH, active, settledId, busyId, registerPlant, onOpen, onLogPayment, onComplete, streamAnimId, onStreamRevealed]);
 
     const initialIndex = useMemo(() => {
         const i = debts.findIndex(d => d.id === focusId);

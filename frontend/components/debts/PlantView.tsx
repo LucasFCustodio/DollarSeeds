@@ -333,7 +333,7 @@ const PlantView = forwardRef<PlantViewHandle, PlantViewProps>(function PlantView
         const PaidOff = art.paidOff;
         const tag = stakeTagOf(species);
         return (
-            <Pressable style={canvas} onPress={finishComplete} accessibilityRole="button" accessibilityLabel={t('actions.skip')}>
+            <Pressable style={[canvas, styles.clip]} onPress={finishComplete} accessibilityRole="button" accessibilityLabel={t('actions.skip')}>
                 <View style={StyleSheet.absoluteFill}>
                     <Base width={width} height={height} />
                 </View>
@@ -407,13 +407,15 @@ const PlantView = forwardRef<PlantViewHandle, PlantViewProps>(function PlantView
             {prev ? (
                 <Animated.View style={[StyleSheet.absoluteFill, oldLayerStyle]}>
                     <prev.front width={width} height={height} />
-                    {prev.top ? <prev.top width={width} height={height} /> : null}
+                    {prev.top ? <View style={StyleSheet.absoluteFill}><prev.top width={width} height={height} /></View> : null}
                 </Animated.View>
             ) : null}
             {!hideFront ? (
                 <Animated.View style={[StyleSheet.absoluteFill, styles.growOrigin, prev ? newLayerStyle : null]}>
                     <frame.front width={width} height={height} />
-                    {Top ? <Top width={width} height={height} /> : null}
+                    {/* Its own absolute layer: two SVGs in one View would stack in a
+                        flex column and shrink to half size each. */}
+                    {Top ? <View style={StyleSheet.absoluteFill}><Top width={width} height={height} /></View> : null}
                 </Animated.View>
             ) : null}
 
@@ -543,6 +545,7 @@ function Splash({ t, start, s }: { t: SharedValue<number>; start: number; s: num
 
 const styles = StyleSheet.create({
     center: { alignItems: 'center', justifyContent: 'center' },
+    clip: { overflow: 'hidden' },
     // Scale grows from the pot, not from the middle of the canvas.
     growOrigin: { transformOrigin: '50% 68%' },
     potOrigin: { transformOrigin: '50% 92%' },

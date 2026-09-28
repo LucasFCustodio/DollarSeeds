@@ -50,7 +50,7 @@ function DebtsGardenScreen() {
     const [payFor, setPayFor] = useState<Debt | null>(null);
     const [streamAnimId, setStreamAnimId] = useState<number | null>(null);
     const [appActive, setAppActive] = useState(AppState.currentState === 'active');
-    const [busyComplete, setBusyComplete] = useState(false);
+    const [completingId, setCompletingId] = useState<number | null>(null);
 
     const gardenRef = useRef<DebtGardenHandle>(null);
     const pending = useRef<PendingAnimation | null>(null);
@@ -149,8 +149,8 @@ function DebtsGardenScreen() {
     }, [analytics, load]);
 
     const onComplete = useCallback(async (id: number) => {
-        if (busyComplete) return;
-        setBusyComplete(true);
+        if (completingId != null) return;
+        setCompletingId(id);
         try {
             const res = await completeDebt(id);
             analytics.debtPaidOff({ debt_id: id, position: res.debt.position, total: res.debt.total });
@@ -165,9 +165,9 @@ function DebtsGardenScreen() {
             console.error('completeDebt failed', e);
             Alert.alert(t('complete.errFailed'));
         } finally {
-            setBusyComplete(false);
+            setCompletingId(null);
         }
-    }, [analytics, busyComplete, load, t]);
+    }, [analytics, completingId, load, t]);
 
     const onStreamRevealed = useCallback(() => {
         setStreamAnimId(null);
@@ -219,6 +219,7 @@ function DebtsGardenScreen() {
                         focusId={garden.focus_id}
                         active={active}
                         streamAnimId={streamAnimId}
+                        busyId={completingId}
                         onSettledChange={onSettledChange}
                         onOpen={openDetail}
                         onLogPayment={openPay}
