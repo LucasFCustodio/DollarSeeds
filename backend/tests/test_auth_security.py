@@ -58,6 +58,13 @@ PROTECTED_ROUTES = [
     ("GET",    "/lessons/abc/playback/",          {},                                   None),
     ("GET",    "/me/entitlements/",               {},                                   None),
     ("GET",    "/announcements/",                 {},                                   None),
+    ("GET",    "/debt-freedom/",                  {},                                   None),
+    ("POST",   "/debt-freedom/",                  {},                                   {"name": "Visa", "original_balance": 1000, "current_balance": 800, "min_payment": 50, "apr": 24.99}),
+    ("GET",    "/debt-freedom/1",                 {},                                   None),
+    ("PATCH",  "/debt-freedom/1",                 {},                                   {"name": "Visa"}),
+    ("DELETE", "/debt-freedom/1",                 {},                                   None),
+    ("POST",   "/debt-freedom/1/payments",        {},                                   {"minimum": True}),
+    ("POST",   "/debt-freedom/1/complete",        {},                                   None),
 ]
 
 ROUTE_IDS = [f"{m} {p}" for m, p, _, _ in PROTECTED_ROUTES]
@@ -531,6 +538,36 @@ def test_a_user_cannot_delete_another_users_account(client, two_users, current_m
         remaining = two_users.rows(table)
         assert all(r["user_id"] == USER_B for r in remaining), f"{table} lost the victim's rows"
     assert any(r["title"] == "B rent" for r in two_users.rows("expenses"))
+
+
+def test_cannot_read_edit_pay_complete_or_delete_another_users_debt(client, two_users):
+    """Debt Freedom: a debt id is client-supplied on every per-debt route."""
+    victim = two_users.seed("debts", {"user_id": USER_B, "name": "B Visa", "original_balance": 1000.0,
+                                      "current_balance": 0.0, "min_payment": 50.0, "apr": 20.0})
+    two_users.seed("debt_transactions", {"user_id": USER_B, "debt_id": victim["id"],
+                                         "kind": "payment_minimum", "amount": 50.0,
+                                         "balance_after": 0.0, "occurred_on": "2026-01-05"})
+    did = victim["id"]
+
+    garden = client.get("/debt-freedom/", headers=auth(USER_A), params={"user_id": USER_B})
+    assert garden.status_code == 200 and garden.json()["debts"] == []
+    assert client.get(f"/debt-freedom/{did}", headers=auth(USER_A)).status_code == 404
+    assert client.patch(f"/debt-freedom/{did}", headers=auth(USER_A),
+                        json={"user_id": USER_B, "name": "hijacked", "current_balance": 9}).status_code == 404
+    assert client.post(f"/debt-freedom/{did}/payments", headers=auth(USER_A),
+                       json={"minimum": True}).status_code == 404
+    assert client.post(f"/debt-freedom/{did}/complete", headers=auth(USER_A)).status_code == 404
+    assert client.delete(f"/debt-freedom/{did}", headers=auth(USER_A)).status_code == 404
+
+    still = next(d for d in two_users.rows("debts") if d["id"] == did)
+    assert still["name"] == "B Visa" and still["status"] == "active"
+    assert len(two_users.rows("debt_transactions")) == 1
+
+    res = client.post("/debt-freedom/", headers=auth(USER_A),
+                      json={"user_id": USER_B, "name": "Mine", "original_balance": 10,
+                            "current_balance": 10, "min_payment": 1, "apr": 0})
+    assert res.status_code == 200
+    assert next(d for d in two_users.rows("debts") if d["name"] == "Mine")["user_id"] == USER_A
 
 
 def test_unauthenticated_account_deletion_is_impossible(client, two_users):

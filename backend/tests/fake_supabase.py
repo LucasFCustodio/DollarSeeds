@@ -80,6 +80,24 @@ COLUMN_DEFAULTS: dict[str, dict[str, Any]] = {
     },
     "app_config": {},
     "subscription_events": {},
+    # Mirrors migration 0010. Optional columns are present-and-NULL, as select('*')
+    # returns them.
+    "debts": {
+        "debt_type": None,
+        "lender": None,
+        "due_day": None,
+        "pay_url": None,
+        "autopay": None,
+        "credit_limit": None,
+        "notes": None,
+        "species": 4,
+        "species_locked": False,
+        "status": "active",
+        "paid_off_at": None,
+        "interest_checked_through": None,
+        "updated_at": None,
+    },
+    "debt_transactions": {},
 }
 
 # UNIQUE indexes the real schema declares. The fake enforces them on insert so an

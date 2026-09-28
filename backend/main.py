@@ -4,12 +4,14 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from typing import Optional
 import os
+import re
 import datetime
 import hmac
 import time
 import uuid
 import httpx
 import jwt
+import debt_freedom as df
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -888,6 +890,7 @@ def delete_income(id: int, user_id: str = Depends(get_current_user_id)):
 USER_DATA_TABLES = [
     "expenses", "income", "savings_transactions", "savings_goals",
     "month_status", "lesson_ratings", "user_settings", "subscriptions",
+    "debt_transactions", "debts",
 ]
 
 @app.post("/account/delete/")
@@ -2906,3 +2909,324 @@ def revenuecat_webhook(payload: dict, authorization: Optional[str] = Header(defa
 
     return {"received": True, "applied": applied, "duplicate": duplicate,
             **({} if applied else {"reason": "stale_event"})}
+
+
+# ─── Debt Freedom (plant debts) ───────────────────────────────────────────────
+# The Debts tab: each debt is a plant, paid down with the snowball method. Entirely
+# separate from the debt GOALS on the Goals tab (savings_goals.goal_type = 'debt') —
+# these routes read and write only `debts` and `debt_transactions` (migration 0010),
+# and never savings_goals or savings_transactions.
+#
+# Every rule (order, species, growth, rollover, projection, the missed-payment
+# interest) lives in debt_freedom.py as pure functions. These routes only load rows,
+# call it, and persist what it says changed. The client renders; it computes nothing.
+
+DEBT_NAME_MAX = 80
+DEBT_TEXT_MAX = 500
+
+
+class DebtCreate(BaseModel):
+    name: str
+    original_balance: float
+    current_balance: float
+    min_payment: float
+    apr: float
+    debt_type: Optional[str] = None
+    lender: Optional[str] = None
+    due_day: Optional[int] = None
+    pay_url: Optional[str] = None
+    autopay: Optional[bool] = None
+    credit_limit: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class DebtUpdate(BaseModel):
+    name: Optional[str] = None
+    original_balance: Optional[float] = None
+    current_balance: Optional[float] = None
+    min_payment: Optional[float] = None
+    apr: Optional[float] = None
+    debt_type: Optional[str] = None
+    lender: Optional[str] = None
+    due_day: Optional[int] = None
+    pay_url: Optional[str] = None
+    autopay: Optional[bool] = None
+    credit_limit: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class DebtPayment(BaseModel):
+    minimum: bool = False
+    extra_amount: Optional[float] = None
+    # The user's local date. Optional so the server can default it; the server clock
+    # is UTC, which is already "tomorrow" for a US evening.
+    occurred_on: Optional[datetime.date] = None
+
+
+DEBT_REQUIRED_FIELDS = ("name", "original_balance", "current_balance", "min_payment", "apr")
+
+
+def _df_bad(detail: str) -> HTTPException:
+    return HTTPException(status_code=400, detail=detail)
+
+
+def _df_clean(fields: dict) -> dict:
+    """Validate and normalise debt fields. Only keys present in `fields` are checked,
+    so PATCH can send any subset. A None on an optional field clears it."""
+    out = {}
+    for key, value in fields.items():
+        if key in DEBT_REQUIRED_FIELDS and value is None:
+            raise _df_bad(f"{key} is required.")
+        if key == "name":
+            value = value.strip()
+            if not value:
+                raise _df_bad("name is required.")
+            value = value[:DEBT_NAME_MAX]
+        elif key in ("original_balance", "current_balance", "min_payment", "credit_limit"):
+            if value is not None and (value < 0 or value != value):
+                raise _df_bad(f"{key} cannot be negative.")
+            value = None if value is None else df.money(value)
+        elif key == "apr":
+            if value < 0 or value > 1000:
+                raise _df_bad("apr must be a percentage between 0 and 1000.")
+        elif key == "due_day":
+            if value is not None and not (1 <= value <= 31):
+                raise _df_bad("due_day must be between 1 and 31.")
+        elif key == "debt_type":
+            if value is not None and value not in df.DEBT_TYPES:
+                raise _df_bad(f"Unknown debt_type '{value}'.")
+        elif key == "pay_url":
+            value = (value or "").strip() or None
+            if value:
+                # Opened in a browser on the phone: never a javascript: or app scheme.
+                # A bare "chase.com" gets https://; anything else with a scheme is refused.
+                if not value.lower().startswith(("https://", "http://")):
+                    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", value):
+                        raise _df_bad("pay_url must be a web address.")
+                    value = "https://" + value
+                value = value[:DEBT_TEXT_MAX]
+        elif key in ("lender", "notes"):
+            value = (value or "").strip() or None
+            if value:
+                value = value[:DEBT_TEXT_MAX]
+        out[key] = value
+    return out
+
+
+def _df_now() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _df_load(user_id: str):
+    debts = supabase.table("debts").select("*").eq("user_id", user_id).execute().data or []
+    txns = (supabase.table("debt_transactions").select("*").eq("user_id", user_id)
+            .order("occurred_on").order("id").execute().data or [])
+    return debts, txns
+
+
+def _df_owned(user_id: str, debt_id: int) -> dict:
+    rows = supabase.table("debts").select("*").eq("id", debt_id).eq("user_id", user_id).execute().data
+    if not rows:
+        raise HTTPException(status_code=404, detail="Debt not found.")
+    return rows[0]
+
+
+def _df_sync_species(user_id: str, debts: list) -> None:
+    """Re-deal species to every still-unlocked debt. Called after anything that can
+    change the order or the count: create, delete, and every balance change."""
+    for debt_id, species in df.species_updates(debts).items():
+        supabase.table("debts").update({"species": species}).eq("id", debt_id).eq("user_id", user_id).execute()
+        for d in debts:
+            if d["id"] == debt_id:
+                d["species"] = species
+
+
+def _df_one(user_id: str, debt_id: int, today: datetime.date) -> dict:
+    """One decorated debt plus the garden-level fields, after re-dealing species."""
+    debts, txns = _df_load(user_id)
+    _df_sync_species(user_id, debts)
+    garden = df.decorate_garden(debts, txns, today)
+    debt = next((d for d in garden["debts"] if d["id"] == debt_id), None)
+    return {"debt": debt, "focus_id": garden["focus_id"],
+            "plan_est_payoff_month": garden["plan_est_payoff_month"]}
+
+
+def _df_apply_missed_payments(user_id: str, debts: list, txns: list, today: datetime.date) -> bool:
+    """The owner's missed-payment rule, applied lazily. Returns True if any balance
+    moved. The debt row is advanced with a conditional update on the old
+    interest_checked_through, so two overlapping GETs cannot both charge a cycle."""
+    by_debt: dict = {}
+    for t in txns:
+        by_debt.setdefault(t.get("debt_id"), []).append(t)
+    moved = False
+    for d in debts:
+        charges, checked = df.missed_payment_charges(d, by_debt.get(d["id"], []), today)
+        if checked is None:
+            continue
+        old = d.get("interest_checked_through")
+        patch = {"interest_checked_through": checked.isoformat()}
+        if charges:
+            patch["current_balance"] = charges[-1]["balance_after"]
+            patch["updated_at"] = _df_now()
+        q = supabase.table("debts").update(patch).eq("id", d["id"]).eq("user_id", user_id)
+        q = q.is_("interest_checked_through", None) if old is None else q.eq("interest_checked_through", old)
+        if not q.execute().data:
+            continue  # another request got there first
+        d.update(patch)
+        for c in charges:
+            row = {
+                "user_id": user_id, "debt_id": d["id"], "kind": df.KIND_INTEREST,
+                "amount": c["amount"], "balance_after": c["balance_after"],
+                "occurred_on": c["occurred_on"].isoformat(),
+            }
+            inserted = supabase.table("debt_transactions").insert(row).execute().data
+            txns.append(inserted[0] if inserted else row)
+            moved = True
+    return moved
+
+
+@app.get("/debt-freedom/")
+def get_debt_garden(user_id: str = Depends(get_current_user_id)):
+    today = datetime.date.today()
+    debts, txns = _df_load(user_id)
+    if _df_apply_missed_payments(user_id, debts, txns, today):
+        _df_sync_species(user_id, debts)
+    return df.decorate_garden(debts, txns, today)
+
+
+@app.post("/debt-freedom/")
+def create_debt(debt: DebtCreate, user_id: str = Depends(get_current_user_id)):
+    fields = _df_clean(debt.model_dump())
+    row = {
+        **fields,
+        "user_id": user_id,
+        "species": df.DEFAULT_SPECIES,
+        "species_locked": False,
+        "status": df.STATUS_ACTIVE,
+    }
+    created = supabase.table("debts").insert(row).execute().data
+    if not created:
+        raise HTTPException(status_code=500, detail="Could not create the debt.")
+    return _df_one(user_id, created[0]["id"], datetime.date.today())
+
+
+@app.get("/debt-freedom/{id}")
+def get_debt(id: int, user_id: str = Depends(get_current_user_id)):
+    _df_owned(user_id, id)
+    today = datetime.date.today()
+    debts, txns = _df_load(user_id)
+    garden = df.decorate_garden(debts, txns, today)
+    debt = next(d for d in garden["debts"] if d["id"] == id)
+    rolls_into = next((d for d in garden["debts"] if d["id"] == debt.get("rolls_into_id")), None)
+    history = sorted((t for t in txns if t.get("debt_id") == id),
+                     key=lambda t: (str(t.get("occurred_on")), t.get("id") or 0), reverse=True)
+    return {
+        "debt": debt,
+        "transactions": history,
+        "rolls_into": {"id": rolls_into["id"], "name": rolls_into["name"]} if rolls_into else None,
+        "focus_id": garden["focus_id"],
+        "plan_est_payoff_month": garden["plan_est_payoff_month"],
+    }
+
+
+@app.patch("/debt-freedom/{id}")
+def update_debt(id: int, update: DebtUpdate, user_id: str = Depends(get_current_user_id)):
+    current = _df_owned(user_id, id)
+    fields = _df_clean({k: getattr(update, k) for k in update.model_fields_set if k != "user_id"})
+    today = datetime.date.today()
+    if not fields:
+        return _df_one(user_id, id, today)
+
+    new_balance = fields.get("current_balance")
+    old_balance = df.money(current.get("current_balance"))
+    balance_moved = new_balance is not None and new_balance != old_balance
+    if balance_moved and df.is_paid_off(current):
+        raise HTTPException(status_code=409, detail="A paid-off debt's balance cannot change.")
+
+    fields["updated_at"] = _df_now()
+    supabase.table("debts").update(fields).eq("id", id).eq("user_id", user_id).execute()
+    if balance_moved:
+        supabase.table("debt_transactions").insert({
+            "user_id": user_id, "debt_id": id, "kind": df.KIND_BALANCE_EDIT,
+            "amount": df.money(new_balance - old_balance),
+            "balance_after": new_balance,
+            "occurred_on": today.isoformat(),
+        }).execute()
+    return _df_one(user_id, id, today)
+
+
+@app.delete("/debt-freedom/{id}")
+def delete_debt(id: int, user_id: str = Depends(get_current_user_id)):
+    _df_owned(user_id, id)
+    # The FK cascades, but delete the history explicitly too: it keeps this route
+    # correct even against a schema where the cascade was never declared.
+    supabase.table("debt_transactions").delete().eq("debt_id", id).eq("user_id", user_id).execute()
+    supabase.table("debts").delete().eq("id", id).eq("user_id", user_id).execute()
+    debts, _ = _df_load(user_id)
+    _df_sync_species(user_id, debts)
+    return {"deleted": True}
+
+
+@app.post("/debt-freedom/{id}/payments")
+def log_debt_payment(id: int, payment: DebtPayment, user_id: str = Depends(get_current_user_id)):
+    debt = _df_owned(user_id, id)
+    if df.is_paid_off(debt):
+        raise HTTPException(status_code=409, detail="This debt is already paid off.")
+    extra = payment.extra_amount or 0
+    if extra < 0:
+        raise _df_bad("extra_amount cannot be negative.")
+    if not payment.minimum and extra <= 0:
+        raise _df_bad("Nothing to pay: send minimum, extra_amount, or both.")
+
+    debts, txns = _df_load(user_id)
+    if extra > 0:
+        focus = df.focus_debt(df.order_debts(debts))
+        if not focus or focus["id"] != id:
+            raise HTTPException(status_code=409, detail="Extra payments go to the focus debt only.")
+
+    occurred_on = payment.occurred_on or datetime.date.today()
+    own_txns = [t for t in txns if t.get("debt_id") == id]
+    previous_step = df.growth_step(debt, df.has_payment(own_txns))
+
+    balance = df.money(debt.get("current_balance"))
+    parts = []
+    if payment.minimum:
+        parts.append((df.KIND_MINIMUM, df._num(debt.get("min_payment"))))
+    if extra > 0:
+        parts.append((df.KIND_EXTRA, extra))
+    written = []
+    for kind, wanted in parts:
+        amount = df.money(min(wanted, balance))  # never below 0
+        if amount <= 0:
+            continue
+        balance = df.money(balance - amount)
+        row = {
+            "user_id": user_id, "debt_id": id, "kind": kind, "amount": amount,
+            "balance_after": balance, "occurred_on": occurred_on.isoformat(),
+        }
+        inserted = supabase.table("debt_transactions").insert(row).execute().data
+        written.append(inserted[0] if inserted else row)
+    if not written:
+        raise HTTPException(status_code=409, detail="This debt has no balance left to pay.")
+
+    # The first payment locks the species: the plant the user has watched sprout
+    # never changes kind afterwards.
+    supabase.table("debts").update({
+        "current_balance": balance, "species_locked": True, "updated_at": _df_now(),
+    }).eq("id", id).eq("user_id", user_id).execute()
+    return {**_df_one(user_id, id, datetime.date.today()),
+            "previous_step": previous_step, "transactions": written}
+
+
+@app.post("/debt-freedom/{id}/complete")
+def complete_debt(id: int, user_id: str = Depends(get_current_user_id)):
+    debt = _df_owned(user_id, id)
+    if df.is_paid_off(debt):
+        raise HTTPException(status_code=409, detail="This debt is already paid off.")
+    if df._num(debt.get("current_balance")) > 0:
+        raise HTTPException(status_code=409, detail="Only a debt with a zero balance can be completed.")
+    now = _df_now()
+    supabase.table("debts").update({
+        "status": df.STATUS_PAID_OFF, "paid_off_at": now, "updated_at": now,
+    }).eq("id", id).eq("user_id", user_id).execute()
+    return _df_one(user_id, id, datetime.date.today())

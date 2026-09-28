@@ -152,6 +152,60 @@ Idempotency lives in the conditional update on `subscriptions`
 makes a duplicate delivery and a stale out-of-order delivery both match zero rows,
 atomically. This table only answers "what did RevenueCat tell us, and when".
 
+### `debts` / `debt_transactions` — Debt Freedom (plant debts)
+
+The Debts tab: each debt is a plant grown by paying it down with the snowball method.
+Migration [0010](../../backend/migrations/0010_debt_freedom.sql). **Entirely separate
+from debt goals** (`savings_goals.goal_type = 'debt'`) — nothing here touches
+`savings_goals` or `savings_transactions`. Routes live under `/debt-freedom/` in
+`main.py`; **every rule is a pure function in
+[backend/debt_freedom.py](../../backend/debt_freedom.py)**, unit-tested in
+`tests/test_debt_freedom.py`. The client renders server-computed fields only.
+
+`debts`:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | bigint identity PK | |
+| `user_id` | uuid | No FK, like every other table |
+| `name` | text | |
+| `original_balance` / `current_balance` | numeric | `current_balance` never goes below 0 |
+| `min_payment` | numeric | |
+| `apr` | numeric | Percent, e.g. `24.99` |
+| `due_day` | smallint | Nullable, 1–31. Past a short month's end it lands on the last day. Unset shows as red `--` |
+| `debt_type` | text | Nullable. Canonical English: `credit_card`, `student_loan`, `medical`, `auto`, `personal`, `bnpl`, `family`, `other` |
+| `lender`, `pay_url`, `autopay`, `credit_limit`, `notes` | | All nullable. `pay_url` is http(s) only (server-enforced) |
+| `species` | smallint | 1–4, default 4. Which plant art |
+| `species_locked` | bool | Set by the first payment; a locked species never changes |
+| `status` | text | `active` \| `paid_off` |
+| `paid_off_at` | timestamptz | Set by `POST /debt-freedom/{id}/complete` |
+| `interest_checked_through` | date | Last due date the missed-payment rule examined. NULL = never; anchors on `created_at` |
+
+`debt_transactions`: `debt_id` (FK, cascade), `kind` (`payment_minimum` \|
+`payment_extra` \| `interest` \| `balance_edit`), `amount`, `balance_after`,
+`occurred_on` (date). `balance_edit.amount` is signed (new − old).
+
+**The rules** (all in `debt_freedom.py`):
+
+- **Order** — paid-off first (oldest `paid_off_at` first), then active by
+  `current_balance` ascending, ties by `created_at` then `id`. The first active debt is
+  the **focus**; only it accepts `extra_amount`.
+- **Species** — N < 4 → all species 4; else position i gets `floor(i*4/N)+1`. Re-dealt
+  to unlocked debts after every create, delete and balance change.
+- **Growth step** — 0 until a payment exists; then 1 below 10% paid, else
+  `min(10, floor(pct*10)+1)`.
+- **Rollover** — the focus's `suggested_payment` = its minimum + every paid-off debt's
+  minimum.
+- **Projection** — monthly: interest, then minimums, then everything left to the focus,
+  rolling over within the month. Month 1 is next calendar month. `null` when the
+  focus payment does not exceed its interest, or after 600 months.
+- **Missed payment** (the owner's rule, one function: `missed_payment_charges`) — run
+  lazily at the start of `GET /debt-freedom/`: for each due date passed since
+  `interest_checked_through` with no `payment_minimum` in its cycle
+  `(previous due, due]`, add one month of interest as an `interest` row. The debt row is
+  advanced with a conditional update on the old `interest_checked_through`, so
+  overlapping requests cannot double-charge.
+
 ### `app_config`
 
 `key` (PK) / `value` / `updated_at`. Three rows: `premium_enabled`,
@@ -259,6 +313,7 @@ State as verified **2026-07-26** — already correct, nothing to apply:
 | Tables | RLS | Policies |
 |--------|-----|----------|
 | `expenses`, `income`, `savings_transactions`, `savings_goals`, `month_status`, `lesson_ratings` | enabled | One `ALL` policy each, role `authenticated`, `USING (auth.uid() = user_id)` |
+| `debts`, `debt_transactions` | enabled | Same: one `ALL` policy each, role `authenticated`, `USING (auth.uid() = user_id)` (plus the same `WITH CHECK`). Added by migration `0010` — **not yet applied** until its `Applied to project` line is filled in. |
 | `user_settings` | enabled | Three policies — `SELECT` / `INSERT` / `UPDATE`, same `auth.uid() = user_id` — but on role `public`, not `authenticated`. No `DELETE` policy. |
 | `lesson_series`, `lessons` | enabled | **None** — deny-all to anon and authenticated, by design. Shared content is served only through the backend (`GET /lessons/...`) on service_role. |
 | `subscriptions`, `subscription_events`, `app_config` | enabled | **None** — same posture. Entitlement is served only through `GET /me/entitlements/`; letting the anon key read `subscriptions` directly would expose who pays. Added by migration `0005`. |
