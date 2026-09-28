@@ -11,10 +11,10 @@
 | Phase | What | State |
 |---|---|---|
 | 0 | App Store Connect products + RevenueCat wiring | **DONE — verified end to end** |
-| 1 | Backend: capability token, entitlements resolver, gates | **BUILT on `subscription` — 432 tests green, ready to merge and deploy** |
+| 1 | Backend: capability token, entitlements resolver, gates | **DONE — merged, deployed, verified against production 2026-09-28** |
 | 2a | Frontend: paywall (products, prices, trial, purchase) | **Unblocked — can start now** |
-| 2b | Frontend: gating UI (locked goals, grayed states, budget lock) | Blocked on Phase 1 landing |
-| 3 | Release: flip `premium_enabled` | After 2 ships and is approved |
+| 2b | Frontend: gating UI (locked goals, grayed states, budget lock) | **Unblocked — Phase 1 has landed** |
+| 3 | Release | **No flag to flip. The limits go live per install — see Phase 3** |
 | 4 | Contract: retire old products | Much later |
 
 All blocking decisions are settled. Remaining questions in §13 are non-blocking.
@@ -23,21 +23,41 @@ All blocking decisions are settled. Remaining questions in §13 are non-blocking
 
 - Every change gets its own branch, **chained**: the first branches off `main`, each later
   one branches off the previous. Phase 1 lives on **`subscription`**.
-- **Phase 1 merges into `main` as soon as it's done, and Render deploys it to production.**
-  That's safe because old builds never send `limits`: current users get exactly today's
-  behaviour. The Phase 2 branch is then created off the merged `main`, and the frontend
-  branches merge later, for the final build.
+- **Phase 1 is merged and deployed.** That was safe because old builds never send
+  `limits`: current users get exactly today's behaviour. The Phase 2 branch is created off
+  the merged `main`, and the frontend branches merge later, for the final build.
 - **Testing on a phone happens against production**, which the dev build already points at
-  (`https://dollarseeds-1.onrender.com`). Two things make it work:
-  - The dev build sends `limits` (added to `CLIENT_FEATURES` in Phase 2).
-  - Test accounts are listed in the `LIMITS_TEST_USER_IDS` environment variable on Render.
-    For those accounts only, on `limits` requests only, the limits are enforced as if
-    `premium_enabled` were on. It never touches `/config/`, `/playback/`, or anyone else.
-- **Never flip `app_config.premium_enabled` to test.** The shipped premium build reads it from
-  `/config/` to decide what to lock. It flips at release (Phase 3).
-- Test accounts: `custodiolucas555` (`44776d06-9114-48ce-95b6-40c58ce6c033`) and
-  `appletester` (`63103554-5b72-4d59-9168-9968b559142b`). Anything created while testing is
-  a real row in the production database.
+  (`https://dollarseeds-1.onrender.com`). One thing makes it work: the dev build sends
+  `limits`, added to `CLIENT_FEATURES` in Phase 2. That is now enough on its own, because
+  `app_config.premium_enabled` is already `true` — see Phase 3.
+- **`LIMITS_TEST_USER_IDS` is NOT needed, and should stay unset.** It exists to switch the
+  limits on for named accounts while `premium_enabled` is `false`, and that flag is true,
+  so every `limits` request is already subject to them. Leave it unset: setting it would
+  imply the limits depend on it, and they do not. The mechanism stays in the code for the
+  day the flag goes false.
+
+#### Test accounts — read this before testing anything about the free tier
+
+| Account | User id | What it is good for |
+|---|---|---|
+| a **fresh throwaway** | sign one up | **anything about the free tier.** Test, then delete it |
+| `appletester` | `63103554-5b72-4d59-9168-9968b559142b` | the SUBSCRIBER experience only |
+| `custodiolucas555` | `44776d06-9114-48ce-95b6-40c58ce6c033` | **has no password** — created by email link, so it cannot be signed into with one |
+
+**`appletester` is permanently entitled and cannot show you the free tier.** It reports
+`premium_active: true` with a null `expires_at`, `product_id` and `store`, which means
+there is no live `subscriptions` row and the `true` comes from the RevenueCat fallback —
+§11's TRANSFER bug. Every gate therefore passes it through silently: the video paywall,
+the goal cap, the locked goals and the budget lock all do nothing for it. Testing the
+gating UI on that account shows the paid experience and says nothing about the free one.
+
+**DECIDED 2026-09-28: leave that entitlement alone for now** and use a fresh account for
+free-tier testing. `verify_limits.py` at the repo root does exactly that against the live
+API — it signs one up, drives every gate, then deletes the account and everything it
+wrote. That leaves `appletester` as a standing "subscriber" account, which is useful in
+its own right.
+
+Anything created while testing is a real row in the production database.
 - (CLAUDE.md's note that the frontend hardcodes `10.0.0.13:8000` is out of date — screens
   hardcode the Render address.)
 
@@ -430,40 +450,58 @@ been decided and the oldest-first order is built (see §5).
 Product cards, $9.99/$69.99, trial copy gated on eligibility, purchase, restore, "Current
 plan" label. Needs only RevenueCat, which is done.
 
-### Phase 2b — Gating UI. Needs Phase 1 landed + §5 confirmed.
+### Phase 2b — Gating UI. UNBLOCKED — Phase 1 has landed.
 
 Locked/grayed goal states, goal-cap messaging, budget-type lock.
 
-Test the dev build against production (Phase 1 is deployed by then), signed in as an account
-listed in `LIMITS_TEST_USER_IDS`. Purchases go through RevenueCat sandbox.
+The backend is live and proven, so all of this works against production the moment the dev
+build starts sending `limits`:
 
-### Phase 3 — Release. NEEDS REWRITING — its premise no longer holds.
+- `GET /me/entitlements/` carries `max_goals`, `goals_used`, `budget_types`,
+  `video_series` and `max_bank_connections`. **Render those values; never hardcode the
+  numbers.** That is the entire reason they are values rather than booleans (§6) — it is
+  what lets the free tier change without an App Store release.
+- `GET /savings/goal/` carries `locked` per goal, and for `limits` clients it is sorted
+  **oldest first**, so the active goal is the first non-General row instead of the last.
+- The four 403 codes in §7 arrive as `{"code": ..., "detail": ...}`. `detail` is a
+  finished sentence and is safe to show as-is.
 
-Ship with `app_config.premium_enabled` still `false`, so the new binary installs and
-behaves free. Once approved and rolling out, flip it to `true` in the Supabase dashboard —
-no redeploy, no app update, and it still works when a bad deploy is what broke things.
-Flipping it back is the rollback.
+**Test signed in as a FRESH account**, never `appletester` — see "Test accounts" above.
+Every goal, expense and month-close made while testing is a real production row. Purchases
+go through RevenueCat sandbox.
 
-Products must be **Approved** before this, plus up to 24h of store propagation.
+### Phase 3 — Release. DECIDED 2026-09-28: there is no flag to flip.
 
-> **Two things have changed underneath the paragraph above** (both confirmed against
-> production on 2026-09-28):
->
-> 1. **`premium_enabled` is already `true`.** "Ship with it still false" is not the
->    current state, so as things stand the limits activate the moment a Phase 2 build
->    installs. There is no dark ship and no flag to flip at release.
-> 2. **It is no longer a limits-only lever.** The same row gates premium video series,
->    and "The Truth on Generosity" is now deliberately `is_premium = true`. So flipping
->    it to `false` to roll the limits back would also hand that series to every marked
->    client, and access given away is awkward to take back.
->
-> Three ways out, to be decided before Phase 2 ships:
->
-> | Option | What happens | Cost |
-> |---|---|---|
-> | **A. Second flag (recommended)** | Add an `app_config` row `limits_enabled`, default `false`, read by `_entitlements()` instead of `premium_enabled` | One new row plus a few lines in `main.py`. Restores the dark ship AND an independent rollback, and leaves video gating alone |
-> | **B. Flip it false now** | Ship dark as originally planned, flip to `true` at release | Premium videos are free to marked clients until release day |
-> | **C. Leave it true** | Limits go live as each user installs the Phase 2 build | No staged rollout and no flag rollback. Backing out means pulling the build |
+The original plan was to ship dark with `app_config.premium_enabled` at `false`, then flip
+it at release. **That is not available**, for two reasons found while verifying Phase 1:
+
+1. `premium_enabled` is already `true` in production, and was before this rework started.
+   Nothing is shipping dark.
+2. That one row now gates two separate things: premium video series AND the free-tier
+   limits. "The Truth on Generosity" is deliberately `is_premium = true`, so setting the
+   row to `false` would hand that series to every marked client.
+
+**The decision is to leave it `true` and accept what follows.** A second `app_config` row
+(`limits_enabled`) was considered and deliberately not taken.
+
+Concretely:
+
+- **The limits go live per install.** A user is subject to the goal cap, the locked goals
+  and the budget lock from the moment they open a build that sends `limits`. There is no
+  staged rollout and no release-day switch.
+- **App Store review IS the rollout.** Users update over days or weeks, so the free tier
+  arrives gradually anyway, just not on a schedule anyone controls.
+- **The rollback is the build, not a flag.** If the limits misbehave, the fix is a new
+  build through review, or a backend change deployed to Render. Setting `premium_enabled`
+  to `false` still works as an emergency lever and takes effect within a minute, but it
+  costs the video paywall at the same time: every marked client gets the premium series,
+  and access given away is awkward to take back. Use it only if the limits are doing real
+  damage.
+- **Nothing else about the release changes.** Products must still be **Approved** before
+  shipping, plus up to 24h of store propagation.
+
+Because the flag is already on, **the free tier is testable against production right now**,
+from any unentitled account, with no configuration at all.
 
 ### Phase 4 — Contract
 
