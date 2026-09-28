@@ -1888,9 +1888,14 @@ PAID_MAX_BANK_CONNECTIONS = 1
 #     point: the rollback lever must never widen who can see paid content.
 #
 # Note that premium_enabled now governs the FREE-TIER LIMITS as well (see _entitlements).
-# One flip therefore moves both, and there is no way to enable one without the other. If
-# they ever need to move independently, add a second app_config row rather than
-# overloading this one.
+# One flip moves both, and there is no way to enable one without the other. Splitting them
+# (a second app_config row, read by _entitlements instead of this one) was considered on
+# 2026-09-28 and DELIBERATELY NOT TAKEN: the row is already true, so the limits ship with
+# the build rather than with a flag, and the rollback is a new build. Flipping this to
+# false still disables the limits within a minute, but it frees the premium video series
+# at the same time -- an emergency lever with a real cost, not a routine switch.
+# SUBSCRIPTION_REWORK.md Phase 3 has the reasoning. If that trade ever stops being
+# acceptable, add the second row rather than overloading this one.
 APP_CONFIG_DEFAULTS = {
     "premium_enabled": "false",
     "min_supported_version": "0.0.0",
