@@ -1,0 +1,140 @@
+{
+  "canvas": {
+    "width": 1000,
+    "height": 1250,
+    "potBottom": 1150
+  },
+  "species": {
+    "1": {
+      "stakeTag": {
+        "x": 489.4,
+        "y": 914.8,
+        "width": 201.1,
+        "height": 129.1
+      },
+      "stakeTagRotation": -5,
+      "bugSteps": []
+    },
+    "2": {
+      "stakeTag": {
+        "x": 489.4,
+        "y": 914.8,
+        "width": 201.1,
+        "height": 129.1
+      },
+      "stakeTagRotation": -5,
+      "bugSteps": []
+    },
+    "3": {
+      "stakeTag": {
+        "x": 489.4,
+        "y": 914.8,
+        "width": 201.1,
+        "height": 129.1
+      },
+      "stakeTagRotation": -5,
+      "bugSteps": [
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    },
+    "4": {
+      "stakeTag": {
+        "x": 489.4,
+        "y": 914.8,
+        "width": 201.1,
+        "height": 129.1
+      },
+      "stakeTagRotation": -5,
+      "bugSteps": []
+    }
+  },
+  "fragments": [
+    {
+      "id": "fragment_01",
+      "dx": -213.5,
+      "dy": 124.5,
+      "rotate": -80,
+      "cx": 311.5,
+      "cy": 925.5
+    },
+    {
+      "id": "fragment_02",
+      "dx": -149.67,
+      "dy": 255,
+      "rotate": 176,
+      "cx": 441.67,
+      "cy": 913
+    },
+    {
+      "id": "fragment_03",
+      "dx": 331.17,
+      "dy": 136.17,
+      "rotate": 80,
+      "cx": 570.83,
+      "cy": 913.83
+    },
+    {
+      "id": "fragment_04",
+      "dx": 179.33,
+      "dy": 240.5,
+      "rotate": -172,
+      "cx": 692.67,
+      "cy": 927.5
+    },
+    {
+      "id": "fragment_05",
+      "dx": -158.8,
+      "dy": 95,
+      "rotate": 10,
+      "cx": 276.8,
+      "cy": 1075
+    },
+    {
+      "id": "fragment_06",
+      "dx": 77.14,
+      "dy": 100.14,
+      "rotate": -4,
+      "cx": 402.86,
+      "cy": 1067.86
+    },
+    {
+      "id": "fragment_07",
+      "dx": 83.14,
+      "dy": 97.71,
+      "rotate": 6,
+      "cx": 592.86,
+      "cy": 1070.29
+    },
+    {
+      "id": "fragment_08",
+      "dx": 38.8,
+      "dy": 1.6,
+      "rotate": -20,
+      "cx": 721.2,
+      "cy": 1078.4
+    }
+  ],
+  "potLabel": {
+    "x": 290,
+    "y": 926,
+    "width": 420,
+    "height": 168
+  },
+  "seed": {
+    "x": 469.2,
+    "y": 781,
+    "width": 61.6,
+    "height": 49.9
+  },
+  "soilTop": {
+    "x": 244,
+    "y": 810,
+    "width": 512,
+    "height": 58
+  }
+}
