@@ -182,9 +182,18 @@ Deliberately chosen over a user-nominated "favourite" for simplicity. Consequenc
 - **Accepted trade-off:** the user has no say. If their oldest goal is minor and their
   newest is the one that matters, the important one grays out.
 
-> **Ordering.** `GET /savings/goal/` currently sorts `created_at` **descending** — newest
-> first — so the active goal lands at the *bottom* of the list, under every grayed one.
-> Pin it directly below General Savings, or the feature reads as broken.
+> **Ordering — DECIDED and BUILT.** `GET /savings/goal/` used to sort `created_at`
+> **descending**, so the active goal landed at the *bottom* of the list, under every
+> grayed one. For a `limits` client it now sorts **oldest first**, `id` breaking ties
+> (the same key that picks the active goal). General Savings is seeded before a user's
+> first goal, so it heads the list and the active goal sits directly below it — which
+> is what this note asked for. It is also the better order on its own merits: a goal
+> set long ago has usually had the most put into it.
+>
+> **Only for `limits` clients.** A reordered list crashes nothing, but "today's
+> response in a different order" is not today's response, so the App Store binaries
+> keep newest-first. `GET /savings/goal/completed/` is untouched — most recent
+> achievement first is right for that tab.
 
 ---
 
@@ -392,8 +401,8 @@ where reading §6 or §7 alone would leave you expecting something else.
    (freezing `balanced` for someone whose dashboard said Wealth Builder) is worse.
 
 Two things deliberately left alone: `GET /settings/` still returns the raw row, and
-`GET /savings/goal/` still sorts `created_at` descending — so the active goal is still at
-the bottom of the list, which is §13 q1 and a Phase 2b decision.
+`GET /savings/goal/` kept its newest-first sort at the time of writing; §13 q1 has since
+been decided and the oldest-first order is built (see §5).
 
 ### Phase 2a — Paywall. Unblocked.
 
@@ -494,8 +503,13 @@ Scheduled for after the subscription frontend is finalised.
 
 ## 13. Open questions
 
-1. How the goals list reorders so the active goal isn't buried under grayed ones (§5).
-2. How bank sync gates in practice, beyond the 0/1 connection cap.
-3. Whether the paywall leads with Yearly or presents both equally.
+1. ~~How the goals list reorders so the active goal isn't buried under grayed ones.~~
+   **DECIDED 2026-09-28: oldest first, newest last, for `limits` clients only. Built —
+   see §5.**
+2. How bank sync gates in practice, beyond the 0/1 connection cap. **Deferred — after
+   the subscription frontend ships.**
+3. Whether the paywall leads with Yearly or presents both equally. **Deferred to the
+   paywall design, in Phase 2a.**
 4. How consumer pricing interacts with the B2B partner track — partner seats were quoted
-   at $6 each, below the $9.99 consumer price, leaving no rev-share margin.
+   at $6 each, below the $9.99 consumer price, leaving no rev-share margin. **Deferred —
+   there is no partner to price for yet.**

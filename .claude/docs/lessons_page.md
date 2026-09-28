@@ -174,6 +174,7 @@ cannot be patched. Each generation gets exactly the response it was built agains
 | `is_premium` on the detail route | absent | present | present | present |
 | `instagram_url` / `linkedin_url` / `website_url` | absent | absent | present (null when unset) | present |
 | `locked` on `GET /savings/goal/` | absent | absent | absent | present |
+| `GET /savings/goal/` sort order | newest first | newest first | newest first | **oldest first**, `id` breaking ties |
 | the five allowance fields on `/me/entitlements/` | absent | absent | absent | present |
 | goal cap, locked goals, budget-type lock | never | never | never | enforced |
 

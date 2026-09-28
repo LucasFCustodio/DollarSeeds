@@ -281,6 +281,13 @@ class _Query:
             # advertising `social`, so that an unmarked request cannot be affected by a
             # stale PostgREST schema cache on a freshly-added column.
             self.db.selects.append((self.table, self.columns))
+            # The ORDER list is part of the contract too, for the same reason the
+            # column list is: PostgREST appends every `order=` it is given, so a
+            # tiebreak added for one kind of client must not silently reach the query
+            # another kind of client makes. GET /savings/goal/ sorts oldest-first with
+            # an id tiebreak for `limits` builds and newest-first, single key, for the
+            # binaries already in the App Store.
+            self.db.orders.append((self.table, list(self._order)))
         rows = self._rows()
 
         if self.op == "select":
@@ -437,6 +444,8 @@ class FakeSupabase:
         self.calls: list[tuple[str, str]] = []
         # (table, columns) per select. `columns` is None for select("*").
         self.selects: list[tuple[str, Optional[list[str]]]] = []
+        # (table, [(column, desc), ...]) per select, in the order PostgREST received them.
+        self.orders: list[tuple[str, list[tuple[str, bool]]]] = []
         self.deleted_auth_users: list[str] = []
         self.remote_tokens: dict[str, str] = {}   # token -> user_id (remote verify)
         self.remote_verify_calls: list[str] = []

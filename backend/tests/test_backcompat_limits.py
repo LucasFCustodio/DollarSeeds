@@ -143,6 +143,29 @@ def test_the_goals_list_never_grows_a_locked_key(client, free_user_at_the_cap, h
 
 
 @pytest.mark.parametrize("headers", GENERATIONS)
+def test_the_goals_list_keeps_its_newest_first_order(client, free_user_at_the_cap, headers):
+    """A `limits` build gets the list oldest-first, because the active goal is the
+    oldest and newest-first buried it. These builds keep the order they were designed
+    around — a reordered list crashes nothing, but "today's response in a different
+    order" is not today's response."""
+    data = client.get("/savings/goal/", headers=headers).json()["data"]
+    assert [g["title"] for g in data] == ["New car", "Emergency fund", "General Savings"]
+
+
+@pytest.mark.parametrize("headers", GENERATIONS)
+def test_the_goals_list_query_is_unchanged(client, free_user_at_the_cap, headers):
+    """One `order=` and one only. PostgREST appends each one it is given, so the id
+    tiebreak added for `limits` builds must not reach this query either."""
+    ids = free_user_at_the_cap
+    ids["db"].calls.clear()
+    assert client.get("/savings/goal/", headers=headers).status_code == 200
+
+    # The unordered one is _ensure_general_savings looking up the pool.
+    orders = [keys for table, keys in ids["db"].orders if table == "savings_goals" and keys]
+    assert orders == [[("created_at", True)]], orders
+
+
+@pytest.mark.parametrize("headers", GENERATIONS)
 def test_the_dashboard_budget_type_is_unchanged(client, free_user_at_the_cap,
                                                 headers, current_month):
     body = client.get(f"/dashboard/{current_month}", headers=headers).json()
