@@ -107,7 +107,7 @@
     "started": "Started",
     "apr": "Interest rate",
     "aprValue": "{{apr}}% APR",
-    "minimum": "Minimum payment",
+    "minimumLine": "{{amount}} minimum payment",
     "suggested": "Suggested payment",
     "suggestedHint": "Includes {{amount}} rolled over from debts you've paid off.",
     "due": "Due day",

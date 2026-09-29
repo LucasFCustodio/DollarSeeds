@@ -4,8 +4,11 @@ import { useRouter } from 'expo-router';
 import { Fonts, useTheme } from '../../context/ThemeContext';
 import { IconChevronLeft } from '../icons';
 
-/** Back chevron + eyebrow + title, the same shape as the Settings header. */
-export default function BackHeader({ eyebrow, title, backLabel }: { eyebrow?: string; title: string; backLabel: string }) {
+/** Back chevron + eyebrow + title, the same shape as the Settings header. `right` sits
+ *  at the far end of the row, level with the back button. */
+export default function BackHeader({ eyebrow, title, backLabel, right }: {
+    eyebrow?: string; title: string; backLabel: string; right?: React.ReactNode;
+}) {
     const { theme } = useTheme();
     const router = useRouter();
     return (
@@ -25,7 +28,26 @@ export default function BackHeader({ eyebrow, title, backLabel }: { eyebrow?: st
                 ) : null}
                 <Text numberOfLines={1} style={[styles.title, { color: theme.ink, fontFamily: Fonts.serif }]}>{title}</Text>
             </View>
+            {right}
         </View>
+    );
+}
+
+/** A square icon button matching the back button, for BackHeader's `right` slot. */
+export function HeaderIconButton({ label, onPress, children }: {
+    label: string; onPress: () => void; children: React.ReactNode;
+}) {
+    const { theme } = useTheme();
+    return (
+        <Pressable
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            hitSlop={8}
+            style={({ pressed }) => [styles.back, { backgroundColor: theme.surface, borderColor: theme.ink }, pressed && { opacity: 0.7 }]}
+        >
+            {children}
+        </Pressable>
     );
 }
 

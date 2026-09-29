@@ -107,7 +107,7 @@
     "started": "Início",
     "apr": "Taxa de juros",
     "aprValue": "{{apr}}% a.a.",
-    "minimum": "Pagamento mínimo",
+    "minimumLine": "{{amount}} de pagamento mínimo",
     "suggested": "Pagamento sugerido",
     "suggestedHint": "Inclui {{amount}} vindos das dívidas que você já quitou.",
     "due": "Vencimento",

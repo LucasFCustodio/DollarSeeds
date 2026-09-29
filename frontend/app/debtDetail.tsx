@@ -14,7 +14,8 @@ import { useLocale } from '../context/LocaleContext';
 import { DEBT_FREEDOM_ENABLED } from '../constants/features';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import BackHeader from '../components/debts/BackHeader';
+import BackHeader, { HeaderIconButton } from '../components/debts/BackHeader';
+import { IconGearMascot } from '../components/icons';
 import CheckinSheet from '../components/debts/CheckinSheet';
 import { useDebtFormat } from '../components/debts/format';
 import { deleteDebt, fetchDebt, type DebtDetail, type DebtTransaction } from '../lib/debtFreedom';
@@ -96,6 +97,12 @@ function DebtDetailScreen() {
                     eyebrow={t('detail.position', { position: d.position, total: d.total })}
                     title={d.name}
                     backLabel={t('actions.back')}
+                    right={(
+                        // Edit, as the home screen's settings gear (in ink instead of white).
+                        <HeaderIconButton label={t('detail.edit')} onPress={edit}>
+                            <IconGearMascot size={18} color={theme.ink} />
+                        </HeaderIconButton>
+                    )}
                 />
             </View>
             <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}>
@@ -106,7 +113,10 @@ function DebtDetailScreen() {
                     {!paidOff ? (
                         <Text style={[styles.big, { color: theme.ink, fontFamily: Fonts.serif }]}>{f.money(d.current_balance)}</Text>
                     ) : null}
-                    <Text style={{ color: theme.ink2, fontFamily: Fonts.sansSemiBold, fontSize: 14 }}>
+                    <Text style={[styles.meta, { color: theme.ink2, fontFamily: Fonts.sansSemiBold }]}>
+                        {t('detail.minimumLine', { amount: f.money(d.min_payment) })}
+                    </Text>
+                    <Text style={[styles.meta, { color: theme.ink2, fontFamily: Fonts.sansSemiBold }]}>
                         {t('label.pctPaid', { pct: f.pct(d.pct_paid) })}
                         {!paidOff ? `  ·  ${t('detail.estPayoff')} ` : ''}
                         {!paidOff ? (
@@ -114,15 +124,10 @@ function DebtDetailScreen() {
                         ) : null}
                     </Text>
                     {!paidOff ? (
-                        <View style={styles.actions}>
-                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.checkin')} variant="secondary" fullWidth onPress={() => setCheckingIn(true)} /></View>
-                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={edit} /></View>
+                        <View style={styles.checkin}>
+                            <Button color={theme.brand} label={t('detail.checkin')} variant="secondary" fullWidth onPress={() => setCheckingIn(true)} />
                         </View>
-                    ) : (
-                        <View style={styles.actions}>
-                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={edit} /></View>
-                        </View>
-                    )}
+                    ) : null}
                 </Card>
 
                 {!paidOff && !d.due_day ? (
@@ -145,7 +150,6 @@ function DebtDetailScreen() {
                     <Row label={t('detail.original')} value={f.money(d.original_balance)} />
                     <Row label={t('detail.started')} value={f.fullDate(d.created_at)} />
                     <Row label={t('detail.apr')} value={t('detail.aprValue', { apr: formatNumber(d.apr, d.apr % 1 ? 2 : 0) })} />
-                    <Row label={t('detail.minimum')} value={f.money(d.min_payment)} />
                     {!paidOff ? (
                         <Row label={t('detail.suggested')} value={f.money(d.suggested_payment)}
                             hint={rollover > 0 ? t('detail.suggestedHint', { amount: f.money(rollover) }) : undefined} />
@@ -262,7 +266,8 @@ const styles = StyleSheet.create({
     body: { paddingHorizontal: 16, paddingTop: 4, gap: 12 },
     eyebrow: { fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase' },
     big: { fontSize: 48, lineHeight: 56 },
-    actions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+    meta: { fontSize: 14 },
+    checkin: { marginTop: 14 },
     card: {},
     section: { fontSize: 11, letterSpacing: 1.6, textTransform: 'uppercase', marginTop: 8, marginLeft: 4 },
     row: { paddingHorizontal: 12, paddingVertical: 12 },
