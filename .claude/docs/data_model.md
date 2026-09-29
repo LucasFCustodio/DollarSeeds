@@ -155,7 +155,8 @@ atomically. This table only answers "what did RevenueCat tell us, and when".
 ### `debts` / `debt_transactions` — Debt Freedom (plant debts)
 
 The Debts tab: each debt is a plant grown by paying it down with the snowball method.
-Migration [0010](../../backend/migrations/0010_debt_freedom.sql). **Entirely separate
+Migrations [0010](../../backend/migrations/0010_debt_freedom.sql) and
+[0011](../../backend/migrations/0011_debt_freedom_v2.sql) (v2: due-date cycles). **Entirely separate
 from debt goals** (`savings_goals.goal_type = 'debt'`) — nothing here touches
 `savings_goals` or `savings_transactions`. Routes live under `/debt-freedom/` in
 `main.py`; **every rule is a pure function in
@@ -172,18 +173,30 @@ from debt goals** (`savings_goals.goal_type = 'debt'`) — nothing here touches
 | `original_balance` / `current_balance` | numeric | `current_balance` never goes below 0 |
 | `min_payment` | numeric | |
 | `apr` | numeric | Percent, e.g. `24.99` |
-| `due_day` | smallint | Nullable, 1–31. Past a short month's end it lands on the last day. Unset shows as red `--` |
+| `due_day` | smallint | 1–31. Past a short month's end it lands on the last day. **Required by the API since v2** (create; PATCH can set but never clear it); the column stays nullable. Pre-v2 debts without one show a red `--` and are skipped by the cycle check until it is set — setting it the first time anchors `interest_checked_through` on the previous due date, so there is no back-charging |
 | `debt_type` | text | Nullable. Canonical English: `credit_card`, `student_loan`, `medical`, `auto`, `personal`, `bnpl`, `family`, `other` |
 | `lender`, `pay_url`, `autopay`, `credit_limit`, `notes` | | All nullable. `pay_url` is http(s) only (server-enforced) |
 | `species` | smallint | 1–4, default 4. Which plant art |
 | `species_locked` | bool | Set by the first payment; a locked species never changes |
 | `status` | text | `active` \| `paid_off` |
 | `paid_off_at` | timestamptz | Set by `POST /debt-freedom/{id}/complete` |
-| `interest_checked_through` | date | Last due date the missed-payment rule examined. NULL = never; anchors on `created_at` |
+| `interest_checked_through` | date | Last due date the cycle check closed. NULL = never; anchors on `created_at` |
+| `late_fee` | numeric | 0011. Nullable. The card agreement's late fee. NULL = unknown (a missed minimum asks for it); `0` = no fee |
+| `highest_step` | smallint | 0011. Nullable. Highest growth step reached; plants never shrink. NULL = use the computed step |
+| `cycle_start_balance` | numeric | 0011. Nullable. The statement balance the full-payment check compares against; set on create, at each cycle close, and by a check-in; moves with a balance edit. NULL (pre-v2) = rebuilt as `current_balance` + the cycle's net payments |
+| `checkin_due_since` | date | 0011. Nullable. The due date whose statement check-in is pending. NULL = none |
+| `late_fee_pending_for` | date | 0011. Nullable. A missed due date waiting for the user to enter the fee. NULL = none |
 
 `debt_transactions`: `debt_id` (FK, cascade), `kind` (`payment_minimum` \|
-`payment_extra` \| `interest` \| `balance_edit`), `amount`, `balance_after`,
-`occurred_on` (date). `balance_edit.amount` is signed (new − old).
+`payment_extra` \| `interest` \| `balance_edit` \| `late_fee` \| `statement_adjustment` \|
+`minimum_reversal` — the last three added by 0011, CHECK widened `NOT VALID`), `amount`,
+`balance_after`, `occurred_on` (date). `balance_edit.amount` and
+`statement_adjustment.amount` are signed (new − old); `minimum_reversal.amount` is the
+positive amount put back on the balance (the toggle's undo).
+
+`debt_freedom_settings` (0011): `user_id` (PK), `monthly_extra` (numeric, nullable —
+blank/NULL = $0), `updated_at`. One row per user, upserted by
+`PUT /debt-freedom/settings`. Cleared by `POST /account/delete/`.
 
 **The rules** (all in `debt_freedom.py`):
 
@@ -199,12 +212,25 @@ from debt goals** (`savings_goals.goal_type = 'debt'`) — nothing here touches
 - **Projection** — monthly: interest, then minimums, then everything left to the focus,
   rolling over within the month. Month 1 is next calendar month. `null` when the
   focus payment does not exceed its interest, or after 600 months.
-- **Missed payment** (the owner's rule, one function: `missed_payment_charges`) — run
-  lazily at the start of `GET /debt-freedom/`: for each due date passed since
-  `interest_checked_through` with no `payment_minimum` in its cycle
-  `(previous due, due]`, add one month of interest as an `interest` row. The debt row is
-  advanced with a conditional update on the old `interest_checked_through`, so
-  overlapping requests cannot double-charge.
+- **Growth never shrinks** — `growth_step = max(computed_step, highest_step)`;
+  `highest_step` is saved whenever the computed step passes it. Both are returned.
+- **Due-date cycle check** (one function: `process_due_dates`) — run lazily at the start
+  of every `/debt-freedom/` route that reads or changes a debt's balance. A cycle runs
+  from the day after one due date through the next, inclusive; a due date is closed the
+  **day after** it, so a minimum logged on the due date still counts. For each passed due
+  date, in order (catch-up does them all at once): (1) net payments (`payment_minimum` +
+  `payment_extra` − `minimum_reversal`) ≥ `cycle_start_balance` → paid in full, nothing
+  added; else (2) net minimum < `min_payment` → a `late_fee` row if `late_fee` > 0, or
+  `late_fee_pending_for` = that due date if `late_fee` is NULL; then (3) one `interest`
+  row, `balance × APR/100/365 × days` since the previous due date (since creation for
+  the first cycle); (4) `cycle_start_balance` = new balance, `checkin_due_since` = the
+  due date, `interest_checked_through` advances — by a conditional update on its old
+  value, so overlapping requests cannot process a cycle twice.
+- **Local date** — cycle routes take an optional `today` (the phone's date); one more
+  than a day from the server's date is ignored. The first cycle's payment window opens
+  the day before `created_at`, which is stamped in UTC.
+- **Projection** uses the same daily-APR interest over each month's real days, and adds
+  `monthly_extra` to the focus debt's payment every month.
 
 ### `app_config`
 
@@ -314,6 +340,7 @@ State as verified **2026-07-26** — already correct, nothing to apply:
 |--------|-----|----------|
 | `expenses`, `income`, `savings_transactions`, `savings_goals`, `month_status`, `lesson_ratings` | enabled | One `ALL` policy each, role `authenticated`, `USING (auth.uid() = user_id)` |
 | `debts`, `debt_transactions` | enabled | Same: one `ALL` policy each, role `authenticated`, `USING (auth.uid() = user_id)` (plus the same `WITH CHECK`). Added by migration `0010` — **not yet applied** until its `Applied to project` line is filled in. |
+| `debt_freedom_settings` | enabled | Same single `ALL` policy. Added by migration `0011` — **not yet applied** until its `Applied to project` line is filled in. |
 | `user_settings` | enabled | Three policies — `SELECT` / `INSERT` / `UPDATE`, same `auth.uid() = user_id` — but on role `public`, not `authenticated`. No `DELETE` policy. |
 | `lesson_series`, `lessons` | enabled | **None** — deny-all to anon and authenticated, by design. Shared content is served only through the backend (`GET /lessons/...`) on service_role. |
 | `subscriptions`, `subscription_events`, `app_config` | enabled | **None** — same posture. Entitlement is served only through `GET /me/entitlements/`; letting the anon key read `subscriptions` directly would expose who pays. Added by migration `0005`. |

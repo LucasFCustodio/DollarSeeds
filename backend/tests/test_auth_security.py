@@ -59,11 +59,16 @@ PROTECTED_ROUTES = [
     ("GET",    "/me/entitlements/",               {},                                   None),
     ("GET",    "/announcements/",                 {},                                   None),
     ("GET",    "/debt-freedom/",                  {},                                   None),
-    ("POST",   "/debt-freedom/",                  {},                                   {"name": "Visa", "original_balance": 1000, "current_balance": 800, "min_payment": 50, "apr": 24.99}),
+    ("POST",   "/debt-freedom/",                  {},                                   {"name": "Visa", "original_balance": 1000, "current_balance": 800, "min_payment": 50, "apr": 24.99, "due_day": 14}),
+    ("GET",    "/debt-freedom/settings",          {},                                   None),
+    ("PUT",    "/debt-freedom/settings",          {},                                   {"monthly_extra": 50}),
     ("GET",    "/debt-freedom/1",                 {},                                   None),
     ("PATCH",  "/debt-freedom/1",                 {},                                   {"name": "Visa"}),
     ("DELETE", "/debt-freedom/1",                 {},                                   None),
     ("POST",   "/debt-freedom/1/payments",        {},                                   {"minimum": True}),
+    ("POST",   "/debt-freedom/1/payments/undo-minimum", {},                             {"today": "2026-09-14"}),
+    ("POST",   "/debt-freedom/1/checkin",         {},                                   {"statement_balance": 800, "min_payment": 50}),
+    ("POST",   "/debt-freedom/1/late-fee",        {},                                   {"due_date": "2026-09-14", "amount": 30}),
     ("POST",   "/debt-freedom/1/complete",        {},                                   None),
 ]
 
@@ -556,6 +561,11 @@ def test_cannot_read_edit_pay_complete_or_delete_another_users_debt(client, two_
                         json={"user_id": USER_B, "name": "hijacked", "current_balance": 9}).status_code == 404
     assert client.post(f"/debt-freedom/{did}/payments", headers=auth(USER_A),
                        json={"minimum": True}).status_code == 404
+    assert client.post(f"/debt-freedom/{did}/payments/undo-minimum", headers=auth(USER_A)).status_code == 404
+    assert client.post(f"/debt-freedom/{did}/checkin", headers=auth(USER_A),
+                       json={"statement_balance": 5000, "min_payment": 1}).status_code == 404
+    assert client.post(f"/debt-freedom/{did}/late-fee", headers=auth(USER_A),
+                       json={"due_date": "2026-01-05", "amount": 99}).status_code == 404
     assert client.post(f"/debt-freedom/{did}/complete", headers=auth(USER_A)).status_code == 404
     assert client.delete(f"/debt-freedom/{did}", headers=auth(USER_A)).status_code == 404
 
@@ -565,7 +575,7 @@ def test_cannot_read_edit_pay_complete_or_delete_another_users_debt(client, two_
 
     res = client.post("/debt-freedom/", headers=auth(USER_A),
                       json={"user_id": USER_B, "name": "Mine", "original_balance": 10,
-                            "current_balance": 10, "min_payment": 1, "apr": 0})
+                            "current_balance": 10, "min_payment": 1, "apr": 0, "due_day": 3})
     assert res.status_code == 200
     assert next(d for d in two_users.rows("debts") if d["name"] == "Mine")["user_id"] == USER_A
 

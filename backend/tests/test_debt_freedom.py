@@ -1,7 +1,8 @@
 """Debt Freedom — the snowball rules (debt_freedom.py) and the /debt-freedom/ routes.
 
 The pure rules are tested with plain dicts and a fixed `today`, so nothing here
-depends on the calendar. The route tests run against the in-memory fake.
+depends on the calendar. The route tests run against the in-memory fake, with the
+server date pinned by the `clock` fixture.
 """
 
 from __future__ import annotations
@@ -14,6 +15,20 @@ import debt_freedom as df
 from conftest import USER_A, auth
 
 TODAY = datetime.date(2026, 9, 28)
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch):
+    """The routes' server date. Route-created debts get the fake's created_at
+    (2026-01-01), so the default is the day after: no due date has passed yet.
+    Call the fixture with a date to move it."""
+    import main
+    state = {"today": datetime.date(2026, 1, 2)}
+    monkeypatch.setattr(main, "_df_server_today", lambda: state["today"])
+
+    def set_today(d):
+        state["today"] = d
+    return set_today
 
 
 def debt(id, balance, *, original=None, minimum=50.0, apr=0.0, status="active",
@@ -168,11 +183,13 @@ def test_paid_off_minimums_count_toward_the_plan():
 
 
 def test_interest_is_added_before_payments():
-    # 1000 at 12% APR: 1% a month. Paying 510/mo: Oct 1010-510=500, Nov 505 -> 0.
+    # 1000 at 12% APR, daily over each month's real days (the due-date check's
+    # formula). Oct: 1000 × .12/365 × 31 = 10.19 → 1010.19 − 510 = 500.19.
+    # Nov: 500.19 × .12/365 × 30 = 4.93 → 505.13, paid off.
     rows = df.order_debts([debt(1, 1000, minimum=510, apr=12)])
     sim = df.simulate(rows, TODAY)
     assert sim["months"][1] == "2026-11"
-    assert sim["interest"][1] == pytest.approx(15.0)
+    assert sim["interest"][1] == pytest.approx(15.13)
 
 
 def test_payment_not_exceeding_interest_is_none():
@@ -215,69 +232,202 @@ def test_next_due_date():
     assert df.next_due_date(31, datetime.date(2026, 2, 3)) == datetime.date(2026, 2, 28)
 
 
-# ── missed payment ───────────────────────────────────────────────────────────
+# ── due-date cycles ──────────────────────────────────────────────────────────
 
-def test_missed_payment_charges_one_month_of_interest():
-    d = debt(1, 1200, apr=12, due_day=14, created_at="2026-08-20T10:00:00+00:00")
-    charges, checked = df.missed_payment_charges(d, [], TODAY)
-    # Only Sep 14 is after creation and before today.
-    assert charges == [{"occurred_on": datetime.date(2026, 9, 14), "amount": 12.0, "balance_after": 1212.0}]
-    assert checked == datetime.date(2026, 9, 14)
-
-
-def test_a_minimum_in_the_cycle_prevents_the_charge():
-    d = debt(1, 1200, apr=12, due_day=14, created_at="2026-08-20T10:00:00+00:00")
-    charges, checked = df.missed_payment_charges(d, [pay(1, "2026-08-30")], TODAY)
-    assert charges == []
-    assert checked == datetime.date(2026, 9, 14)
+def card(balance=1000.0, *, start=None, fee=None, minimum=50.0, apr=24.0, due_day=14,
+         created_at="2026-08-20T10:00:00+00:00", checked=None, **extra):
+    d = debt(1, balance, original=1000.0, minimum=minimum, apr=apr, due_day=due_day,
+             created_at=created_at, checked=checked)
+    d.update({"cycle_start_balance": 1000.0 if start is None else start, "late_fee": fee,
+              "checkin_due_since": None, "late_fee_pending_for": None, **extra})
+    return d
 
 
-def test_an_extra_payment_alone_does_not_count_as_the_minimum():
-    d = debt(1, 1200, apr=12, due_day=14, created_at="2026-08-20T10:00:00+00:00")
-    charges, _ = df.missed_payment_charges(d, [pay(1, "2026-09-01", kind=df.KIND_EXTRA)], TODAY)
-    assert len(charges) == 1
+def kinds(result):
+    return [(r["kind"], r["amount"], r["occurred_on"]) for r in result["transactions"]]
 
 
-def test_each_cycle_needs_its_own_minimum():
-    d = debt(1, 1200, apr=12, due_day=14, created_at="2026-07-01T00:00:00+00:00")
-    # Jul 20 falls in the (Jul 14, Aug 14] cycle only: Jul 14 and Sep 14 are missed.
-    charges, _ = df.missed_payment_charges(d, [pay(1, "2026-07-20")], TODAY)
-    assert [c["occurred_on"] for c in charges] == [datetime.date(2026, 7, 14), datetime.date(2026, 9, 14)]
+def test_full_payment_in_a_cycle_adds_no_interest_and_no_fee():
+    d = card(0.0, fee=30)
+    result = df.process_due_dates(d, [pay(1, "2026-09-01", kind=df.KIND_EXTRA, amount=1000)], TODAY)
+    assert result["transactions"] == []
+    assert result["patch"]["current_balance"] == 0.0
+    assert result["patch"]["checkin_due_since"] == "2026-09-14"
+    d.update(result["patch"])
+    assert df.ready_to_complete(d) is True
 
 
-def test_several_missed_cycles_compound():
-    d = debt(1, 1000, apr=12, due_day=5, created_at="2026-06-10T00:00:00+00:00")
-    charges, checked = df.missed_payment_charges(d, [], TODAY)
-    assert [c["occurred_on"] for c in charges] == [
-        datetime.date(2026, 7, 5), datetime.date(2026, 8, 5), datetime.date(2026, 9, 5)]
-    assert [c["amount"] for c in charges] == [10.0, 10.1, 10.2]
-    assert charges[-1]["balance_after"] == 1030.3
-    assert checked == datetime.date(2026, 9, 5)
+def test_minimum_logged_adds_interest_only():
+    # 25 days (Aug 20 → Sep 14) on the 950 left after the minimum.
+    result = df.process_due_dates(card(950.0, fee=30), [pay(1, "2026-09-01")], TODAY)
+    assert kinds(result) == [("interest", 15.62, "2026-09-14")]
+    assert result["patch"]["current_balance"] == 965.62
+    assert result["patch"]["cycle_start_balance"] == 965.62
+    assert result["patch"]["interest_checked_through"] == "2026-09-14"
+    assert "late_fee_pending_for" not in result["patch"]
 
 
-def test_checked_through_stops_a_cycle_being_charged_twice():
-    d = debt(1, 1000, apr=12, due_day=5, created_at="2026-06-10T00:00:00+00:00", checked="2026-09-05")
-    assert df.missed_payment_charges(d, [], TODAY) == ([], None)
+def test_missed_minimum_with_a_late_fee_adds_the_fee_then_interest():
+    result = df.process_due_dates(card(fee=30), [], TODAY)
+    # Interest is on the balance after the fee: 1030 × 24% / 365 × 25.
+    assert kinds(result) == [("late_fee", 30.0, "2026-09-14"), ("interest", 16.93, "2026-09-14")]
+    assert result["patch"]["current_balance"] == 1046.93
 
 
-def test_due_today_is_not_yet_missed():
-    d = debt(1, 1000, apr=12, due_day=28, created_at="2026-09-01T00:00:00+00:00")
-    assert df.missed_payment_charges(d, [], TODAY) == ([], None)
+def test_missed_minimum_without_a_late_fee_asks_and_still_adds_interest():
+    result = df.process_due_dates(card(), [], TODAY)
+    assert kinds(result) == [("interest", 16.44, "2026-09-14")]
+    assert result["patch"]["late_fee_pending_for"] == "2026-09-14"
 
 
-def test_no_due_day_zero_balance_or_paid_off_is_never_charged():
-    created = "2026-01-01T00:00:00+00:00"
-    assert df.missed_payment_charges(debt(1, 1000, apr=12, created_at=created), [], TODAY) == ([], None)
-    charges, _ = df.missed_payment_charges(debt(1, 0, apr=12, due_day=5, created_at=created), [], TODAY)
-    assert charges == []
-    assert df.missed_payment_charges(
-        debt(1, 0, apr=12, due_day=5, status="paid_off", created_at=created), [], TODAY) == ([], None)
+def test_a_late_fee_of_zero_means_no_fee_and_no_question():
+    result = df.process_due_dates(card(fee=0), [], TODAY)
+    assert [k for k, _, _ in kinds(result)] == ["interest"]
+    assert "late_fee_pending_for" not in result["patch"]
 
 
-def test_short_months_clamp_the_due_day():
-    d = debt(1, 1000, apr=12, due_day=31, created_at="2026-02-01T00:00:00+00:00", checked="2026-01-31")
-    charges, _ = df.missed_payment_charges(d, [], datetime.date(2026, 3, 1))
-    assert [c["occurred_on"] for c in charges] == [datetime.date(2026, 2, 28)]
+def test_an_extra_payment_alone_is_not_the_minimum():
+    result = df.process_due_dates(card(900.0, fee=25), [pay(1, "2026-09-01", kind=df.KIND_EXTRA, amount=100)], TODAY)
+    assert [k for k, _, _ in kinds(result)] == ["late_fee", "interest"]
+
+
+def test_a_reversed_minimum_does_not_count():
+    txns = [pay(1, "2026-09-01"), pay(1, "2026-09-02", kind=df.KIND_MINIMUM_REVERSAL)]
+    result = df.process_due_dates(card(fee=25), txns, TODAY)
+    assert [k for k, _, _ in kinds(result)] == ["late_fee", "interest"]
+
+
+def test_interest_uses_real_calendar_days_including_due_day_31_in_february():
+    # 36.5% APR = 0.1% a day. Due day 31 lands on Feb 28, then Mar 31, then Apr 30.
+    d = card(apr=36.5, due_day=31, fee=0, created_at="2026-01-10T00:00:00+00:00", checked="2026-01-31")
+    result = df.process_due_dates(d, [], datetime.date(2026, 5, 1))
+    assert kinds(result) == [
+        ("interest", 28.0, "2026-02-28"),    # 28 days on 1000
+        ("interest", 31.87, "2026-03-31"),   # 31 days on 1028
+        ("interest", 31.8, "2026-04-30"),    # 30 days on 1059.87
+    ]
+
+
+def test_the_first_cycle_counts_days_from_creation():
+    d = card(apr=36.5, fee=0, created_at="2026-09-04T12:00:00+00:00")
+    assert kinds(df.process_due_dates(d, [], TODAY)) == [("interest", 10.0, "2026-09-14")]
+
+
+def test_catch_up_processes_every_missed_due_date_in_order():
+    d = card(apr=12, due_day=5, fee=25, created_at="2026-06-10T00:00:00+00:00")
+    result = df.process_due_dates(d, [], TODAY)
+    assert [(k, on) for k, _, on in kinds(result)] == [
+        ("late_fee", "2026-07-05"), ("interest", "2026-07-05"),
+        ("late_fee", "2026-08-05"), ("interest", "2026-08-05"),
+        ("late_fee", "2026-09-05"), ("interest", "2026-09-05"),
+    ]
+    balances = [r["balance_after"] for r in result["transactions"]]
+    assert balances == sorted(balances)          # each builds on the one before
+    assert result["patch"]["interest_checked_through"] == "2026-09-05"
+    assert result["patch"]["checkin_due_since"] == "2026-09-05"
+
+
+def test_each_cycle_is_checked_against_its_own_payments():
+    # A minimum in the Aug 6 – Sep 5 cycle only: July and September are missed.
+    d = card(apr=0, due_day=5, fee=25, created_at="2026-06-10T00:00:00+00:00")
+    result = df.process_due_dates(d, [pay(1, "2026-07-20")], TODAY)
+    assert [on for k, _, on in kinds(result)] == ["2026-07-05", "2026-09-05"]
+
+
+def test_the_due_date_itself_is_not_processed_until_the_next_day():
+    d = card(created_at="2026-09-01T00:00:00+00:00", due_day=28)
+    assert df.process_due_dates(d, [], TODAY) is None
+    assert df.process_due_dates(d, [], TODAY + datetime.timedelta(days=1)) is not None
+
+
+def test_a_processed_cycle_is_not_processed_twice():
+    d = card(checked="2026-09-14")
+    assert df.process_due_dates(d, [], TODAY) is None
+
+
+def test_no_due_day_or_paid_off_is_skipped():
+    assert df.process_due_dates(card(due_day=None), [], TODAY) is None
+    assert df.process_due_dates(card(status="paid_off"), [], TODAY) is None
+
+
+def test_a_pre_v2_debt_rebuilds_its_first_statement():
+    # No cycle_start_balance: the statement is current_balance + the cycle's
+    # payments, so paying half is not mistaken for paying in full.
+    d = card(500.0, fee=0)
+    d["cycle_start_balance"] = None
+    result = df.process_due_dates(d, [pay(1, "2026-09-01", kind=df.KIND_EXTRA, amount=500)], TODAY)
+    assert [k for k, _, _ in kinds(result)] == ["interest"]
+
+
+def test_a_payment_logged_the_evening_before_utc_creation_counts():
+    # created_at is UTC; the phone's date can be a day behind it.
+    d = card(950.0, fee=30, created_at="2026-08-21T01:00:00+00:00")
+    result = df.process_due_dates(d, [pay(1, "2026-08-20")], TODAY)
+    assert [k for k, _, _ in kinds(result)] == ["interest"]
+
+
+def test_toggle_cycle_boundaries():
+    d = card(checked="2026-08-14")
+    txns = [pay(1, "2026-09-14")]
+    due_day = datetime.date(2026, 9, 14)
+    assert df.current_cycle(d, due_day) == (datetime.date(2026, 8, 15), due_day, due_day)
+    assert df.min_logged_this_cycle(d, txns, due_day) is True       # still this cycle
+    nxt = due_day + datetime.timedelta(days=1)
+    assert df.current_cycle(d, nxt)[2] == datetime.date(2026, 10, 14)
+    assert df.min_logged_this_cycle(d, txns, nxt) is False          # a new cycle
+    assert df.minimum_to_undo(d, txns, due_day) == 50.0
+    assert df.minimum_to_undo(d, txns, nxt) is None
+
+
+def test_a_debt_with_no_due_day_resets_the_toggle_monthly():
+    d = card(due_day=None)
+    assert df.min_logged_this_cycle(d, [pay(1, "2026-09-02")], TODAY) is True
+    assert df.min_logged_this_cycle(d, [pay(1, "2026-08-30")], TODAY) is False
+
+
+def test_a_first_due_day_starts_at_the_current_cycle():
+    d = card(created_at="2026-01-01T00:00:00+00:00", due_day=None)
+    assert df.anchor_for_new_due_day(d, 14, TODAY) == "2026-09-14"
+    d["interest_checked_through"] = "2026-09-14"
+    d["due_day"] = 14
+    assert df.process_due_dates(d, [], TODAY) is None
+    # Created after the last due date: anchor on created_at instead.
+    assert df.anchor_for_new_due_day(card(created_at="2026-09-20T00:00:00+00:00"), 14, TODAY) is None
+
+
+@pytest.mark.parametrize("statement,adjustment", [(1120.0, 120.0), (880.0, -120.0)])
+def test_checkin_adjusts_in_both_directions(statement, adjustment):
+    result = df.statement_checkin(card(checkin_due_since="2026-09-14"), statement, 60)
+    assert result["adjustment"] == adjustment
+    assert result["patch"] == {"min_payment": 60.0, "checkin_due_since": None,
+                               "current_balance": statement, "cycle_start_balance": statement}
+
+
+def test_checkin_with_the_same_balance_writes_no_adjustment():
+    result = df.statement_checkin(card(), 1000.0, 50)
+    assert result["adjustment"] is None
+    assert "current_balance" not in result["patch"] and result["patch"]["checkin_due_since"] is None
+
+
+# ── plants never shrink ──────────────────────────────────────────────────────
+
+def test_highest_step_never_decreases():
+    d = debt(1, 500, original=1000)
+    txns = [pay(1, "2026-09-01")]
+    assert df.highest_step_updates([d], txns) == {1: 6}
+    d["highest_step"] = 6
+    d["current_balance"] = 1200               # a check-in raised the balance
+    assert df.computed_step(d, txns) == 1
+    assert df.shown_step(d, txns) == 6
+    assert df.highest_step_updates([d], txns) == {}
+    d["current_balance"] = 100                 # and a higher step is saved again
+    assert df.highest_step_updates([d], txns) == {1: 10}
+
+
+def test_monthly_extra_shortens_the_simulated_payoff():
+    rows = df.order_debts([debt(1, 1200, minimum=100)])
+    assert df.simulate(rows, TODAY)["months"][1] == "2027-09"
+    assert df.simulate(rows, TODAY, monthly_extra=100)["months"][1] == "2027-03"
 
 
 # ── decorate ─────────────────────────────────────────────────────────────────
@@ -308,7 +458,7 @@ def test_garden_fields():
 # ── routes ───────────────────────────────────────────────────────────────────
 
 NEW = {"name": "Chase Visa", "original_balance": 2480, "current_balance": 1240,
-       "min_payment": 150, "apr": 24.99}
+       "min_payment": 150, "apr": 24.99, "due_day": 14}
 
 
 def create(client, **overrides):
@@ -333,10 +483,18 @@ def test_create_validates(client, bad):
     assert res.status_code == 400, res.text
 
 
-def test_create_requires_the_five_fields(client):
+@pytest.mark.parametrize("field", ["apr", "due_day"])
+def test_create_requires_the_six_fields(client, field):
     body = dict(NEW)
-    del body["apr"]
+    del body[field]
     assert client.post("/debt-freedom/", headers=auth(USER_A), json=body).status_code == 422
+
+
+def test_create_stores_the_first_statement_and_late_fee(client, supabase_db):
+    d = create(client, late_fee=35)
+    assert d["late_fee"] == 35.0 and d["min_logged_this_cycle"] is False
+    assert d["current_cycle_due_date"] == "2026-01-14"
+    assert supabase_db.rows("debts")[0]["cycle_start_balance"] == 1240.0
 
 
 def test_species_are_redealt_on_create_and_delete(client, supabase_db):
@@ -402,11 +560,20 @@ def test_balance_edit_writes_a_transaction(client, supabase_db):
     assert res.status_code == 200
     [t] = supabase_db.rows("debt_transactions")
     assert (t["kind"], t["amount"], t["balance_after"]) == ("balance_edit", 60.0, 1300.0)
+    # The statement it is checked against moves with the correction.
+    assert supabase_db.rows("debts")[0]["cycle_start_balance"] == 1300.0
     # A non-balance edit writes none, and null clears an optional field.
-    client.patch(f"/debt-freedom/{d['id']}", headers=auth(USER_A), json={"due_day": 3})
-    res = client.patch(f"/debt-freedom/{d['id']}", headers=auth(USER_A), json={"due_day": None, "name": "Visa"})
-    assert res.json()["debt"]["due_day"] is None and res.json()["debt"]["name"] == "Visa"
+    client.patch(f"/debt-freedom/{d['id']}", headers=auth(USER_A), json={"due_day": 3, "lender": "Chase"})
+    res = client.patch(f"/debt-freedom/{d['id']}", headers=auth(USER_A), json={"lender": None, "name": "Visa"})
+    assert res.json()["debt"]["due_day"] == 3 and res.json()["debt"]["lender"] is None
+    assert res.json()["debt"]["name"] == "Visa"
     assert len(supabase_db.rows("debt_transactions")) == 1
+
+
+def test_patch_cannot_clear_the_due_day(client):
+    d = create(client)
+    res = client.patch(f"/debt-freedom/{d['id']}", headers=auth(USER_A), json={"due_day": None})
+    assert res.status_code == 400
 
 
 def test_patch_cannot_null_a_required_field(client):
@@ -454,18 +621,161 @@ def test_detail_includes_history_and_what_it_rolls_into(client):
     assert [t["kind"] for t in res["transactions"]] == ["payment_minimum"]
 
 
-def test_garden_applies_missed_payment_interest_once(client, supabase_db):
-    supabase_db.seed("debts", {"user_id": USER_A, "name": "Card", "original_balance": 1000.0,
-                               "current_balance": 1000.0, "min_payment": 50.0, "apr": 12.0,
-                               "due_day": 1, "created_at": "2025-01-01T00:00:00+00:00",
-                               "interest_checked_through": None})
-    today = datetime.date.today()
-    first = client.get("/debt-freedom/", headers=auth(USER_A)).json()
-    interest = [t for t in supabase_db.rows("debt_transactions") if t["kind"] == "interest"]
-    assert interest, "a due date has certainly passed since 2025-01-01"
-    assert first["debts"][0]["current_balance"] == interest[-1]["balance_after"]
-    assert first["debts"][0]["interest_checked_through"] <= today.isoformat()
+def seed_card(db, **overrides):
+    return db.seed("debts", {
+        "user_id": USER_A, "name": "Card", "original_balance": 1000.0, "current_balance": 1000.0,
+        "min_payment": 50.0, "apr": 24.0, "due_day": 14, "cycle_start_balance": 1000.0,
+        "created_at": "2026-08-20T10:00:00+00:00", **overrides,
+    })
 
+
+def test_garden_processes_missed_due_dates_once(client, supabase_db, clock):
+    clock(datetime.date(2026, 9, 28))
+    d = seed_card(supabase_db, due_day=5, apr=12.0, late_fee=25.0, created_at="2026-06-10T00:00:00+00:00")
+    first = client.get("/debt-freedom/", headers=auth(USER_A)).json()
+    rows = supabase_db.rows("debt_transactions")
+    assert [(t["kind"], t["occurred_on"]) for t in rows] == [
+        ("late_fee", "2026-07-05"), ("interest", "2026-07-05"),
+        ("late_fee", "2026-08-05"), ("interest", "2026-08-05"),
+        ("late_fee", "2026-09-05"), ("interest", "2026-09-05"),
+    ]
+    got = first["debts"][0]
+    assert got["current_balance"] == rows[-1]["balance_after"]
+    assert got["checkin_due_since"] == "2026-09-05"
+    assert got["current_cycle_due_date"] == "2026-10-05"
     again = client.get("/debt-freedom/", headers=auth(USER_A)).json()
-    assert len([t for t in supabase_db.rows("debt_transactions") if t["kind"] == "interest"]) == len(interest)
-    assert again["debts"][0]["current_balance"] == first["debts"][0]["current_balance"]
+    assert len(supabase_db.rows("debt_transactions")) == 6
+    assert again["debts"][0]["current_balance"] == got["current_balance"]
+    assert d["id"] == got["id"]
+
+
+def test_a_client_today_more_than_a_day_off_is_ignored(client, supabase_db, clock):
+    clock(datetime.date(2026, 9, 10))
+    seed_card(supabase_db)
+    client.get("/debt-freedom/", headers=auth(USER_A), params={"today": "2026-12-01"})
+    assert supabase_db.rows("debt_transactions") == []     # Sep 14 has not passed
+    client.get("/debt-freedom/", headers=auth(USER_A), params={"today": "2026-09-11"})
+    assert supabase_db.rows("debt_transactions") == []
+
+
+def test_toggle_on_off_and_its_cycle(client, supabase_db, clock):
+    clock(datetime.date(2026, 9, 14))
+    d = seed_card(supabase_db)
+    path = f"/debt-freedom/{d['id']}/payments"
+    on = client.post(path, headers=auth(USER_A), json={"minimum": True, "today": "2026-09-14"})
+    assert on.status_code == 200, on.text
+    assert on.json()["debt"]["min_logged_this_cycle"] is True
+    assert on.json()["debt"]["current_balance"] == 950.0
+    # A second minimum in the same cycle is refused.
+    assert client.post(path, headers=auth(USER_A), json={"minimum": True}).status_code == 409
+
+    off = client.post(f"{path}/undo-minimum", headers=auth(USER_A), json={"today": "2026-09-14"})
+    assert off.status_code == 200, off.text
+    body = off.json()["debt"]
+    assert body["current_balance"] == 1000.0 and body["min_logged_this_cycle"] is False
+    assert body["species_locked"] is True
+    assert [t["kind"] for t in supabase_db.rows("debt_transactions")] == ["payment_minimum", "minimum_reversal"]
+    assert client.post(f"{path}/undo-minimum", headers=auth(USER_A)).status_code == 409
+
+    # On again, then the due date passes: a new cycle, the toggle is off, and the
+    # old cycle's minimum can no longer be undone.
+    assert client.post(path, headers=auth(USER_A), json={"minimum": True}).status_code == 200
+    clock(datetime.date(2026, 9, 15))
+    garden = client.get("/debt-freedom/", headers=auth(USER_A)).json()
+    assert garden["debts"][0]["min_logged_this_cycle"] is False
+    assert garden["debts"][0]["current_cycle_due_date"] == "2026-10-14"
+    assert client.post(f"{path}/undo-minimum", headers=auth(USER_A)).status_code == 409
+    # The minimum counted: interest only, no late fee question.
+    assert "late_fee" not in [t["kind"] for t in supabase_db.rows("debt_transactions")]
+    assert garden["debts"][0]["late_fee_pending_for"] is None
+
+
+def test_undo_never_shrinks_the_plant(client, supabase_db, clock):
+    clock(datetime.date(2026, 9, 10))
+    d = seed_card(supabase_db, current_balance=200.0, min_payment=150.0)
+    paid = client.post(f"/debt-freedom/{d['id']}/payments", headers=auth(USER_A), json={"minimum": True}).json()
+    assert paid["debt"]["growth_step"] == 10                  # 95% paid
+    undone = client.post(f"/debt-freedom/{d['id']}/payments/undo-minimum", headers=auth(USER_A)).json()
+    assert undone["debt"]["computed_step"] == 9 and undone["debt"]["growth_step"] == 10
+    assert undone["debt"]["highest_step"] == 10
+
+
+@pytest.mark.parametrize("statement,change", [(1120.0, 120.0), (880.0, -120.0)])
+def test_checkin_writes_the_adjustment_and_clears_the_prompt(client, supabase_db, clock, statement, change):
+    clock(datetime.date(2026, 9, 20))
+    d = seed_card(supabase_db, checkin_due_since="2026-09-14", interest_checked_through="2026-09-14")
+    res = client.post(f"/debt-freedom/{d['id']}/checkin", headers=auth(USER_A),
+                      json={"statement_balance": statement, "min_payment": 60})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["balance_change"] == change
+    assert body["debt"]["current_balance"] == statement and body["debt"]["min_payment"] == 60.0
+    assert body["debt"]["checkin_due_since"] is None
+    [t] = supabase_db.rows("debt_transactions")
+    assert (t["kind"], t["amount"], t["balance_after"]) == ("statement_adjustment", change, statement)
+    assert supabase_db.rows("debts")[0]["cycle_start_balance"] == statement
+
+
+def test_checkin_that_lowers_percent_paid_keeps_the_plant(client, supabase_db, clock):
+    clock(datetime.date(2026, 9, 10))
+    d = seed_card(supabase_db, current_balance=500.0)
+    client.post(f"/debt-freedom/{d['id']}/payments", headers=auth(USER_A), json={"minimum": True})
+    res = client.post(f"/debt-freedom/{d['id']}/checkin", headers=auth(USER_A),
+                      json={"statement_balance": 1000, "min_payment": 50}).json()
+    assert res["debt"]["computed_step"] == 1
+    assert res["debt"]["growth_step"] == 6 and res["debt"]["highest_step"] == 6
+
+
+def test_late_fee_save_and_remember(client, supabase_db, clock):
+    clock(datetime.date(2026, 9, 20))
+    d = seed_card(supabase_db, late_fee_pending_for="2026-09-14", interest_checked_through="2026-09-14")
+    path = f"/debt-freedom/{d['id']}/late-fee"
+    assert client.post(path, headers=auth(USER_A), json={"due_date": "2026-08-14", "amount": 30}).status_code == 409
+    res = client.post(path, headers=auth(USER_A), json={"due_date": "2026-09-14", "amount": 30, "remember": True})
+    assert res.status_code == 200, res.text
+    body = res.json()["debt"]
+    assert body["current_balance"] == 1030.0 and body["late_fee"] == 30.0
+    assert body["late_fee_pending_for"] is None
+    [t] = supabase_db.rows("debt_transactions")
+    assert (t["kind"], t["amount"], t["occurred_on"]) == ("late_fee", 30.0, "2026-09-14")
+    # Answered: a repeat (a double tap) changes nothing.
+    assert client.post(path, headers=auth(USER_A), json={"due_date": "2026-09-14", "amount": 30}).status_code == 409
+    assert len(supabase_db.rows("debt_transactions")) == 1
+
+
+def test_late_fee_skip(client, supabase_db, clock):
+    clock(datetime.date(2026, 9, 20))
+    d = seed_card(supabase_db, late_fee_pending_for="2026-09-14", interest_checked_through="2026-09-14")
+    res = client.post(f"/debt-freedom/{d['id']}/late-fee", headers=auth(USER_A),
+                      json={"due_date": "2026-09-14", "amount": None})
+    assert res.status_code == 200
+    assert res.json()["debt"]["late_fee_pending_for"] is None
+    assert res.json()["debt"]["current_balance"] == 1000.0 and res.json()["debt"]["late_fee"] is None
+    assert supabase_db.rows("debt_transactions") == []
+
+
+def test_settings_round_trip_and_shorten_the_plan(client, supabase_db, clock):
+    clock(datetime.date(2026, 9, 10))
+    seed_card(supabase_db, apr=0.0, current_balance=1200.0, min_payment=100.0)
+    assert client.get("/debt-freedom/settings", headers=auth(USER_A)).json() == {"monthly_extra": None}
+    before = client.get("/debt-freedom/", headers=auth(USER_A)).json()
+    assert before["monthly_extra"] is None and before["plan_est_payoff_month"] == "2027-09"
+    res = client.put("/debt-freedom/settings", headers=auth(USER_A), json={"monthly_extra": 100})
+    assert res.json() == {"monthly_extra": 100.0}
+    after = client.get("/debt-freedom/", headers=auth(USER_A)).json()
+    assert after["monthly_extra"] == 100.0 and after["plan_est_payoff_month"] == "2027-03"
+    # Blank clears it; the row is updated, not duplicated.
+    client.put("/debt-freedom/settings", headers=auth(USER_A), json={"monthly_extra": None})
+    assert len(supabase_db.rows("debt_freedom_settings")) == 1
+    assert client.put("/debt-freedom/settings", headers=auth(USER_A), json={"monthly_extra": -5}).status_code == 400
+
+
+def test_patch_sets_a_first_due_day_without_back_charging(client, supabase_db, clock):
+    clock(datetime.date(2026, 9, 28))
+    d = seed_card(supabase_db, due_day=None, cycle_start_balance=None, created_at="2026-01-01T00:00:00+00:00")
+    res = client.patch(f"/debt-freedom/{d['id']}", headers=auth(USER_A), json={"due_day": 14})
+    assert res.status_code == 200
+    assert res.json()["debt"]["due_day"] == 14 and res.json()["debt"]["missing"] == []
+    assert supabase_db.rows("debt_transactions") == []
+    stored = supabase_db.rows("debts")[0]
+    assert stored["interest_checked_through"] == "2026-09-14" and stored["cycle_start_balance"] == 1000.0
