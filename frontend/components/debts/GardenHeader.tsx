@@ -57,16 +57,20 @@ function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd, onS
             <View style={styles.text}>
                 {debt ? (
                     <Animated.View key={`${debt.id}-${mode}`} entering={FadeIn.duration(260)} exiting={FadeOut.duration(160)}>
-                        <Text style={[styles.eyebrow, { color: theme.ink2, fontFamily: Fonts.monoSemiBold }]}>
-                            {eyebrow}
-                        </Text>
-                        <Text
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                            style={[styles.amount, { color: theme.ink, fontFamily: Fonts.serif }]}
-                        >
-                            {amount}
-                        </Text>
+                        {/* Only these two lines sit beside the buttons; the "Free by"
+                            row runs the full width so the check-in pill fits beside it. */}
+                        <View style={styles.besideActions}>
+                            <Text style={[styles.eyebrow, { color: theme.ink2, fontFamily: Fonts.monoSemiBold }]}>
+                                {eyebrow}
+                            </Text>
+                            <Text
+                                numberOfLines={1}
+                                adjustsFontSizeToFit
+                                style={[styles.amount, { color: theme.ink, fontFamily: Fonts.serif }]}
+                            >
+                                {amount}
+                            </Text>
+                        </View>
                         <View style={styles.subRow}>
                             <Text style={[styles.sub, { color: missingDate ? theme.danger : theme.ink2, fontFamily: Fonts.sansSemiBold }]}>
                                 {sub}
@@ -145,15 +149,20 @@ function PlantGlyph({ color }: { color: string }) {
     );
 }
 
+const ICON_BTN = 40;
+const ACTION_GAP = 8;
+const ACTIONS_WIDTH = ICON_BTN * 3 + ACTION_GAP * 2;
+
 const styles = StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6, minHeight: 104 },
-    text: { flex: 1, paddingRight: 12 },
+    row: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6, minHeight: 104 },
+    text: { flex: 1 },
+    besideActions: { marginRight: ACTIONS_WIDTH + 12 },
     eyebrow: { fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 2 },
     amount: { fontSize: 44, lineHeight: 50 },
     subRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 8, rowGap: 4, marginTop: 2 },
     sub: { fontSize: 15 },
     pill: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, paddingVertical: 4, paddingLeft: 10, paddingRight: 7 },
     pillText: { fontSize: 12 },
-    actions: { flexDirection: 'row', gap: 8, paddingTop: 4 },
-    iconBtn: { width: 40, height: 40, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+    actions: { position: 'absolute', top: 12, right: 20, flexDirection: 'row', gap: ACTION_GAP },
+    iconBtn: { width: ICON_BTN, height: ICON_BTN, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 });
