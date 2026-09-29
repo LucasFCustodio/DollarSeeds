@@ -1,7 +1,8 @@
 /**
  * useMinToggle — the min-payment toggle's request, shared by the garden and the detail
- * screen. Off → on logs this cycle's minimum; on → off undoes it. The caller plays the
- * drops (garden) or queues them (detail) in `onChanged`.
+ * screen. Off → on logs this cycle's minimum; on → off undoes it. The caller applies the
+ * returned debt at once (so the switch never shows a stale state that invites a second
+ * log) and plays the drops (garden) or queues them (detail) in `onChanged`.
  */
 import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
@@ -18,14 +19,14 @@ export function useMinToggle(
 ) {
     const { t } = useTranslation('debts');
     const analytics = useAnalytics();
-    const [pendingId, setPendingId] = useState<number | null>(null);
+    const [pending, setPending] = useState<{ id: number; value: boolean } | null>(null);
     const inFlight = useRef(false);
 
     const toggle = useCallback(async (debt: Debt) => {
         if (inFlight.current) return;
         inFlight.current = true;
-        setPendingId(debt.id);
         const turningOn = !debt.min_logged_this_cycle;
+        setPending({ id: debt.id, value: turningOn });
         try {
             if (turningOn) {
                 const result = await logPayment(debt.id, { minimum: true, occurredOn: localDateISO() });
@@ -46,9 +47,15 @@ export function useMinToggle(
             onStale();
         } finally {
             inFlight.current = false;
-            setPendingId(null);
+            setPending(null);
         }
     }, [analytics, onChanged, onStale, t]);
 
-    return { toggle, pendingId };
+    /** The switch's target while its request is in flight, or null. */
+    const pendingValueFor = useCallback(
+        (id: number) => (pending && pending.id === id ? pending.value : null),
+        [pending],
+    );
+
+    return { toggle, pendingValueFor };
 }

@@ -67,10 +67,11 @@ function DebtDetailScreen() {
     };
 
     const onToggled = useCallback((result: OneDebt, on: boolean) => {
+        setData(prev => prev && { ...prev, debt: result.debt });   // no stale switch while reloading
         if (on) queueGardenAnimation({ kind: 'payment', debtId: result.debt.id, extra: false });
         load();
     }, [load]);
-    const { toggle, pendingId } = useMinToggle(onToggled, load);
+    const { toggle, pendingValueFor } = useMinToggle(onToggled, load);
 
     const confirmDelete = () => {
         if (!data) return;
@@ -140,7 +141,7 @@ function DebtDetailScreen() {
                         <>
                             <View style={styles.actions}>
                                 <View style={styles.flex}>
-                                    <MinToggle debt={d} pending={pendingId === d.id} onPress={() => toggle(d)} />
+                                    <MinToggle debt={d} pendingValue={pendingValueFor(d.id)} onChange={() => toggle(d)} />
                                 </View>
                                 {d.is_focus ? (
                                     <View style={styles.flex}><Button color={theme.brand} label={t('actions.extra')} variant="primary" fullWidth onPress={() => setPaying(true)} /></View>

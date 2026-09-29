@@ -35,8 +35,8 @@ interface Props {
     settled: boolean;
     /** A request or sequence is running for this debt: hide its action. */
     busy: boolean;
-    /** The min-payment toggle's request is in flight for this debt. */
-    togglePending: boolean;
+    /** The min-payment switch's target while its request is in flight, else null. */
+    togglePending: boolean | null;
     registerPlant: (id: number, handle: PlantViewHandle | null) => void;
     onOpen: (id: number) => void;
     onToggleMin: (id: number) => void;
@@ -139,7 +139,7 @@ function PlantSection({
                         ? { top: ch + 4, left: Math.max(16, left + cw * 0.06), right: Math.max(16, left + cw * 0.06) }
                         : { top: ch + 4, left: left + cw * 0.18, width: cw * 0.64 }]}>
                         <View style={styles.flex}>
-                            <MinToggle debt={debt} pending={togglePending} onPress={() => onToggleMin(debt.id)} />
+                            <MinToggle debt={debt} pendingValue={togglePending} onChange={() => onToggleMin(debt.id)} />
                         </View>
                         {debt.is_focus ? (
                             <Pressable

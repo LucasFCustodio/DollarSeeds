@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { Fonts, useTheme } from '../../context/ThemeContext';
-import { IconChevronRight, IconGear, IconPlus } from '../icons';
+import { IconChevronRight, IconGearMascot, IconPlus } from '../icons';
 import type { Debt } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
 
@@ -103,7 +103,8 @@ function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd, onS
                     hitSlop={8}
                     style={[styles.iconBtn, { backgroundColor: theme.surface, borderColor: theme.ink }]}
                 >
-                    <IconGear size={18} color={theme.ink} />
+                    {/* The home screen's settings gear, in ink instead of white. */}
+                    <IconGearMascot size={18} color={theme.ink} />
                 </Pressable>
                 <Pressable
                     onPress={onToggleMode}

@@ -172,10 +172,13 @@ function DebtsGardenScreen() {
     }, [analytics, water]);
 
     const onToggled = useCallback((result: OneDebt, on: boolean) => {
+        // The server's answer, applied now: the switch must not sit on the old state
+        // (inviting a second log) while the full garden reloads.
+        setGarden(g => g && { ...g, debts: g.debts.map(d => (d.id === result.debt.id ? result.debt : d)) });
         if (on) water(result, 'minimum');
         else load();   // the plant keeps its highest step; only the numbers change
     }, [load, water]);
-    const { toggle, pendingId: togglePendingId } = useMinToggle(onToggled, load);
+    const { toggle, pendingValueFor } = useMinToggle(onToggled, load);
     const onToggleMin = useCallback((id: number) => {
         const d = byIdRef.current.get(id);
         if (d) toggle(d);
@@ -263,7 +266,7 @@ function DebtsGardenScreen() {
                         active={active}
                         streamAnimId={streamAnimId}
                         busyId={completingId}
-                        togglePendingId={togglePendingId}
+                        togglePendingFor={pendingValueFor}
                         onSettledChange={onSettledChange}
                         onOpen={openDetail}
                         onToggleMin={onToggleMin}

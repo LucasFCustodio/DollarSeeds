@@ -30,8 +30,8 @@ interface Props {
     streamAnimId: number | null;
     /** The debt a completion is running for; its action button hides. */
     busyId: number | null;
-    /** The debt whose min-payment toggle request is in flight. */
-    togglePendingId: number | null;
+    /** The min-payment switch's target for a debt whose request is in flight. */
+    togglePendingFor: (id: number) => boolean | null;
     onSettledChange: (debt: Debt | null) => void;
     onOpen: (id: number) => void;
     onToggleMin: (id: number) => void;
@@ -43,7 +43,7 @@ interface Props {
 const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
 const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
-    { debts, focusId, active, streamAnimId, busyId, togglePendingId, onSettledChange, onOpen, onToggleMin, onExtra,
+    { debts, focusId, active, streamAnimId, busyId, togglePendingFor, onSettledChange, onOpen, onToggleMin, onExtra,
         onComplete, onStreamRevealed },
     ref,
 ) {
@@ -98,7 +98,7 @@ const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
             height={sectionH}
             settled={active && item.id === settledId}
             busy={item.id === busyId}
-            togglePending={item.id === togglePendingId}
+            togglePending={togglePendingFor(item.id)}
             registerPlant={registerPlant}
             onOpen={onOpen}
             onToggleMin={onToggleMin}
@@ -107,7 +107,7 @@ const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
             streamAnimateIn={streamAnimId === item.id}
             onStreamRevealed={onStreamRevealed}
         />
-    ), [size?.w, sectionH, active, settledId, busyId, togglePendingId, registerPlant, onOpen, onToggleMin, onExtra,
+    ), [size?.w, sectionH, active, settledId, busyId, togglePendingFor, registerPlant, onOpen, onToggleMin, onExtra,
         onComplete, streamAnimId, onStreamRevealed]);
 
     const initialIndex = useMemo(() => {
