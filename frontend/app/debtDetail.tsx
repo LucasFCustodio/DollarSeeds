@@ -1,7 +1,7 @@
 /**
  * debtDetail — everything about one Debt Freedom debt, opened by tapping its plant
- * or card. The min-payment toggle, Extra (focus debt only), statement check-in, Edit,
- * Delete (confirmed). All figures are server-computed.
+ * or card. Statement check-in, Edit, Delete (confirmed). Payments are logged from the
+ * garden only (the min-payment switch and Extra). All figures are server-computed.
  */
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -9,21 +9,15 @@ import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as WebBrowser from 'expo-web-browser';
-import * as Haptics from 'expo-haptics';
 import { Fonts, useTheme } from '../context/ThemeContext';
 import { useLocale } from '../context/LocaleContext';
 import { DEBT_FREEDOM_ENABLED } from '../constants/features';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import BackHeader from '../components/debts/BackHeader';
-import LogPaymentSheet from '../components/debts/LogPaymentSheet';
 import CheckinSheet from '../components/debts/CheckinSheet';
-import MinToggle from '../components/debts/MinToggle';
-import { useMinToggle } from '../components/debts/useMinToggle';
 import { useDebtFormat } from '../components/debts/format';
-import { useAnalytics } from '../lib/analytics';
-import { queueGardenAnimation } from '../lib/debtFreedomEvents';
-import { deleteDebt, fetchDebt, type DebtDetail, type DebtTransaction, type OneDebt, type PaymentResult } from '../lib/debtFreedom';
+import { deleteDebt, fetchDebt, type DebtDetail, type DebtTransaction } from '../lib/debtFreedom';
 
 const VERSE_COUNT = 5;
 
@@ -39,13 +33,11 @@ function DebtDetailScreen() {
     const f = useDebtFormat();
     const router = useRouter();
     const insets = useSafeAreaInsets();
-    const analytics = useAnalytics();
     const { id: idParam } = useLocalSearchParams<{ id: string }>();
     const id = Number(idParam);
 
     const [data, setData] = useState<DebtDetail | null>(null);
     const [error, setError] = useState(false);
-    const [paying, setPaying] = useState(false);
     const [checkingIn, setCheckingIn] = useState(false);
     const [verse] = useState(() => Math.floor(Math.random() * VERSE_COUNT));
 
@@ -56,22 +48,6 @@ function DebtDetailScreen() {
     }, [id]);
 
     useFocusEffect(load);
-
-    const onLogged = (result: PaymentResult) => {
-        setPaying(false);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        analytics.debtPaymentLogged({ debt_id: result.debt.id, kind: 'extra', growth_step: result.debt.growth_step });
-        // The drops play in the garden, on this plant, when the user goes back.
-        queueGardenAnimation({ kind: 'payment', debtId: result.debt.id, extra: true });
-        load();
-    };
-
-    const onToggled = useCallback((result: OneDebt, on: boolean) => {
-        setData(prev => prev && { ...prev, debt: result.debt });   // no stale switch while reloading
-        if (on) queueGardenAnimation({ kind: 'payment', debtId: result.debt.id, extra: false });
-        load();
-    }, [load]);
-    const { toggle, pendingValueFor } = useMinToggle(onToggled, load);
 
     const confirmDelete = () => {
         if (!data) return;
@@ -138,20 +114,10 @@ function DebtDetailScreen() {
                         ) : null}
                     </Text>
                     {!paidOff ? (
-                        <>
-                            <View style={styles.actions}>
-                                <View style={styles.flex}>
-                                    <MinToggle debt={d} pendingValue={pendingValueFor(d.id)} onChange={() => toggle(d)} />
-                                </View>
-                                {d.is_focus ? (
-                                    <View style={styles.flex}><Button color={theme.brand} label={t('actions.extra')} variant="primary" fullWidth onPress={() => setPaying(true)} /></View>
-                                ) : null}
-                            </View>
-                            <View style={styles.actions}>
-                                <View style={styles.flex}><Button color={theme.brand} label={t('detail.checkin')} variant="secondary" fullWidth onPress={() => setCheckingIn(true)} /></View>
-                                <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={edit} /></View>
-                            </View>
-                        </>
+                        <View style={styles.actions}>
+                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.checkin')} variant="secondary" fullWidth onPress={() => setCheckingIn(true)} /></View>
+                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={edit} /></View>
+                        </View>
                     ) : (
                         <View style={styles.actions}>
                             <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={edit} /></View>
@@ -244,7 +210,6 @@ function DebtDetailScreen() {
                     <Button color={theme.danger} label={t('detail.delete')} variant="dangerSoft" fullWidth onPress={confirmDelete} />
                 </View>
             </ScrollView>
-            <LogPaymentSheet debt={paying ? d : null} onClose={() => setPaying(false)} onLogged={onLogged} />
             <CheckinSheet debt={checkingIn ? d : null} onClose={() => setCheckingIn(false)} onSaved={load} />
         </View>
     );
