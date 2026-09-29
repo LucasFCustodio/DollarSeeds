@@ -1,6 +1,7 @@
 /**
  * debtDetail — everything about one Debt Freedom debt, opened by tapping its plant
- * or card. Edit, Log payment, Delete (confirmed). All figures are server-computed.
+ * or card. The min-payment toggle, Extra (focus debt only), statement check-in, Edit,
+ * Delete (confirmed). All figures are server-computed.
  */
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -16,10 +17,13 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import BackHeader from '../components/debts/BackHeader';
 import LogPaymentSheet from '../components/debts/LogPaymentSheet';
+import CheckinSheet from '../components/debts/CheckinSheet';
+import MinToggle from '../components/debts/MinToggle';
+import { useMinToggle } from '../components/debts/useMinToggle';
 import { useDebtFormat } from '../components/debts/format';
 import { useAnalytics } from '../lib/analytics';
 import { queueGardenAnimation } from '../lib/debtFreedomEvents';
-import { deleteDebt, fetchDebt, type DebtDetail, type PaymentResult } from '../lib/debtFreedom';
+import { deleteDebt, fetchDebt, type DebtDetail, type DebtTransaction, type OneDebt, type PaymentResult } from '../lib/debtFreedom';
 
 const VERSE_COUNT = 5;
 
@@ -42,6 +46,7 @@ function DebtDetailScreen() {
     const [data, setData] = useState<DebtDetail | null>(null);
     const [error, setError] = useState(false);
     const [paying, setPaying] = useState(false);
+    const [checkingIn, setCheckingIn] = useState(false);
     const [verse] = useState(() => Math.floor(Math.random() * VERSE_COUNT));
 
     const load = useCallback(() => {
@@ -52,20 +57,20 @@ function DebtDetailScreen() {
 
     useFocusEffect(load);
 
-    const onLogged = (result: PaymentResult, extra: boolean) => {
+    const onLogged = (result: PaymentResult) => {
         setPaying(false);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        const kinds = result.transactions.map(tx => tx.kind);
-        analytics.debtPaymentLogged({
-            debt_id: result.debt.id,
-            kind: kinds.includes('payment_minimum') && kinds.includes('payment_extra')
-                ? 'minimum_extra' : kinds.includes('payment_extra') ? 'extra' : 'minimum',
-            growth_step: result.debt.growth_step,
-        });
+        analytics.debtPaymentLogged({ debt_id: result.debt.id, kind: 'extra', growth_step: result.debt.growth_step });
         // The drops play in the garden, on this plant, when the user goes back.
-        queueGardenAnimation({ kind: 'payment', debtId: result.debt.id, extra });
+        queueGardenAnimation({ kind: 'payment', debtId: result.debt.id, extra: true });
         load();
     };
+
+    const onToggled = useCallback((result: OneDebt, on: boolean) => {
+        if (on) queueGardenAnimation({ kind: 'payment', debtId: result.debt.id, extra: false });
+        load();
+    }, [load]);
+    const { toggle, pendingId } = useMinToggle(onToggled, load);
 
     const confirmDelete = () => {
         if (!data) return;
@@ -105,6 +110,7 @@ function DebtDetailScreen() {
     const missing = t('label.missing');
     const rollover = Math.max(0, d.suggested_payment - d.min_payment);
     const usage = d.debt_type === 'credit_card' && d.credit_limit ? d.current_balance / d.credit_limit : null;
+    const edit = () => router.push({ pathname: '/debtForm', params: { id: String(d.id) } });
 
     return (
         <View style={[styles.fill, { backgroundColor: theme.bg }]}>
@@ -131,16 +137,35 @@ function DebtDetailScreen() {
                         ) : null}
                     </Text>
                     {!paidOff ? (
-                        <View style={styles.actions}>
-                            <View style={styles.flex}><Button color={theme.brand} label={t('actions.logPayment')} variant="primary" fullWidth onPress={() => setPaying(true)} /></View>
-                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={() => router.push({ pathname: '/debtForm', params: { id: String(d.id) } })} /></View>
-                        </View>
+                        <>
+                            <View style={styles.actions}>
+                                <View style={styles.flex}>
+                                    <MinToggle debt={d} pending={pendingId === d.id} onPress={() => toggle(d)} />
+                                </View>
+                                {d.is_focus ? (
+                                    <View style={styles.flex}><Button color={theme.brand} label={t('actions.extra')} variant="primary" fullWidth onPress={() => setPaying(true)} /></View>
+                                ) : null}
+                            </View>
+                            <View style={styles.actions}>
+                                <View style={styles.flex}><Button color={theme.brand} label={t('detail.checkin')} variant="secondary" fullWidth onPress={() => setCheckingIn(true)} /></View>
+                                <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={edit} /></View>
+                            </View>
+                        </>
                     ) : (
                         <View style={styles.actions}>
-                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={() => router.push({ pathname: '/debtForm', params: { id: String(d.id) } })} /></View>
+                            <View style={styles.flex}><Button color={theme.brand} label={t('detail.edit')} variant="secondary" fullWidth onPress={edit} /></View>
                         </View>
                     )}
                 </Card>
+
+                {!paidOff && !d.due_day ? (
+                    <View style={[styles.prompt, { backgroundColor: theme.dangerSoft, borderColor: theme.danger }]}>
+                        <Text style={{ color: theme.danger, fontFamily: Fonts.sansSemiBold, fontSize: 14, lineHeight: 20 }}>{t('detail.addDueDay')}</Text>
+                        <View style={styles.promptCta}>
+                            <Button color={theme.danger} label={t('detail.addDueDayCta')} variant="outline" size="sm" onPress={edit} />
+                        </View>
+                    </View>
+                ) : null}
 
                 <Card theme={theme} padding={6} style={styles.card}>
                     <Row label={t('detail.type')} value={d.debt_type ? t(`type.${d.debt_type}`) : missing} dim={!d.debt_type} />
@@ -159,6 +184,7 @@ function DebtDetailScreen() {
                             hint={rollover > 0 ? t('detail.suggestedHint', { amount: f.money(rollover) }) : undefined} />
                     ) : null}
                     <Row label={t('detail.due')} value={d.due_day ? t('detail.dueValue', { day: d.due_day }) : missing} danger={!d.due_day && !paidOff} />
+                    <Row label={t('detail.lateFee')} value={d.late_fee != null ? f.money(d.late_fee) : missing} dim={d.late_fee == null} />
                     <Row label={t('detail.autopay')} value={d.autopay == null ? missing : d.autopay ? t('form.yes') : t('form.no')} dim={d.autopay == null} />
                     {!paidOff ? (
                         <>
@@ -187,11 +213,8 @@ function DebtDetailScreen() {
                                 <Text style={{ color: theme.ink, fontFamily: Fonts.sansSemiBold, fontSize: 14 }}>{t(`kind.${tx.kind}`)}</Text>
                                 <Text style={{ color: theme.ink3, fontFamily: Fonts.mono, fontSize: 11, marginTop: 2 }}>{f.fullDate(tx.occurred_on)}</Text>
                             </View>
-                            <Text style={{
-                                color: tx.kind === 'interest' ? theme.danger : tx.kind === 'balance_edit' ? theme.ink2 : theme.success,
-                                fontFamily: Fonts.sansSemiBold, fontSize: 15,
-                            }}>
-                                {tx.kind === 'interest' || (tx.kind === 'balance_edit' && tx.amount > 0) ? '+' : '−'}
+                            <Text style={{ color: txColor(tx, theme), fontFamily: Fonts.sansSemiBold, fontSize: 15 }}>
+                                {raisesBalance(tx) ? '+' : '−'}
                                 {f.money(Math.abs(tx.amount))}
                             </Text>
                         </View>
@@ -221,8 +244,31 @@ function DebtDetailScreen() {
                 </View>
             </ScrollView>
             <LogPaymentSheet debt={paying ? d : null} onClose={() => setPaying(false)} onLogged={onLogged} />
+            <CheckinSheet debt={checkingIn ? d : null} onClose={() => setCheckingIn(false)} onSaved={load} />
         </View>
     );
+}
+
+/** Whether a history row put money ON the balance (shown "+"). The signed kinds carry
+ *  their direction in the amount. */
+function raisesBalance(tx: DebtTransaction) {
+    switch (tx.kind) {
+        case 'interest':
+        case 'late_fee':
+        case 'minimum_reversal':
+            return true;
+        case 'balance_edit':
+        case 'statement_adjustment':
+            return tx.amount > 0;
+        default:
+            return false;
+    }
+}
+
+function txColor(tx: DebtTransaction, theme: ReturnType<typeof useTheme>['theme']) {
+    if (tx.kind === 'interest' || tx.kind === 'late_fee') return theme.danger;
+    if (tx.kind === 'payment_minimum' || tx.kind === 'payment_extra') return theme.success;
+    return theme.ink2;
 }
 
 function Row({ label, value, hint, danger, dim, link, last }: {
@@ -258,5 +304,7 @@ const styles = StyleSheet.create({
     tx: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12 },
     empty: { padding: 14, fontSize: 14 },
     verse: { borderRadius: 18, borderWidth: 1, padding: 18, marginTop: 8 },
+    prompt: { borderRadius: 16, borderWidth: 1, padding: 14 },
+    promptCta: { marginTop: 10, alignItems: 'flex-start' },
     delete: { marginTop: 8 },
 });

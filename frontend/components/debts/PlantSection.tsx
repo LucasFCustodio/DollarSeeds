@@ -1,15 +1,19 @@
 /**
  * PlantSection — one page of the garden: the plant in its pot, its label, the
- * focus glow, the action under the pot, and the water stream down to the next plant.
+ * focus glow, the actions under the pot, and the water stream down to the next plant.
+ *
+ * Actions: "Mark as paid off" at a zero balance; otherwise the min-payment toggle on
+ * every active debt, plus the filled "Extra" button on the focus debt.
  */
 import React, { memo, useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Fonts, useTheme } from '../../context/ThemeContext';
+import { Fonts, shadow, useTheme } from '../../context/ThemeContext';
 import Button from '../ui/Button';
 import { plantStateOf, type Debt } from '../../lib/debtFreedom';
 import PlantView, { type PlantViewHandle } from './PlantView';
 import PotLabel from './PotLabel';
+import MinToggle from './MinToggle';
 import FocusGlow from './FocusGlow';
 import WaterStream from './WaterStream';
 import { CANVAS_RATIO, POT_LABEL_BOX, POT_WIDTH, CANVAS_W } from './art';
@@ -31,9 +35,12 @@ interface Props {
     settled: boolean;
     /** A request or sequence is running for this debt: hide its action. */
     busy: boolean;
+    /** The min-payment toggle's request is in flight for this debt. */
+    togglePending: boolean;
     registerPlant: (id: number, handle: PlantViewHandle | null) => void;
     onOpen: (id: number) => void;
-    onLogPayment: (id: number) => void;
+    onToggleMin: (id: number) => void;
+    onExtra: (id: number) => void;
     onComplete: (id: number) => void;
     streamAnimateIn: boolean;
     onStreamRevealed: (id: number) => void;
@@ -44,8 +51,8 @@ export function canvasWidthFor(width: number, height: number) {
 }
 
 function PlantSection({
-    debt, hasNext, width, height, settled, busy, registerPlant, onOpen, onLogPayment, onComplete,
-    streamAnimateIn, onStreamRevealed,
+    debt, hasNext, width, height, settled, busy, togglePending, registerPlant, onOpen, onToggleMin, onExtra,
+    onComplete, streamAnimateIn, onStreamRevealed,
 }: Props) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
@@ -121,16 +128,36 @@ function PlantSection({
                 />
             </Pressable>
 
-            {settled && !busy && (debt.ready_to_complete || (debt.is_focus && state !== 'paid_off')) ? (
-                <View style={[styles.action, { top: ch + 4, left: left + cw * 0.18, width: cw * 0.64 }]}>
-                    {debt.ready_to_complete ? (
+            {settled && !busy && state !== 'paid_off' ? (
+                debt.ready_to_complete ? (
+                    <View style={[styles.action, { top: ch + 4, left: left + cw * 0.18, width: cw * 0.64 }]}>
                         <Button color={theme.brand} label={t('actions.markPaidOff')} variant="primary" size="md" fullWidth
                             onPress={() => onComplete(debt.id)} />
-                    ) : (
-                        <Button color={theme.brand} label={t('actions.logPayment')} variant="primary" size="md" fullWidth
-                            onPress={() => onLogPayment(debt.id)} />
-                    )}
-                </View>
+                    </View>
+                ) : (
+                    <View style={[styles.action, styles.row, debt.is_focus
+                        ? { top: ch + 4, left: Math.max(16, left + cw * 0.06), right: Math.max(16, left + cw * 0.06) }
+                        : { top: ch + 4, left: left + cw * 0.18, width: cw * 0.64 }]}>
+                        <View style={styles.flex}>
+                            <MinToggle debt={debt} pending={togglePending} onPress={() => onToggleMin(debt.id)} />
+                        </View>
+                        {debt.is_focus ? (
+                            <Pressable
+                                onPress={() => onExtra(debt.id)}
+                                accessibilityRole="button"
+                                accessibilityLabel={t('payment.title')}
+                                style={({ pressed }) => [styles.extra, {
+                                    backgroundColor: theme.brand, borderColor: theme.brand,
+                                    opacity: pressed ? 0.8 : 1, ...(shadow(4) as object),
+                                }]}
+                            >
+                                <Text style={[styles.extraLabel, { color: theme.onBrand, fontFamily: Fonts.sansBold }]}>
+                                    {t('actions.extra')}
+                                </Text>
+                            </Pressable>
+                        ) : null}
+                    </View>
+                )
             ) : null}
         </View>
     );
@@ -141,4 +168,8 @@ export default memo(PlantSection);
 const styles = StyleSheet.create({
     stake: { flex: 1, width: '90%', alignItems: 'center', justifyContent: 'center' },
     action: { position: 'absolute' },
+    row: { flexDirection: 'row', gap: 10 },
+    flex: { flex: 1 },
+    extra: { paddingVertical: 10.5, paddingHorizontal: 22, borderRadius: 10, borderWidth: 1.5, justifyContent: 'center' },
+    extraLabel: { fontSize: 15 },
 });

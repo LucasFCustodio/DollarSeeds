@@ -19,16 +19,22 @@ import { Fonts, useTheme } from '@/context/ThemeContext';
 import Button from '@/components/ui/Button';
 import { DEBT_FREEDOM_ENABLED } from '@/constants/features';
 import { useAnalytics } from '@/lib/analytics';
-import { completeDebt, fetchGarden, type Debt, type Garden, type PaymentResult } from '@/lib/debtFreedom';
+import { completeDebt, fetchGarden, type Debt, type Garden, type OneDebt, type PaymentResult } from '@/lib/debtFreedom';
 import { claimRandomBug, takeGardenAnimation, type PendingAnimation } from '@/lib/debtFreedomEvents';
 import DebtGarden, { type DebtGardenHandle } from '@/components/debts/DebtGarden';
 import GardenHeader, { type GardenMode } from '@/components/debts/GardenHeader';
 import DebtCard from '@/components/debts/DebtCard';
 import LogPaymentSheet from '@/components/debts/LogPaymentSheet';
+import CheckinSheet from '@/components/debts/CheckinSheet';
+import LateFeeSheet from '@/components/debts/LateFeeSheet';
+import PlanSettingsSheet from '@/components/debts/PlanSettingsSheet';
+import { useMinToggle } from '@/components/debts/useMinToggle';
 import PlantView from '@/components/debts/PlantView';
 
 const TAB_BAR_HEIGHT = 58;
 const BUG_DELAY_AFTER_PAYMENT_MS = 2000;
+/** The late-fee question waits this long after its plant settles. */
+const LATE_FEE_ASK_DELAY_MS = 700;
 
 export default function DebtsScreen() {
     if (!DEBT_FREEDOM_ENABLED) return <Redirect href="/(tabs)" />;
@@ -48,6 +54,9 @@ function DebtsGardenScreen() {
     const [mode, setMode] = useState<GardenMode>('plants');
     const [settled, setSettled] = useState<Debt | null>(null);
     const [payFor, setPayFor] = useState<Debt | null>(null);
+    const [checkinFor, setCheckinFor] = useState<Debt | null>(null);
+    const [lateFeeFor, setLateFeeFor] = useState<Debt | null>(null);
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const [streamAnimId, setStreamAnimId] = useState<number | null>(null);
     const [appActive, setAppActive] = useState(AppState.currentState === 'active');
     const [completingId, setCompletingId] = useState<number | null>(null);
@@ -55,6 +64,8 @@ function DebtsGardenScreen() {
     const gardenRef = useRef<DebtGardenHandle>(null);
     const pending = useRef<PendingAnimation | null>(null);
     const afterStreamFocus = useRef<number | null>(null);
+    /** `${debt id}:${due date}` late-fee questions already asked this session. */
+    const askedLateFee = useRef(new Set<string>());
 
     // Pause everything when the tab is not focused or the app is backgrounded.
     useEffect(() => {
@@ -120,33 +131,61 @@ function DebtsGardenScreen() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active, settledDebt?.id]);
 
+    // The late-fee question: once per missed due date per session, when its plant
+    // settles and nothing else is open.
+    const sheetOpen = !!payFor || !!checkinFor || !!lateFeeFor || settingsOpen;
+    useEffect(() => {
+        const due = settledDebt?.late_fee_pending_for;
+        if (!active || !settledDebt || !due || sheetOpen || pending.current) return;
+        const key = `${settledDebt.id}:${due}`;
+        if (askedLateFee.current.has(key)) return;
+        const id = setTimeout(() => {
+            askedLateFee.current.add(key);
+            setLateFeeFor(settledDebt);
+        }, LATE_FEE_ASK_DELAY_MS);
+        return () => clearTimeout(id);
+    }, [active, settledDebt, sheetOpen]);
+
     const onSettledChange = useCallback((d: Debt | null) => setSettled(d), []);
     const openDetail = useCallback((id: number) => {
         router.push({ pathname: '/debtDetail', params: { id: String(id) } });
     }, [router]);
     const byIdRef = useRef(byId);
     byIdRef.current = byId;
-    const openPay = useCallback((id: number) => setPayFor(byIdRef.current.get(id) ?? null), []);
+    const openExtra = useCallback((id: number) => setPayFor(byIdRef.current.get(id) ?? null), []);
 
-    const onLogged = useCallback((result: PaymentResult, extra: boolean) => {
-        setPayFor(null);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        const kinds = result.transactions.map(tx => tx.kind);
-        analytics.debtPaymentLogged({
-            debt_id: result.debt.id,
-            kind: kinds.includes('payment_minimum') && kinds.includes('payment_extra')
-                ? 'minimum_extra' : kinds.includes('payment_extra') ? 'extra' : 'minimum',
-            growth_step: result.debt.growth_step,
-        });
-        const plant = gardenRef.current?.plant(result.debt.id);
-        plant?.playPayment(extra ? 'extra' : 'minimum');
-        // New numbers everywhere (the step change drives the grow transition,
-        // which PlantView holds until the drops land).
+    // Drops on the plant, then new numbers everywhere (the step change drives the grow
+    // transition, which PlantView holds until the drops land).
+    const water = useCallback((result: OneDebt, kind: 'minimum' | 'extra') => {
+        gardenRef.current?.plant(result.debt.id)?.playPayment(kind);
         load();
         if (result.debt.species === 3 && result.debt.growth_step >= 5) {
             setTimeout(() => gardenRef.current?.plant(result.debt.id)?.playBug(), BUG_DELAY_AFTER_PAYMENT_MS);
         }
-    }, [analytics, load]);
+    }, [load]);
+
+    const onLogged = useCallback((result: PaymentResult) => {
+        setPayFor(null);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        analytics.debtPaymentLogged({ debt_id: result.debt.id, kind: 'extra', growth_step: result.debt.growth_step });
+        water(result, 'extra');
+    }, [analytics, water]);
+
+    const onToggled = useCallback((result: OneDebt, on: boolean) => {
+        if (on) water(result, 'minimum');
+        else load();   // the plant keeps its highest step; only the numbers change
+    }, [load, water]);
+    const { toggle, pendingId: togglePendingId } = useMinToggle(onToggled, load);
+    const onToggleMin = useCallback((id: number) => {
+        const d = byIdRef.current.get(id);
+        if (d) toggle(d);
+    }, [toggle]);
+
+    const onCheckinSaved = useCallback(() => { load(); }, [load]);
+    const onLateFeeAnswered = useCallback(() => {
+        setLateFeeFor(null);
+        load();
+    }, [load]);
 
     const onComplete = useCallback(async (id: number) => {
         if (completingId != null) return;
@@ -178,6 +217,8 @@ function DebtsGardenScreen() {
 
     const onAdd = useCallback(() => router.push('/debtForm'), [router]);
     const toggleMode = useCallback(() => setMode(m => (m === 'plants' ? 'cards' : 'plants')), []);
+    const openSettings = useCallback(() => setSettingsOpen(true), []);
+    const openCheckin = useCallback((d: Debt) => setCheckinFor(d), []);
 
     const tabClear = Math.max(insets.bottom, 14) + TAB_BAR_HEIGHT;
     const focusDebt = garden?.focus_id != null ? byId.get(garden.focus_id) ?? null : null;
@@ -210,6 +251,8 @@ function DebtsGardenScreen() {
                 mode={mode}
                 onToggleMode={toggleMode}
                 onAdd={onAdd}
+                onSettings={openSettings}
+                onCheckin={openCheckin}
             />
             {mode === 'plants' ? (
                 <View style={[styles.fill, { marginBottom: tabClear }]}>
@@ -220,9 +263,11 @@ function DebtsGardenScreen() {
                         active={active}
                         streamAnimId={streamAnimId}
                         busyId={completingId}
+                        togglePendingId={togglePendingId}
                         onSettledChange={onSettledChange}
                         onOpen={openDetail}
-                        onLogPayment={openPay}
+                        onToggleMin={onToggleMin}
+                        onExtra={openExtra}
                         onComplete={onComplete}
                         onStreamRevealed={onStreamRevealed}
                     />
@@ -237,6 +282,10 @@ function DebtsGardenScreen() {
                 />
             )}
             <LogPaymentSheet debt={payFor} onClose={() => setPayFor(null)} onLogged={onLogged} />
+            <CheckinSheet debt={checkinFor} onClose={() => setCheckinFor(null)} onSaved={onCheckinSaved} />
+            <LateFeeSheet debt={lateFeeFor} onClose={() => setLateFeeFor(null)} onAnswered={onLateFeeAnswered} />
+            <PlanSettingsSheet visible={settingsOpen} monthlyExtra={garden.monthly_extra}
+                onClose={() => setSettingsOpen(false)} onSaved={load} />
         </View>
     );
 }

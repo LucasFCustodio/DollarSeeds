@@ -30,9 +30,12 @@ interface Props {
     streamAnimId: number | null;
     /** The debt a completion is running for; its action button hides. */
     busyId: number | null;
+    /** The debt whose min-payment toggle request is in flight. */
+    togglePendingId: number | null;
     onSettledChange: (debt: Debt | null) => void;
     onOpen: (id: number) => void;
-    onLogPayment: (id: number) => void;
+    onToggleMin: (id: number) => void;
+    onExtra: (id: number) => void;
     onComplete: (id: number) => void;
     onStreamRevealed: (id: number) => void;
 }
@@ -40,7 +43,8 @@ interface Props {
 const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
 const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
-    { debts, focusId, active, streamAnimId, busyId, onSettledChange, onOpen, onLogPayment, onComplete, onStreamRevealed },
+    { debts, focusId, active, streamAnimId, busyId, togglePendingId, onSettledChange, onOpen, onToggleMin, onExtra,
+        onComplete, onStreamRevealed },
     ref,
 ) {
     const listRef = useRef<FlatList<Debt>>(null);
@@ -94,14 +98,17 @@ const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
             height={sectionH}
             settled={active && item.id === settledId}
             busy={item.id === busyId}
+            togglePending={item.id === togglePendingId}
             registerPlant={registerPlant}
             onOpen={onOpen}
-            onLogPayment={onLogPayment}
+            onToggleMin={onToggleMin}
+            onExtra={onExtra}
             onComplete={onComplete}
             streamAnimateIn={streamAnimId === item.id}
             onStreamRevealed={onStreamRevealed}
         />
-    ), [size?.w, sectionH, active, settledId, busyId, registerPlant, onOpen, onLogPayment, onComplete, streamAnimId, onStreamRevealed]);
+    ), [size?.w, sectionH, active, settledId, busyId, togglePendingId, registerPlant, onOpen, onToggleMin, onExtra,
+        onComplete, streamAnimId, onStreamRevealed]);
 
     const initialIndex = useMemo(() => {
         const i = debts.findIndex(d => d.id === focusId);

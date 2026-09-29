@@ -1,6 +1,7 @@
 /**
  * GardenHeader — fixed above the garden, describing the plant that has settled on
- * screen. Crossfades when a new plant settles.
+ * screen. Crossfades when a new plant settles. When that debt's statement check-in
+ * is due, a harvest-yellow pill sits beside its "Free by" date.
  */
 import React, { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -8,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { Fonts, useTheme } from '../../context/ThemeContext';
-import { IconPlus } from '../icons';
+import { IconChevronRight, IconGear, IconPlus } from '../icons';
 import type { Debt } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
 
@@ -20,9 +21,11 @@ interface Props {
     mode: GardenMode;
     onToggleMode: () => void;
     onAdd: () => void;
+    onSettings: () => void;
+    onCheckin: (debt: Debt) => void;
 }
 
-function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd }: Props) {
+function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd, onSettings, onCheckin }: Props) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
     const f = useDebtFormat();
@@ -47,6 +50,7 @@ function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd }: P
     }
 
     const missingDate = debt && !debt.est_payoff_month && debt.status !== 'paid_off';
+    const checkinDue = !!debt && mode === 'plants' && debt.status !== 'paid_off' && !!debt.checkin_due_since;
 
     return (
         <View style={styles.row}>
@@ -63,13 +67,40 @@ function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd }: P
                         >
                             {amount}
                         </Text>
-                        <Text style={[styles.sub, { color: missingDate ? theme.danger : theme.ink2, fontFamily: Fonts.sansSemiBold }]}>
-                            {sub}
-                        </Text>
+                        <View style={styles.subRow}>
+                            <Text style={[styles.sub, { color: missingDate ? theme.danger : theme.ink2, fontFamily: Fonts.sansSemiBold }]}>
+                                {sub}
+                            </Text>
+                            {checkinDue ? (
+                                // Harvest yellow as a fill with dark text: yellow text on
+                                // the cream background would not be readable.
+                                <Pressable
+                                    onPress={() => onCheckin(debt)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t('a11y.checkinPill', { name: debt.name })}
+                                    hitSlop={6}
+                                    style={({ pressed }) => [styles.pill, { backgroundColor: theme.harvest, opacity: pressed ? 0.8 : 1 }]}
+                                >
+                                    <Text numberOfLines={1} style={[styles.pillText, { color: theme.text, fontFamily: Fonts.sansBold }]}>
+                                        {t('header.checkin')}
+                                    </Text>
+                                    <IconChevronRight size={12} color={theme.text} />
+                                </Pressable>
+                            ) : null}
+                        </View>
                     </Animated.View>
                 ) : null}
             </View>
             <View style={styles.actions}>
+                <Pressable
+                    onPress={onSettings}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('actions.planSettings')}
+                    hitSlop={8}
+                    style={[styles.iconBtn, { backgroundColor: theme.surface, borderColor: theme.ink }]}
+                >
+                    <IconGear size={18} color={theme.ink} />
+                </Pressable>
                 <Pressable
                     onPress={onToggleMode}
                     accessibilityRole="button"
@@ -119,7 +150,10 @@ const styles = StyleSheet.create({
     text: { flex: 1, paddingRight: 12 },
     eyebrow: { fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 2 },
     amount: { fontSize: 44, lineHeight: 50 },
-    sub: { fontSize: 15, marginTop: 2 },
-    actions: { flexDirection: 'row', gap: 10, paddingTop: 4 },
+    subRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 8, rowGap: 4, marginTop: 2 },
+    sub: { fontSize: 15 },
+    pill: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, paddingVertical: 4, paddingLeft: 10, paddingRight: 7 },
+    pillText: { fontSize: 12 },
+    actions: { flexDirection: 'row', gap: 8, paddingTop: 4 },
     iconBtn: { width: 40, height: 40, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 });

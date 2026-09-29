@@ -49,11 +49,15 @@ function PotLabel({ debt, boxHeight }: Props) {
                 <Text style={missingDue ? { color: theme.danger } : null}>{due}</Text>
                 {after}
             </Text>
+            {/* A debt from before due days were required: ask for one (tapping the
+                plant opens its detail, which links to the edit form). */}
             <Text
                 numberOfLines={1}
-                style={{ color: theme.ink2, fontFamily: Fonts.sansSemiBold, fontSize: size * 0.86 }}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+                style={{ color: missingDue ? theme.danger : theme.ink2, fontFamily: Fonts.sansSemiBold, fontSize: size * 0.86 }}
             >
-                {t('label.pctPaid', { pct: f.pct(debt.pct_paid) })}
+                {missingDue && debt.status !== 'paid_off' ? t('label.addDueDay') : t('label.pctPaid', { pct: f.pct(debt.pct_paid) })}
             </Text>
         </View>
     );

@@ -2,7 +2,8 @@
  * debtForm — create or edit a Debt Freedom debt.
  *
  * Create: `/debtForm`. Edit: `/debtForm?id=<id>`, same form, prefilled.
- * Five required fields; the rest sit under a collapsed "More details". On create the
+ * Six required fields (the due day since v2: billing cycles hang off it); the rest sit
+ * under a collapsed "More details". On create the
  * garden scrolls to the new debt and plays the seed-planting animation, once.
  */
 import React, { useEffect, useState } from 'react';
@@ -57,6 +58,7 @@ function DebtForm() {
     const [payUrl, setPayUrl] = useState('');
     const [autopay, setAutopay] = useState<Tri>('unset');
     const [creditLimit, setCreditLimit] = useState('');
+    const [lateFee, setLateFee] = useState('');
     const [notes, setNotes] = useState('');
 
     useEffect(() => {
@@ -75,9 +77,10 @@ function DebtForm() {
                 setPayUrl(debt.pay_url ?? '');
                 setAutopay(debt.autopay == null ? 'unset' : debt.autopay ? 'yes' : 'no');
                 setCreditLimit(num(debt.credit_limit));
+                setLateFee(num(debt.late_fee));
                 setNotes(debt.notes ?? '');
-                const hasMore = debt.debt_type || debt.lender || debt.due_day || debt.pay_url
-                    || debt.autopay != null || debt.credit_limit != null || debt.notes;
+                const hasMore = debt.debt_type || debt.lender || debt.pay_url
+                    || debt.autopay != null || debt.credit_limit != null || debt.late_fee != null || debt.notes;
                 setMore(!!hasMore);
             })
             .catch(e => {
@@ -95,7 +98,7 @@ function DebtForm() {
 
     const submit = async () => {
         setError(null);
-        if (!name.trim() || !original.trim() || !current.trim() || !minPayment.trim() || !apr.trim()) {
+        if (!name.trim() || !original.trim() || !current.trim() || !minPayment.trim() || !apr.trim() || !dueDay.trim()) {
             setError(t('form.errRequired'));
             return;
         }
@@ -115,8 +118,13 @@ function DebtForm() {
             setError(t('form.errNumber', { field: t('form.creditLimit') }));
             return;
         }
-        const day = dueDay.trim() ? Number(dueDay.trim()) : null;
-        if (day != null && !(Number.isInteger(day) && day >= 1 && day <= 31)) {
+        const fee = lateFee.trim() ? parseAmount(lateFee) : null;
+        if (lateFee.trim() && (fee == null || fee < 0)) {
+            setError(t('form.errNumber', { field: t('form.lateFee') }));
+            return;
+        }
+        const day = Number(dueDay.trim());
+        if (!(Number.isInteger(day) && day >= 1 && day <= 31)) {
             setError(t('form.errDueDay'));
             return;
         }
@@ -133,6 +141,7 @@ function DebtForm() {
             pay_url: payUrl.trim() || null,
             autopay: autopay === 'unset' ? null : autopay === 'yes',
             credit_limit: limit,
+            late_fee: fee,
             notes: notes.trim() || null,
         };
 
@@ -173,6 +182,7 @@ function DebtForm() {
                     <InputField icon={null} maxLength={undefined} label={t('form.current')} placeholder="0" isNumeric value={current} onChangeText={setCurrent} />
                     <InputField icon={null} maxLength={undefined} label={t('form.minPayment')} placeholder="0" isNumeric value={minPayment} onChangeText={setMinPayment} />
                     <InputField icon={null} maxLength={undefined} label={t('form.apr')} placeholder="0" isNumeric value={apr} onChangeText={setApr} />
+                    <InputField icon={null} label={t('form.dueDay')} placeholder={t('form.dueDayPlaceholder')} isNumeric value={dueDay} onChangeText={setDueDay} maxLength={2} />
 
                     <Pressable
                         onPress={() => setMore(m => !m)}
@@ -195,7 +205,6 @@ function DebtForm() {
                                 onSelect={(label: string) => setDebtType(DEBT_TYPES.find(v => typeLabel(v) === label) ?? null)}
                             />
                             <InputField icon={null} isNumeric={false} placeholder="" label={t('form.lender')} value={lender} onChangeText={setLender} maxLength={120} />
-                            <InputField icon={null} label={t('form.dueDay')} placeholder={t('form.dueDayPlaceholder')} isNumeric value={dueDay} onChangeText={setDueDay} maxLength={2} />
                             <InputField icon={null} isNumeric={false} label={t('form.payUrl')} placeholder={t('form.payUrlPlaceholder')} value={payUrl} onChangeText={setPayUrl} maxLength={400} />
                             <Dropdown
                                 label={t('form.autopay')}
@@ -204,6 +213,8 @@ function DebtForm() {
                                 onSelect={(label: string) => setAutopay(label === t('form.yes') ? 'yes' : label === t('form.no') ? 'no' : 'unset')}
                             />
                             <InputField icon={null} maxLength={undefined} label={t('form.creditLimit')} placeholder="0" isNumeric value={creditLimit} onChangeText={setCreditLimit} />
+                            <InputField icon={null} maxLength={undefined} label={t('form.lateFee')} placeholder="0" isNumeric value={lateFee} onChangeText={setLateFee} />
+                            <Text style={[styles.hint, { color: theme.ink3, fontFamily: Fonts.sans }]}>{t('form.lateFeeHint')}</Text>
                             <InputField icon={null} isNumeric={false} placeholder="" label={t('form.notes')} value={notes} onChangeText={setNotes} maxLength={500} />
                         </View>
                     ) : null}
