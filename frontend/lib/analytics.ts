@@ -30,6 +30,9 @@ export type AnalyticsEvent =
     | 'debt_created'
     | 'debt_payment_logged'
     | 'debt_paid_off'
+    | 'debt_min_toggled'
+    | 'debt_checkin_saved'
+    | 'debt_late_fee_entered'
     | 'series_explore_clicked'
     | 'lesson_video_clicked'
     | 'written_lesson_opened'
@@ -75,6 +78,13 @@ export function useAnalytics() {
             capture('debt_payment_logged', p),
         debtPaidOff: (p: { debt_id: number; position: number; total: number }) =>
             capture('debt_paid_off', p),
+        debtMinToggled: (p: { debt_id: number; state: 'on' | 'off' }) =>
+            capture('debt_min_toggled', p),
+        /** Whether the statement came in higher than the app's balance — never the amount. */
+        debtCheckinSaved: (p: { debt_id: number; balance_went_up: 0 | 1 }) =>
+            capture('debt_checkin_saved', p),
+        debtLateFeeEntered: (p: { debt_id: number; outcome: 'saved' | 'skipped' }) =>
+            capture('debt_late_fee_entered', p),
 
         // ── Lessons (ids / titles / video timing only) ───────────────────────────
         seriesExploreClicked: (p: { series_id: string; title: string }) =>

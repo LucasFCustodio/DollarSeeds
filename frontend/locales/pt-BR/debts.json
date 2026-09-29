@@ -5,28 +5,35 @@
     "paidOff": "Quitada",
     "freeBy": "Livre em {{date}}",
     "freeSince": "Livre desde {{date}}",
-    "planFreeBy": "Sem dívidas em {{date}}"
+    "planFreeBy": "Sem dívidas em {{date}}",
+    "checkin": "Confira sua fatura"
   },
   "actions": {
     "add": "Adicionar dívida",
     "showCards": "Ver como cartões",
     "showPlants": "Ver como plantas",
-    "logPayment": "Registrar pagamento",
     "markPaidOff": "Marcar como quitada",
     "skip": "Toque para pular",
     "retry": "Tentar de novo",
-    "back": "Voltar"
+    "back": "Voltar",
+    "logMin": "Registrar mínimo",
+    "minLogged": "Mínimo registrado",
+    "extra": "Extra",
+    "planSettings": "Ajustes do plano"
   },
   "label": {
     "minDue": "{{min}} mín · vence {{date}}",
     "pctPaid": "{{pct}}% pago",
     "missing": "--",
     "paidOffOn": "Quitada · {{date}}",
-    "focus": "Foco"
+    "focus": "Foco",
+    "addDueDay": "Toque para informar o vencimento"
   },
   "a11y": {
     "plant": "{{name}}, {{pct}}% pago, etapa {{step}} de 10, dívida {{position}} de {{total}}",
-    "plantPaidOff": "{{name}}, quitada, dívida {{position}} de {{total}}"
+    "plantPaidOff": "{{name}}, quitada, dívida {{position}} de {{total}}",
+    "minToggle": "Pagamento mínimo de {{name}}",
+    "checkinPill": "Conferência da fatura pendente para {{name}}"
   },
   "empty": {
     "title": "Seu jardim está vazio",
@@ -59,10 +66,12 @@
     "notSet": "Não informado",
     "save": "Plantar",
     "saveEdit": "Salvar alterações",
-    "errRequired": "Preencha os cinco campos obrigatórios.",
+    "errRequired": "Preencha os seis campos obrigatórios.",
     "errNumber": "{{field}} precisa ser um número.",
     "errDueDay": "O dia do vencimento deve ser entre 1 e 31.",
-    "errSave": "Não foi possível salvar. Verifique sua conexão e tente de novo."
+    "errSave": "Não foi possível salvar. Verifique sua conexão e tente de novo.",
+    "lateFee": "Multa por atraso",
+    "lateFeeHint": "Consta no contrato do cartão. É somada automaticamente quando o mínimo não é pago."
   },
   "type": {
     "credit_card": "Cartão de crédito",
@@ -75,12 +84,11 @@
     "other": "Outro"
   },
   "payment": {
-    "title": "Registrar pagamento",
-    "paidMinimum": "Paguei o mínimo ({{amount}})",
+    "title": "Pagar extra",
     "extra": "Valor extra",
     "extraHint": "O extra vai para a dívida em foco, a mais perto de acabar.",
-    "submit": "Registrar",
-    "errNothing": "Marque o mínimo ou informe um valor extra.",
+    "submit": "Registrar pagamento extra",
+    "errNothing": "Informe um valor extra.",
     "errFailed": "Não foi possível registrar o pagamento. Tente de novo.",
     "cancel": "Cancelar"
   },
@@ -121,16 +129,59 @@
     "deleteBody": "Isso remove a dívida e o histórico de pagamentos. Não dá para desfazer.",
     "cancel": "Cancelar",
     "errLoad": "Não foi possível carregar esta dívida.",
-    "errDelete": "Não foi possível excluir esta dívida. Tente de novo."
+    "errDelete": "Não foi possível excluir esta dívida. Tente de novo.",
+    "lateFee": "Multa por atraso",
+    "checkin": "Conferir fatura",
+    "addDueDay": "Informe o dia do vencimento para o app acompanhar cada ciclo de cobrança.",
+    "addDueDayCta": "Informar vencimento"
   },
   "kind": {
     "payment_minimum": "Pagamento mínimo",
     "payment_extra": "Pagamento extra",
-    "interest": "Juros (pagamento atrasado)",
-    "balance_edit": "Saldo atualizado"
+    "interest": "Juros",
+    "balance_edit": "Saldo atualizado",
+    "late_fee": "Multa por atraso",
+    "statement_adjustment": "Conferência da fatura",
+    "minimum_reversal": "Mínimo desfeito"
   },
   "date": {
     "monthYearShort": "{{month}} de {{year}}"
+  },
+  "toggle": {
+    "errFailed": "Não foi possível atualizar o mínimo. Tente de novo.",
+    "errClosed": "Esse ciclo de cobrança já fechou, então o mínimo dele não pode ser desfeito.",
+    "errAlready": "O mínimo deste ciclo já foi registrado."
+  },
+  "checkin": {
+    "title": "Confira sua fatura",
+    "body": "Deixe {{name}} igual à sua última fatura. O app já preencheu o que tem agora.",
+    "statementBalance": "Saldo da fatura",
+    "minPayment": "Pagamento mínimo",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "errFailed": "Não foi possível salvar a conferência. Tente de novo.",
+    "grewCard": "Este cartão cresceu {{amount}} desde o mês passado. Tente deixá-lo na gaveta enquanto paga.",
+    "grewOther": "Este saldo cresceu {{amount}} desde o mês passado. Acontece. Continue regando, um pagamento de cada vez.",
+    "grewTitle": "Salvo",
+    "ok": "Entendi"
+  },
+  "lateFee": {
+    "title": "Multa por atraso?",
+    "bodyCard": "Seu mínimo não foi registrado até {{date}}. O cartão cobrou multa por atraso?",
+    "bodyOther": "Seu mínimo não foi registrado até {{date}}. Houve multa por atraso?",
+    "amount": "Valor da multa",
+    "remember": "Salvar para a próxima vez",
+    "save": "Salvar",
+    "skip": "Sem multa / Pular",
+    "errFailed": "Não foi possível salvar. Tente de novo."
+  },
+  "settings": {
+    "title": "Extra todo mês",
+    "body": "Um valor que você soma todo mês aos mínimos. Ele vai para a dívida em foco e aproxima as datas de \"Livre em\". Deixe em branco para {{zero}}.",
+    "label": "Extra todo mês",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "errFailed": "Não foi possível salvar. Tente de novo."
   },
   "verse": {
     "0": {

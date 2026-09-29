@@ -5,28 +5,35 @@
     "paidOff": "Paid off",
     "freeBy": "Free by {{date}}",
     "freeSince": "Free since {{date}}",
-    "planFreeBy": "Debt-free by {{date}}"
+    "planFreeBy": "Debt-free by {{date}}",
+    "checkin": "Check your statement"
   },
   "actions": {
     "add": "Add a debt",
     "showCards": "Show as cards",
     "showPlants": "Show as plants",
-    "logPayment": "Log a payment",
     "markPaidOff": "Mark as paid off",
     "skip": "Tap to skip",
     "retry": "Try again",
-    "back": "Back"
+    "back": "Back",
+    "logMin": "Log min payment",
+    "minLogged": "Min payment logged",
+    "extra": "Extra",
+    "planSettings": "Plan settings"
   },
   "label": {
     "minDue": "{{min}} min · due {{date}}",
     "pctPaid": "{{pct}}% paid",
     "missing": "--",
     "paidOffOn": "Paid off · {{date}}",
-    "focus": "Focus"
+    "focus": "Focus",
+    "addDueDay": "Tap to add a due day"
   },
   "a11y": {
     "plant": "{{name}}, {{pct}}% paid, step {{step}} of 10, debt {{position}} of {{total}}",
-    "plantPaidOff": "{{name}}, paid off, debt {{position}} of {{total}}"
+    "plantPaidOff": "{{name}}, paid off, debt {{position}} of {{total}}",
+    "minToggle": "Minimum payment for {{name}}",
+    "checkinPill": "Statement check-in due for {{name}}"
   },
   "empty": {
     "title": "Your garden is empty",
@@ -59,10 +66,12 @@
     "notSet": "Not set",
     "save": "Plant it",
     "saveEdit": "Save changes",
-    "errRequired": "Fill in all five required fields.",
+    "errRequired": "Fill in all six required fields.",
     "errNumber": "{{field}} must be a number.",
     "errDueDay": "The due day must be between 1 and 31.",
-    "errSave": "Couldn't save. Check your connection and try again."
+    "errSave": "Couldn't save. Check your connection and try again.",
+    "lateFee": "Late fee",
+    "lateFeeHint": "From your card agreement. It's added automatically when a minimum is missed."
   },
   "type": {
     "credit_card": "Credit card",
@@ -75,12 +84,11 @@
     "other": "Other"
   },
   "payment": {
-    "title": "Log a payment",
-    "paidMinimum": "Paid minimum ({{amount}})",
+    "title": "Pay extra",
     "extra": "Extra amount",
     "extraHint": "Extra goes to your focus debt, the one closest to done.",
-    "submit": "Log payment",
-    "errNothing": "Tick the minimum or enter an extra amount.",
+    "submit": "Log extra payment",
+    "errNothing": "Enter an extra amount.",
     "errFailed": "Couldn't log that payment. Try again.",
     "cancel": "Cancel"
   },
@@ -121,16 +129,59 @@
     "deleteBody": "This removes the debt and its payment history. It can't be undone.",
     "cancel": "Cancel",
     "errLoad": "Couldn't load this debt.",
-    "errDelete": "Couldn't delete this debt. Try again."
+    "errDelete": "Couldn't delete this debt. Try again.",
+    "lateFee": "Late fee",
+    "checkin": "Check statement",
+    "addDueDay": "Add a due day so the app can follow each billing cycle.",
+    "addDueDayCta": "Add due day"
   },
   "kind": {
     "payment_minimum": "Minimum payment",
     "payment_extra": "Extra payment",
-    "interest": "Interest (missed payment)",
-    "balance_edit": "Balance updated"
+    "interest": "Interest",
+    "balance_edit": "Balance updated",
+    "late_fee": "Late fee",
+    "statement_adjustment": "Statement check-in",
+    "minimum_reversal": "Minimum undone"
   },
   "date": {
     "monthYearShort": "{{month}} {{year}}"
+  },
+  "toggle": {
+    "errFailed": "Couldn't update the minimum. Try again.",
+    "errClosed": "That billing cycle has closed, so its minimum can't be undone.",
+    "errAlready": "The minimum is already logged for this cycle."
+  },
+  "checkin": {
+    "title": "Check your statement",
+    "body": "Match {{name}} to your latest statement. The app fills in what it has now.",
+    "statementBalance": "Statement balance",
+    "minPayment": "Minimum payment",
+    "save": "Save",
+    "cancel": "Cancel",
+    "errFailed": "Couldn't save the check-in. Try again.",
+    "grewCard": "This card grew by {{amount}} since last month. Try to keep it in the drawer while you pay it down.",
+    "grewOther": "This balance grew by {{amount}} since last month. That happens. Keep watering it, one payment at a time.",
+    "grewTitle": "Saved",
+    "ok": "Got it"
+  },
+  "lateFee": {
+    "title": "Late fee?",
+    "bodyCard": "Your minimum wasn't logged by {{date}}. Did your card charge a late fee?",
+    "bodyOther": "Your minimum wasn't logged by {{date}}. Was a late fee charged?",
+    "amount": "Late fee amount",
+    "remember": "Save for next time",
+    "save": "Save",
+    "skip": "No fee / Skip",
+    "errFailed": "Couldn't save that. Try again."
+  },
+  "settings": {
+    "title": "Extra each month",
+    "body": "An amount you add every month on top of your minimums. It goes to your focus debt and moves your \"Free by\" dates closer. Leave it blank for {{zero}}.",
+    "label": "Extra each month",
+    "save": "Save",
+    "cancel": "Cancel",
+    "errFailed": "Couldn't save. Try again."
   },
   "verse": {
     "0": {
