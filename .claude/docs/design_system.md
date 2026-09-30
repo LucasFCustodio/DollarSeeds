@@ -50,7 +50,7 @@ const { theme } = useTheme();
 | `brand2` | `#10B981` (emerald) | `#10B981` | Gradient end, goals color |
 | `brandSoft` | `#E8F3EE` | `#0F2A20` | Secondary buttons, active-tab pill bg |
 | `onBrand` | `#FFFFFF` | `#FFFFFF` | Text on brand-colored backgrounds |
-| `sectionGreen` | `#178D65` | `#178D65` | The home's full-bleed green bands (top bar + Analyze, Envision). Text on it is `onBrand`; buttons on it use the glass style (`rgba(255,255,255,0.16)` fill, `rgba(255,255,255,0.22)` border) |
+| `sectionGreen` | `#178D65` | `#178D65` | The home's green Envision band (the top bar + Analyze band is the `HeroBg` gradient). Text on it is `onBrand`; buttons on it use the glass style (`rgba(255,255,255,0.16)` fill, `rgba(255,255,255,0.22)` border) |
 
 ### Budget Categories
 | Token | Light | Dark | Why |

@@ -7,8 +7,9 @@
  *   Envision  "Where is this going?" debts paid, encouragement, the focus plant
  *
  * The three steps are three full-bleed bands (green, cream, green), so the screen
- * splits into them without the user having to name them. Each band overlaps the
- * one above it under rounded top corners.
+ * splits into them without the user having to name them. The top one is the old
+ * dashboard hero's gradient (HeroBg), its bottom corners curving up over the cream
+ * band; the Envision band overlaps the cream one under rounded top corners.
  *
  * A good visit can take 20 seconds, as long as the user leaves encouraged and with a
  * reason to come back. This file is layout only: state and requests live in
@@ -43,9 +44,13 @@ import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
 import { DebtsPaidLine, EncouragementCard } from '../../components/home/Encouragement';
 import FocusPlant from '../../components/home/FocusPlant';
 import ScriptureModal from '../../components/home/ScriptureModal';
+import HeroBg from '../../components/ui/HeroBg';
 import {
     BAND_OVERLAP, BAND_PAD, BAND_RADIUS, CARD_GAP, HOME_PAD, SECTION_GAP, homeType,
 } from '../../components/home/homeType';
+
+/** HeroBg's bottom corner radius. */
+const HERO_RADIUS = 32;
 
 const SPLIT_CATEGORY: Record<SplitKey, string> = { needs: 'Needs', wants: 'Wants', goals: 'Goals' }; // i18n-canonical
 
@@ -124,38 +129,40 @@ function Home() {
                 showsVerticalScrollIndicator={false}
                 scrollEnabled={!zones?.dragging}
             >
-                {/* Green above the first band, for the pull-down bounce. */}
-                <View style={[styles.overscroll, { backgroundColor: theme.sectionGreen }]} />
+                {/* The hero's top colour above it, for the pull-down bounce. */}
+                <View style={[styles.overscroll, { backgroundColor: theme.brand }]} />
 
                 {/* ── Band 1 · Analyze: "Am I okay?" ────────────────────── */}
-                <View style={[styles.band, { backgroundColor: theme.sectionGreen, paddingTop: insets.top + 8 }]}>
-                    <HomeTopBar month={currentMonth} onOpenMonthPicker={() => setPickerOpen(true)} />
-                    <View style={[styles.section, { gap: CARD_GAP + 8 }]}>
-                        <IncomeHero
-                            left={totalLeft}
-                            income={total_income}
-                            spent={totalSpent}
-                            onAdd={logIncome}
-                            onOpenIncome={openIncomeList}
-                        />
-                        <StatusTitheRow
-                            debts={debts}
-                            overBudget={summary?.over_budget ?? []}
-                            tithe={{
-                                active: titheActive,
-                                amount: titheAmount,
-                                given: titheGiven,
-                                disabled: home.savingTitheGiven || monthClosed,
-                                onToggle: home.toggleTitheGiven,
-                            }}
-                            onOpenDebts={() => openDebts()}
-                            onOpenSplit={openSplit}
-                        />
-                    </View>
+                <View style={styles.hero}>
+                    <HeroBg brand={theme.brand} brand2={theme.brand2} style={{ paddingHorizontal: HOME_PAD, paddingTop: insets.top + 8 }}>
+                        <HomeTopBar month={currentMonth} onOpenMonthPicker={() => setPickerOpen(true)} />
+                        <View style={[styles.section, { gap: CARD_GAP + 8 }]}>
+                            <IncomeHero
+                                left={totalLeft}
+                                income={total_income}
+                                spent={totalSpent}
+                                onAdd={logIncome}
+                                onOpenIncome={openIncomeList}
+                            />
+                            <StatusTitheRow
+                                debts={debts}
+                                overBudget={summary?.over_budget ?? []}
+                                tithe={{
+                                    active: titheActive,
+                                    amount: titheAmount,
+                                    given: titheGiven,
+                                    disabled: home.savingTitheGiven || monthClosed,
+                                    onToggle: home.toggleTitheGiven,
+                                }}
+                                onOpenDebts={() => openDebts()}
+                                onOpenSplit={openSplit}
+                            />
+                        </View>
+                    </HeroBg>
                 </View>
 
                 {/* ── Band 2 · Plan: "What's next?" ─────────────────────── */}
-                <View style={[styles.band, styles.raised, { backgroundColor: theme.bg }, !envision && styles.last]}>
+                <View style={[styles.band, styles.underHero, { backgroundColor: theme.bg }, !envision && styles.last]}>
                     <View style={styles.stack}>
                         {showClosePrompt ? (
                             <CloseOutCard
@@ -205,7 +212,7 @@ function Home() {
             {/* The status bar area stays green however far the page is scrolled. */}
             <View
                 pointerEvents="none"
-                style={[styles.statusBarFill, { height: insets.top, backgroundColor: theme.sectionGreen }]}
+                style={[styles.statusBarFill, { height: insets.top, backgroundColor: theme.brand }]}
             />
 
             <MonthPickerSheet
@@ -226,7 +233,11 @@ const styles = StyleSheet.create({
     content: { flexGrow: 1 },
     overscroll: { position: 'absolute', left: 0, right: 0, top: -1000, height: 1000 },
     statusBarFill: { position: 'absolute', left: 0, right: 0, top: 0 },
+    // Above the cream band, so the hero's curved corners sit over cream.
+    hero: { zIndex: 1 },
     band: { paddingHorizontal: HOME_PAD, paddingBottom: BAND_OVERLAP + BAND_PAD },
+    // The cream band starts under the hero, so cream fills behind its curved corners.
+    underHero: { marginTop: -HERO_RADIUS, paddingTop: HERO_RADIUS + BAND_PAD },
     raised: {
         marginTop: -BAND_OVERLAP,
         paddingTop: BAND_PAD,
