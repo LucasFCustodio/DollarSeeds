@@ -2,8 +2,8 @@
  * Home — built around the Core Journey. Everything on it answers one of the
  * questions the user brings to the app:
  *
- *   Analyze   "Am I okay?"          income left, status, tithe
- *   Plan      "What's next?"        close-out, next debt payment, splits, logging
+ *   Analyze   "Am I okay?"          income left, overdue status, next debt payment, tithe
+ *   Plan      "What's next?"        close-out, splits, logging
  *   Envision  "Where is this going?" debts paid, encouragement, the focus plant
  *
  * The three steps are three full-bleed bands (green, cream, green), so the screen
@@ -35,7 +35,8 @@ import { DropZoneProvider, useDropZones } from '../../components/home/DropZones'
 import HomeTopBar from '../../components/home/HomeTopBar';
 import MonthPickerSheet from '../../components/home/MonthPickerSheet';
 import IncomeHero from '../../components/home/IncomeHero';
-import StatusTitheRow from '../../components/home/StatusTitheRow';
+import OverdueStatus from '../../components/home/OverdueStatus';
+import TitheEnvelope from '../../components/home/TitheEnvelope';
 import { ClosedLine, CloseOutCard } from '../../components/home/CloseOut';
 import NextPaymentCard from '../../components/home/NextPaymentCard';
 import SplitContainers from '../../components/home/SplitContainers';
@@ -100,6 +101,9 @@ function Home() {
     const rawDebts = DEBT_FREEDOM_ENABLED ? summary?.debts ?? null : null;
     const debts = rawDebts && rawDebts.total_count > rawDebts.paid_count ? rawDebts : null;
     const goalsNear = summary?.goals_near_completion ?? [];
+    const nextPayment = debts?.next_payment ?? null;
+    // The next payment is already on the card; the list is only the others.
+    const upcoming = (debts?.due_soon ?? []).filter(d => d.id !== nextPayment?.id);
     // Envision has something to show: the debts-paid line, or a goal in the
     // encouragement card. Otherwise the whole band, heading included, is hidden and
     // the cream band ends the page.
@@ -144,19 +148,24 @@ function Home() {
                                 onAdd={logIncome}
                                 onOpenIncome={openIncomeList}
                             />
-                            <StatusTitheRow
-                                debts={debts}
-                                overBudget={summary?.over_budget ?? []}
-                                tithe={{
-                                    active: titheActive,
-                                    amount: titheAmount,
-                                    given: titheGiven,
-                                    disabled: home.savingTitheGiven || monthClosed,
-                                    onToggle: home.toggleTitheGiven,
-                                }}
-                                onOpenDebts={() => openDebts()}
-                                onOpenSplit={openSplit}
-                            />
+                            {debts && debts.overdue_count > 0 ? (
+                                <OverdueStatus count={debts.overdue_count} onOpenDebts={() => openDebts()} />
+                            ) : null}
+                            {nextPayment ? (
+                                <NextPaymentCard
+                                    payment={nextPayment}
+                                    upcoming={upcoming}
+                                    onPrune={() => openDebts(nextPayment.id)}
+                                />
+                            ) : null}
+                            {titheActive ? (
+                                <TitheEnvelope
+                                    amount={titheAmount}
+                                    given={titheGiven}
+                                    disabled={home.savingTitheGiven || monthClosed}
+                                    onToggle={home.toggleTitheGiven}
+                                />
+                            ) : null}
                         </View>
                     </HeroBg>
                 </View>
@@ -180,9 +189,6 @@ function Home() {
                                 busy={home.closingMonth}
                                 onReopen={home.reopenMonth}
                             />
-                        ) : null}
-                        {debts?.next_payment ? (
-                            <NextPaymentCard payment={debts.next_payment} onPrune={() => openDebts(debts.next_payment!.id)} />
                         ) : null}
                         <SplitContainers budgets={budgets} spent={expenses} onOpen={openSplit} onAdd={logExpense} />
                         <LoggingArea

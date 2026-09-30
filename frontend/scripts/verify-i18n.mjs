@@ -55,7 +55,7 @@ check('lessons title via getFixedT(en)',
 check('plural singular', i18next.t('lessons:series.lessonCount', { count: 1 }), '1 AULA');
 check('plural plural', i18next.t('lessons:series.lessonCount', { count: 4 }), '4 AULAS');
 check('home status plural singular', i18next.t('dashboard:status.overdue', { count: 1 }), '1 dívida em atraso');
-check('home status plural plural', i18next.t('dashboard:status.dueSoon', { count: 3 }), '3 vencimentos chegando');
+check('next payment coming-up plural', i18next.t('dashboard:nextPayment.comingUp', { count: 3 }), '3 pagamentos a vencer:');
 check('home status plural (en)',
   i18next.getFixedT('en', 'dashboard')('status.overdue', { count: 2 }), '2 debts overdue');
 check('serverTitle rollover',

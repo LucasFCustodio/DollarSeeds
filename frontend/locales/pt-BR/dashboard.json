@@ -2,10 +2,7 @@
   "leftThisMonth": "disponível neste mês",
   "tithe": {
     "title": "Dízimo",
-    "givenToggleA11y": "Dízimo entregue neste mês",
-    "give": "Entregar",
-    "givenLine": "Dízimo entregue · {{amount}}",
-    "undoA11y": "Dízimo entregue. Toque para desfazer"
+    "givenToggleA11y": "Dízimo entregue neste mês"
   },
   "rollover": {
     "closeTitle": "Pronto para fechar {{month}}?",
@@ -43,11 +40,7 @@
   },
   "status": {
     "overdue": "{{count}} dívida em atraso",
-    "overdue_plural": "{{count}} dívidas em atraso",
-    "dueSoon": "{{count}} vencimento chegando",
-    "dueSoon_plural": "{{count}} vencimentos chegando",
-    "overBudget": "{{split}} passou {{amount}} do limite",
-    "allGood": "Tudo em dia"
+    "overdue_plural": "{{count}} dívidas em atraso"
   },
   "split": {
     "needs": "Necessidades",
@@ -60,6 +53,8 @@
   "nextPayment": {
     "due": " · vence em {{date}}",
     "withExtra": "{{min}} + {{extra}} extra",
+    "comingUp": "{{count}} pagamento a vencer:",
+    "comingUp_plural": "{{count}} pagamentos a vencer:",
     "prune": "Podar",
     "pruneA11y": "Podar {{name}} em Dívidas"
   },

@@ -43,11 +43,22 @@ export interface FocusDebt {
     debt: Debt;
 }
 
+/** A debt due within 7 days (server rule), nearest first. */
+export interface DueSoonDebt {
+    id: number;
+    name: string;
+    /** YYYY-MM-DD */
+    due_date: string;
+    min_payment: number;
+}
+
 export interface HomeDebts {
     paid_count: number;
     total_count: number;
     overdue_count: number;
     due_soon_count: number;
+    /** Absent from a backend older than this field; read it as []. */
+    due_soon?: DueSoonDebt[];
     next_payment: NextPayment | null;
     focus: FocusDebt | null;
     /** YYYY-MM */
