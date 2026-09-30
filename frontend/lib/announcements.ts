@@ -76,13 +76,14 @@ export function pickLocalized(
  */
 export const INTERNAL_LINK_ROUTES = [
     '/(tabs)',
-    '/(tabs)/transactions',
     '/(tabs)/piggyBank',
     '/(tabs)/lessons',
     '/lessonSeries/',
     '/lessonDetail',
     '/lessonPlayer',
     '/details',
+    '/logExpense',
+    '/logIncome',
     '/settings',
 ] as const;
 

@@ -18,7 +18,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import {
     IconHomeMascot,
-    IconTransactionsMascot,
     IconGoalsMascot,
     IconLessonsMascot,
     IconDebtsTab,
@@ -38,7 +37,6 @@ type TabIconComponent = React.ComponentType<{
 // Map route name -> icon component
 const TAB_ICONS: Record<string, TabIconComponent> = {
     index: IconHomeMascot,
-    transactions: IconTransactionsMascot,
     piggyBank: IconGoalsMascot,
     lessons: IconLessonsMascot,
     debts: IconDebtsTab,

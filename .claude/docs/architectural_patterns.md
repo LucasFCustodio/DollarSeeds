@@ -81,15 +81,16 @@ Both expense and income forms follow the same structure.
 
 ## Savings / Piggy Bank
 
-`SavingsContainer.jsx` follows the same pattern as `ExpenseContainer.jsx` — accepts a `transactionType` prop (`"deposit"` | `"withdrawal"`), manages form state locally, and POSTs to `/savings/transaction/`. The piggy bank balance is a cross-month aggregate (`GET /savings/balance/`) fetched separately from the monthly dashboard endpoint; the dashboard calls both in parallel via `Promise.all`.
+`SavingsContainer.jsx` follows the same pattern as `ExpenseContainer.jsx` — accepts a `transactionType` prop (`"deposit"` | `"withdrawal"`), manages form state locally, and POSTs to `/savings/transaction/`. The piggy bank balance is a cross-month aggregate (`GET /savings/balance/`) fetched separately from the monthly dashboard endpoint.
 
-## Dashboard Data Refresh
+## Home (Dashboard)
 
-[frontend/app/(tabs)/index.tsx](../../frontend/app/(tabs)/index.tsx) uses `useFocusEffect` (not `useEffect`) so data refreshes every time the tab is opened.
+[frontend/app/(tabs)/index.tsx](../../frontend/app/(tabs)/index.tsx) is layout only, built around the Core Journey (Analyze → Plan → Envision). State and requests live in [components/home/useHomeData.ts](../../frontend/components/home/useHomeData.ts); every piece is in [components/home/](../../frontend/components/home/).
 
-- Month is tracked as a 0–11 index; previous/next buttons wrap around
-- API returns `{ total_income, budgets: { needs, wants, goals }, expenses: { ... } }`
-- Progress bars show `(spent / budget) * 100%`; values over 100% render red
+- `useFocusEffect` (not `useEffect`) refetches on every focus: `/dashboard/{month}` plus `GET /home/summary/` ([lib/homeSummary.ts](../../frontend/lib/homeSummary.ts)). The summary never blocks the screen — if it fails, the home renders without its parts
+- Month is a 0–11 index, picked from a bottom sheet opened by tapping the date
+- Every debt element is behind `DEBT_FREEDOM_ENABLED` **and** at least one active debt; the client computes nothing about debts
+- Logging is on the home: the + buttons open `app/logExpense.tsx` / `app/logIncome.tsx`. There is no Transactions tab. Bank-connected logging is a placeholder in [lib/bankTransactions.ts](../../frontend/lib/bankTransactions.ts) — wiring Plaid only touches that file
 
 ---
 

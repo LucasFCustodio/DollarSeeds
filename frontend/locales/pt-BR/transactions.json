@@ -1,10 +1,4 @@
 {
-  "tab": {
-    "title": "Transações",
-    "subtitle": "Registre o que entra e o que sai",
-    "toggleExpense": "Gasto",
-    "toggleIncome": "Renda"
-  },
   "expense": {
     "screenTitle": "Novo gasto",
     "screenSubtitle": "Plante onde faz diferença",

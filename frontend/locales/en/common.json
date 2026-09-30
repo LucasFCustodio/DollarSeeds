@@ -2,8 +2,7 @@
   "action": {
     "cancel": "Cancel",
     "retry": "Tap to retry",
-    "confirm": "Confirm",
-    "viewAll": "View all {{label}} →"
+    "confirm": "Confirm"
   },
   "state": {
     "genericError": "Something went wrong. Please try again."
@@ -49,7 +48,6 @@
   },
   "tabs": {
     "index": "Home",
-    "transactions": "Transactions",
     "piggyBank": "Goals",
     "lessons": "Lessons",
     "debts": "Debts"

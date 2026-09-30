@@ -12,9 +12,9 @@
       "body": "Go here to see your current income, what's left to spend, and how much money you have for each spending category"
     },
     "transactions": {
-      "eyebrow": "TRANSACTIONS",
-      "title": "Add Your Income and Expenses",
-      "body": "Enter an amount, pick a category, name it, choose a date, and save. New income is automatically split across all categories"
+      "eyebrow": "LOGGING",
+      "title": "Log from Home",
+      "body": "Tap + beside what you have left to log income, or + on Needs or Wants to log an expense. New income is automatically split across all categories"
     },
     "goals": {
       "eyebrow": "GOALS",
@@ -33,7 +33,7 @@
     "eyebrow": "ONE LAST THING",
     "title": "Your starting balance",
     "body": "DollarSeeds tracks your money month by month. Enter the savings you had BEFORE {{month}} — everything you'd already put away.",
-    "note": "Don't include any {{month}} income or expenses. You'll log those normally in the Transactions tab.",
+    "note": "Don't include any {{month}} income or expenses. You'll log those normally with the + buttons on Home.",
     "inputLabel": "Starting balance",
     "add": "+ Add",
     "done": "Done",

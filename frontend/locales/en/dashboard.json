@@ -1,34 +1,22 @@
 {
-  "wordmark": "DollarSeeds",
-  "subline": "{{name}} · steward",
-  "stewardFallback": "steward",
-  "monthEyebrow": "BUDGET MONTH",
-  "totalIncome": "{{amount}} · TOTAL INCOME",
   "leftThisMonth": "left this month",
-  "viewAllIncome": "View all Income",
-  "sectionTitle": "How your seeds are growing",
-  "budgetTypeRow": "{{name}} · {{split}}",
-  "quickAction": {
-    "expense": "Log Expense",
-    "income": "Log Income"
-  },
   "tithe": {
     "title": "Tithe",
-    "sub": "Set aside first · before budgeting",
-    "subGiven": "Given · no longer part of what's left",
-    "amountLabel": "SET ASIDE",
-    "givenToggleA11y": "Tithe given this month"
+    "givenToggleA11y": "Tithe given this month",
+    "give": "Give",
+    "givenLine": "Tithe given · {{amount}}",
+    "undoA11y": "Tithe given. Tap to undo"
   },
   "rollover": {
     "closeTitle": "Ready to close out {{month}}?",
     "closeSub": "You have {{amount}} left to move into General Savings.",
     "closing": "Closing…",
     "closeButton": "Close out & save {{amount}}",
-    "closedTitle": "{{month}} is closed",
-    "closedSub": "{{amount}} rolled into General Savings.",
     "reopen": "Reopen",
     "reopenTitle": "Reopen {{month}}?",
-    "reopenWarning": "This switches {{month}} to your current budget split ({{split}}) and tithe setting. If it should keep a different split, change it in Settings before you reopen."
+    "reopenWarning": "This switches {{month}} to your current budget split ({{split}}) and tithe setting. If it should keep a different split, change it in Settings before you reopen.",
+    "closedLine": "{{month}} closed · {{amount}} rolled into General Savings",
+    "dismissA11y": "Dismiss"
   },
   "scripture": {
     "modalTitle": "Well done, faithful steward!",
@@ -38,12 +26,60 @@
   "category": {
     "needsSub": "Rent, groceries, bills",
     "wantsSub": "Lifestyle, treats, fun",
-    "goalsSub": "Savings + debt paydown",
-    "over": "OVER",
-    "left": "LEFT",
-    "spent": "{{amount}} spent",
-    "ofBudget": "of {{amount}}",
-    "piggyBalance": "Piggy bank balance"
+    "goalsSub": "Savings + debt paydown"
+  },
+  "topBar": {
+    "profileA11y": "Profile",
+    "monthA11y": "{{month}}. Tap to change month",
+    "settingsA11y": "Settings"
+  },
+  "monthPicker": {
+    "title": "Choose a month",
+    "close": "Close"
+  },
+  "hero": {
+    "a11y": "{{amount}} left this month. View all income",
+    "addIncomeA11y": "Log income"
+  },
+  "status": {
+    "overdue": "{{count}} debt overdue",
+    "overdue_plural": "{{count}} debts overdue",
+    "dueSoon": "{{count}} due date coming up",
+    "dueSoon_plural": "{{count}} due dates coming up",
+    "overBudget": "{{split}} is {{amount}} over",
+    "allGood": "All up to date"
+  },
+  "split": {
+    "needs": "Needs",
+    "wants": "Wants",
+    "goals": "Savings",
+    "leftA11y": "{{split}}: {{amount}} left",
+    "overA11y": "{{split}}: {{amount}} over budget",
+    "addA11y": "Log a {{split}} expense"
+  },
+  "nextPayment": {
+    "due": " · due {{date}}",
+    "withExtra": "{{min}} + {{extra}} extra",
+    "prune": "Prune",
+    "pruneA11y": "Prune {{name}} in Debts"
+  },
+  "logging": {
+    "nudge": "Last logged {{count}} days ago. Keep your numbers current.",
+    "bubbleExpenseA11y": "Pending expense: {{name}}, {{amount}}",
+    "bubbleIncomeA11y": "Pending income: {{name}}, {{amount}}",
+    "bubbleHint": "Long-press, then drag onto where it belongs"
+  },
+  "connectBank": {
+    "prompt": "Connect your bank to skip manual logging →",
+    "soonTitle": "Bank connection is coming soon",
+    "soonBody": "You'll be able to connect your bank here, and new transactions will wait on your home, ready to drag into place."
+  },
+  "envision": {
+    "debtsPaid": "{{paid}} / {{total}} debts paid",
+    "debtFreeBy": "Debt-free by {{date}}",
+    "almostFree": "1 month to be free from {{name}}",
+    "focusExtra": "{{amount}} extra for {{name}} this month. Keep going!",
+    "goalNear": "{{goal}} is {{pct}}% there"
   },
   "verse": {
     "proverbs-21-20": {
