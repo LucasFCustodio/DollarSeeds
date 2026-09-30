@@ -77,6 +77,10 @@ export interface AppTheme {
     // surface for callouts, following needsSoft/wantsSoft/goalsSoft, and DOES take
     // `ink` safely in both themes.
     harvestSoft: string;
+    // Yellow TEXT on cream. Solid harvest on bg is ~1.5:1 and unreadable, so text that
+    // must read as harvest (the home's tracking nudge, the connect-bank prompt) uses
+    // this darker ochre in light mode; dark mode can take harvest itself.
+    harvestInk: string;
 
     // ── Legacy aliases (backward compat — keep for existing code) ──
     background: string;          // → bg
@@ -131,7 +135,7 @@ const LIGHT: AppTheme = {
     success: '#0F8C5C',  successSoft: '#E5F3EC',
 
     // Accent
-    harvest: '#F4D35E',  harvestSoft: '#FCF2D4',
+    harvest: '#F4D35E',  harvestSoft: '#FCF2D4',  harvestInk: '#8A6A00',
 
     // ── Legacy aliases ──────────────────────────────────────────
     background: '#F5F1E6',
@@ -186,7 +190,7 @@ const DARK: AppTheme = {
     success: '#34D399',  successSoft: '#0F2A20',
 
     // Accent
-    harvest: '#F4D35E',  harvestSoft: '#2C2712',
+    harvest: '#F4D35E',  harvestSoft: '#2C2712',  harvestInk: '#F4D35E',
 
     // ── Legacy aliases ──────────────────────────────────────────
     background: '#0A1612',
