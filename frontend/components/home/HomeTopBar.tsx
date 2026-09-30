@@ -1,9 +1,10 @@
 /**
- * HomeTopBar — profile, the month (tap to pick another), News and Settings.
+ * HomeTopBar — profile, the month (tap to drop down the month wheel), News and
+ * Settings.
  * Sits straight on the green Analyze band; no container. Its buttons are the old
  * dashboard hero's glass buttons, with onBrand glyphs.
  */
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -12,19 +13,29 @@ import { useLocale } from '../../context/LocaleContext';
 import { useAnnouncements } from '../../context/AnnouncementsContext';
 import { IconChevronDown, IconGearMascot, IconMail, IconUser } from '../icons';
 import { GLASS, homeType } from './homeType';
+import MonthDropdown, { type Anchor } from './MonthDropdown';
 
 interface Props {
     month: string;
-    onOpenMonthPicker: () => void;
+    /** 0–11 */
+    selected: number;
+    onPickMonth: (index: number) => void;
 }
 
-export default function HomeTopBar({ month, onOpenMonthPicker }: Props) {
+export default function HomeTopBar({ month, selected, onPickMonth }: Props) {
     const router = useRouter();
     const { theme } = useTheme();
     const { monthYear } = useLocale();
     const { t } = useTranslation('dashboard');
     const { t: tn } = useTranslation('news');
     const { unread, open, announcements } = useAnnouncements();
+
+    const dateRef = useRef<View>(null);
+    const [anchor, setAnchor] = useState<Anchor | null>(null);
+    const toggleMonths = () => {
+        if (anchor) { setAnchor(null); return; }
+        dateRef.current?.measureInWindow((x, y, width, height) => setAnchor({ x, y, width, height }));
+    };
 
     const roundBtn = [styles.roundBtn, { backgroundColor: GLASS.fill, borderColor: GLASS.border }];
 
@@ -40,7 +51,8 @@ export default function HomeTopBar({ month, onOpenMonthPicker }: Props) {
             </View>
 
             <Pressable
-                onPress={onOpenMonthPicker}
+                ref={dateRef}
+                onPress={toggleMonths}
                 accessibilityRole="button"
                 accessibilityLabel={t('topBar.monthA11y', { month: monthYear(month, new Date().getFullYear()) })}
                 hitSlop={10}
@@ -77,6 +89,7 @@ export default function HomeTopBar({ month, onOpenMonthPicker }: Props) {
                     <IconGearMascot size={18} color={theme.onBrand} />
                 </Pressable>
             </View>
+            <MonthDropdown anchor={anchor} selected={selected} onPick={onPickMonth} onClose={() => setAnchor(null)} />
         </View>
     );
 }

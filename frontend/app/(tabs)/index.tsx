@@ -18,7 +18,7 @@
  * Every debt element renders only with DEBT_FREEDOM_ENABLED on AND at least one
  * active debt; with it off the home is complete without them.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -33,7 +33,6 @@ import type { SplitKey } from '../../lib/homeSummary';
 import { useHomeData } from '../../components/home/useHomeData';
 import { DropZoneProvider, useDropZones } from '../../components/home/DropZones';
 import HomeTopBar from '../../components/home/HomeTopBar';
-import MonthPickerSheet from '../../components/home/MonthPickerSheet';
 import IncomeHero from '../../components/home/IncomeHero';
 import OverdueStatus from '../../components/home/OverdueStatus';
 import TitheEnvelope from '../../components/home/TitheEnvelope';
@@ -73,7 +72,6 @@ function Home() {
     const insets = useSafeAreaInsets();
     const zones = useDropZones();
     const home = useHomeData();
-    const [pickerOpen, setPickerOpen] = useState(false);
 
     const { dashboard, summary, currentMonth } = home;
     const { total_income, budgets, expenses, tithe, rollover } = dashboard;
@@ -139,7 +137,7 @@ function Home() {
                 {/* ── Band 1 · Analyze: "Am I okay?" ────────────────────── */}
                 <View style={styles.hero}>
                     <HeroBg brand={theme.brand} brand2={theme.brand2} style={{ paddingHorizontal: HOME_PAD, paddingTop: insets.top + 8 }}>
-                        <HomeTopBar month={currentMonth} onOpenMonthPicker={() => setPickerOpen(true)} />
+                        <HomeTopBar month={currentMonth} selected={home.monthIndex} onPickMonth={home.pickMonth} />
                         <View style={[styles.section, { gap: CARD_GAP + 8 }]}>
                             <IncomeHero
                                 left={totalLeft}
@@ -221,12 +219,6 @@ function Home() {
                 style={[styles.statusBarFill, { height: insets.top, backgroundColor: theme.brand }]}
             />
 
-            <MonthPickerSheet
-                visible={pickerOpen}
-                selected={home.monthIndex}
-                onPick={home.pickMonth}
-                onClose={() => setPickerOpen(false)}
-            />
             <ScriptureModal verse={home.verse} visible={home.verseVisible} onClose={home.closeVerse} />
         </View>
     );
