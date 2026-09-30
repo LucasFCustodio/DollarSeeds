@@ -26,7 +26,7 @@ export default function NextPaymentCard({ payment, onPrune }: { payment: NextPay
         : f.money(payment.min_payment);
 
     return (
-        <PaintedCard source={ART} borderColor={theme.border} borderWidth={1} style={styles.card}>
+        <PaintedCard source={ART} borderColor={theme.ink} borderWidth={1.5} style={styles.card}>
             <View style={styles.row}>
                 <View style={styles.left}>
                     <Text style={homeType.small} numberOfLines={1}>

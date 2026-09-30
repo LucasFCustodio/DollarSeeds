@@ -75,7 +75,11 @@ function SplitCard({ split, budget, spent, onOpen, onAdd }: {
                 depth={6}
                 padding={12}
                 onPress={() => onOpen(split)}
-                style={drop.valid ? { borderColor: look.color, backgroundColor: drop.over ? look.soft : theme.surface } : undefined}
+                // No outline at rest. The border stays (transparent) so the drop
+                // highlight can colour it without shifting the layout.
+                style={drop.valid
+                    ? { borderColor: look.color, backgroundColor: drop.over ? look.soft : theme.surface }
+                    : styles.noOutline}
             >
                 <View
                     style={styles.top}
@@ -141,4 +145,5 @@ const styles = StyleSheet.create({
     titledBar: { marginTop: 12 },
     plus: { width: 24, height: 24, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
     examples: { marginTop: 10, marginBottom: 8 },
+    noOutline: { borderColor: 'transparent' },
 });
