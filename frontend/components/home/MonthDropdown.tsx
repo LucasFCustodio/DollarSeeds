@@ -1,7 +1,8 @@
 /**
  * MonthDropdown — the home's month picker: a small wheel that drops down under the
- * date, three months tall. The TOP row is the selected month. Dragging down brings
- * earlier months to the top, dragging up later ones; it snaps one row at a time and
+ * date, three months tall. The MIDDLE row is the selected month, with the month
+ * before above it and the month after below. Dragging down brings earlier months to
+ * the middle, dragging up later ones; it snaps one row at a time and
  * picks the month it settles on, which the home treats exactly as the old picker's
  * tap (same fetch, same cache reset). Tapping a row picks it and closes; tapping
  * anywhere else closes.
@@ -43,13 +44,13 @@ export default function MonthDropdown({ anchor, selected, onPick, onClose }: Pro
     const { monthLabel } = useLocale();
     const scroll = useRef<ScrollView>(null);
     const last = useRef(selected);
-    const [top, setTop] = useState(selected);
+    const [centre, setCentre] = useState(selected);
 
-    // Every open starts with the current month on top.
+    // Every open starts with the current month in the middle.
     useEffect(() => {
         if (!anchor) return;
         last.current = selected;
-        setTop(selected);
+        setCentre(selected);
         requestAnimationFrame(() => scroll.current?.scrollTo({ y: selected * ROW_H, animated: false }));
     }, [anchor, selected]);
 
@@ -61,7 +62,7 @@ export default function MonthDropdown({ anchor, selected, onPick, onClose }: Pro
     };
     const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
         const i = Math.max(0, Math.min(MONTHS.length - 1, Math.round(e.nativeEvent.contentOffset.y / ROW_H)));
-        if (i !== top) setTop(i);
+        if (i !== centre) setCentre(i);
     };
     const onEndDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
         // A release with no fling may not produce a momentum phase; settle now.
@@ -70,7 +71,7 @@ export default function MonthDropdown({ anchor, selected, onPick, onClose }: Pro
 
     const pickRow = (i: number) => {
         scroll.current?.scrollTo({ y: i * ROW_H, animated: true });
-        setTop(i);
+        setCentre(i);
         if (i !== last.current) {
             last.current = i;
             onPick(i);
@@ -97,12 +98,14 @@ export default function MonthDropdown({ anchor, selected, onPick, onClose }: Pro
                     shadow(8) as object,
                 ]}
             >
-                {/* The selected (top) row's band; the wheel scrolls under it. */}
+                {/* The selected (middle) row's band; the wheel scrolls under it. */}
                 <View pointerEvents="none" style={[styles.band, { backgroundColor: theme.brandSoft }]} />
                 <ScrollView
                     ref={scroll}
                     style={{ height: ROW_H * VISIBLE }}
-                    contentContainerStyle={{ paddingBottom: ROW_H * (VISIBLE - 1) }}
+                    // One empty row above and below, so January and December can
+                    // reach the middle. Offset i × ROW_H puts month i there.
+                    contentContainerStyle={{ paddingVertical: ROW_H * ((VISIBLE - 1) / 2) }}
                     contentOffset={{ x: 0, y: selected * ROW_H }}
                     snapToInterval={ROW_H}
                     decelerationRate="fast"
@@ -113,7 +116,7 @@ export default function MonthDropdown({ anchor, selected, onPick, onClose }: Pro
                     onMomentumScrollEnd={e => settle(e.nativeEvent.contentOffset.y)}
                 >
                     {MONTHS.map((m, i) => {
-                        const active = i === top;
+                        const active = i === centre;
                         return (
                             <Pressable
                                 key={m}
@@ -147,7 +150,7 @@ const styles = StyleSheet.create({
         position: 'absolute', width: WIDTH, borderRadius: 14, borderWidth: 1,
         paddingHorizontal: 6,
     },
-    band: { position: 'absolute', left: 6, right: 6, top: 0, height: ROW_H, borderRadius: 10 },
+    band: { position: 'absolute', left: 6, right: 6, top: ROW_H * ((VISIBLE - 1) / 2), height: ROW_H, borderRadius: 10 },
     row: { height: ROW_H, alignItems: 'center', justifyContent: 'center' },
     label: { fontFamily: Fonts.sansMedium, fontSize: ft(15) },
 });
