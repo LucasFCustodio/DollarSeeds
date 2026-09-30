@@ -28,6 +28,19 @@ export function stakeTagOf(species: number): { box: Box; rotation: number } {
     return { box: s.stakeTag, rotation: s.stakeTagRotation };
 }
 
+/** Top-most painted y of each growth frame (pot, plant, and the flytrap's bug along
+ *  its flight and rising puff), in canvas units — so a view can crop the empty sky
+ *  above a young plant. Measured by the extract script; index = growth step. */
+export const ART_TOP: Record<1 | 2 | 3 | 4, number[]> = {
+    1: layout.species['1'].artTop, 2: layout.species['2'].artTop,
+    3: layout.species['3'].artTop, 4: layout.species['4'].artTop,
+};
+/** Same, for the static paid-off art. */
+export const ART_TOP_PAID_OFF: Record<1 | 2 | 3 | 4, number> = {
+    1: layout.species['1'].artTopPaidOff, 2: layout.species['2'].artTopPaidOff,
+    3: layout.species['3'].artTopPaidOff, 4: layout.species['4'].artTopPaidOff,
+};
+
 export interface FragmentFall { dx: number; dy: number; rotate: number; cx: number; cy: number }
 export const FRAGMENT_FALLS: FragmentFall[] = layout.fragments;
 
