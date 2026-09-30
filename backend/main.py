@@ -554,6 +554,54 @@ def calculate_category_score(spent: float, budget: float) -> float:
         return round(max(1.0, 10.0 - (ratio - 1.0) * 30.0), 1)
 
 
+# ── Home summary rules (GET /home/summary/) ──────────────────────────────────
+# Pure functions, unit-tested in tests/test_home_summary.py. The debt half lives in
+# debt_freedom.py with the other snowball rules.
+
+BUDGET_SPLITS = ("needs", "wants", "goals")
+NEAR_COMPLETION_PCT = 0.80
+NEAR_COMPLETION_MAX = 2
+
+
+def over_budget_splits(budgets: dict, expenses: dict) -> list:
+    """Every split whose spend passed its budget, in split order, from the SAME
+    budgets/expenses dicts /dashboard/{month} serves."""
+    out = []
+    for key in BUDGET_SPLITS:
+        over = float(expenses.get(key) or 0) - float(budgets.get(key) or 0)
+        if over > 0.005:
+            out.append({"split": key, "amount_over": round(over, 2)})
+    return out
+
+
+def goals_near_completion(goals: list) -> list:
+    """Savings goals at 80%+ of their target that are not finished, highest first,
+    at most two. `goals` are rows run through _with_allocated. General Savings, the
+    Reconciliation goal and debt goals are not "savings goals near completion"."""
+    out = []
+    for g in goals:
+        if g.get("is_general") or g.get("is_reconciliation") or g.get("completed"):
+            continue
+        if g.get("goal_type") == "debt":
+            continue
+        target = float(g.get("target_amount") or 0)
+        if target <= 0:
+            continue
+        pct = float(g.get("allocated_amount") or 0) / target
+        if pct >= NEAR_COMPLETION_PCT:
+            out.append({"id": g["id"], "title": g.get("title"), "pct": round(min(pct, 1.0), 4)})
+    out.sort(key=lambda g: (-g["pct"], g["id"]))
+    return out[:NEAR_COMPLETION_MAX]
+
+
+def days_since_log(last_logged_at: Optional[str], today: datetime.date) -> Optional[int]:
+    """Whole days from the date of the last logged row to `today`; None if never."""
+    when = _parse_ts(last_logged_at)
+    if when is None:
+        return None
+    return max(0, (today - when.date()).days)
+
+
 @app.get("/")
 def read_root():
     return {"message": "DollarSeeds Backend is running!"}
@@ -669,10 +717,9 @@ def get_spending_trends(features: set = Depends(_client_features),
     return {"data": results}
 
 
-@app.get("/dashboard/{current_month}")
-def get_dashboard_data(current_month: str,
-                       features: set = Depends(_client_features),
-                       user_id: str = Depends(get_current_user_id)):
+def _month_budget_numbers(user_id: str, current_month: str, features: set) -> dict:
+    """A month's income, tithe, split, budgets and spend — the numbers the dashboard
+    serves. Shared with GET /home/summary/ so the home can never disagree with them."""
     income_response = supabase.table("income").select("amount, day, tithe_enabled, tithe_rate, budget_type").eq("month", current_month).eq("user_id", user_id).execute()
     total_income = sum(item["amount"] for item in income_response.data)
 
@@ -682,7 +729,7 @@ def get_dashboard_data(current_month: str,
     #
     # `st` decides whether this month follows the live settings or the state it was
     # frozen with at close-out, so it is loaded before both resolvers. It is the
-    # same row the rollover block below reads — one query, not two.
+    # same row the dashboard's rollover block reads — one query, not two.
     settings = _get_user_settings(user_id)
     st = _month_status(user_id, current_month)
     ent = _entitlements(user_id, features)
@@ -708,6 +755,24 @@ def get_dashboard_data(current_month: str,
     # source='income', so they flow into this total automatically — no extra query needed.
     # (Transfers between goals use source='transfer' and are intentionally excluded.)
     total_goals = sum(item["amount"] for item in expense_goals_response.data) + sum(item["amount"] for item in savings_deposits_response.data)
+
+    return {
+        "total_income": total_income, "settings": settings, "st": st, "ent": ent,
+        "tithe": tithe, "bt_key": bt_key, "bt": bt,
+        "budgets": {"needs": needs_budget, "wants": wants_budget, "goals": goals_budget},
+        "expenses": {"needs": total_needs, "wants": total_wants, "goals": total_goals},
+    }
+
+
+@app.get("/dashboard/{current_month}")
+def get_dashboard_data(current_month: str,
+                       features: set = Depends(_client_features),
+                       user_id: str = Depends(get_current_user_id)):
+    nums = _month_budget_numbers(user_id, current_month, features)
+    total_income, settings, st, ent = nums["total_income"], nums["settings"], nums["st"], nums["ent"]
+    tithe, bt_key, bt = nums["tithe"], nums["bt_key"], nums["bt"]
+    needs_budget, wants_budget, goals_budget = (nums["budgets"][k] for k in ("needs", "wants", "goals"))
+    total_needs, total_wants, total_goals = (nums["expenses"][k] for k in ("needs", "wants", "goals"))
 
     needs_score = calculate_category_score(total_needs, needs_budget)
     wants_score = calculate_category_score(total_wants, wants_budget)
@@ -3412,3 +3477,39 @@ def complete_debt(id: int, user_id: str = Depends(get_current_user_id)):
         "status": df.STATUS_PAID_OFF, "paid_off_at": now, "updated_at": now,
     }).eq("id", id).eq("user_id", user_id).execute()
     return _df_one(user_id, id, _df_server_today())
+
+
+# ══ Home summary ═════════════════════════════════════════════════════════════
+# Everything the home screen needs beyond /dashboard/{month}. Read-only and
+# additive: it writes nothing of its own (the debt half runs the same lazy cycle
+# processing every /debt-freedom/ read does) and no existing endpoint changed.
+
+@app.get("/home/summary/")
+def get_home_summary(month: str,
+                     today: Optional[datetime.date] = None,
+                     features: set = Depends(_client_features),
+                     user_id: str = Depends(get_current_user_id)):
+    local_today = _df_today(today)
+
+    stamps = []
+    for table in ("expenses", "income"):
+        rows = (supabase.table(table).select("created_at").eq("user_id", user_id)
+                .order("created_at", desc=True).limit(1).execute().data)
+        if rows and _parse_ts(rows[0].get("created_at")) is not None:
+            stamps.append(rows[0]["created_at"])
+    last = max(stamps, key=_parse_ts) if stamps else None
+
+    nums = _month_budget_numbers(user_id, month, features)
+
+    goals = (supabase.table("savings_goals").select("*").eq("user_id", user_id)
+             .eq("completed", False).execute().data or [])
+
+    garden, txns = _df_garden(user_id, local_today)
+
+    return {
+        "last_logged_at": last,
+        "days_since_last_log": days_since_log(last, local_today),
+        "over_budget": over_budget_splits(nums["budgets"], nums["expenses"]),
+        "debts": df.home_debt_summary(garden, txns, local_today),
+        "goals_near_completion": goals_near_completion(_with_allocated(goals, user_id)),
+    }
