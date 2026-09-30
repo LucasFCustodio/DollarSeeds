@@ -15,12 +15,20 @@ import debt_freedom as df
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from supabase import create_client, Client
+from supabase.lib.client_options import SyncClientOptions
 
 load_dotenv()
 
 URL: str = os.environ.get("SUPABASE_URL")
 KEY: str = os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(URL, KEY)
+# One client serves every request, and FastAPI runs sync handlers on a thread pool.
+# supabase-py's default client multiplexes all of those threads over ONE HTTP/2
+# connection, which is not thread-safe: concurrent queries fail at random with
+# httpx.ReadError / RemoteProtocolError, i.e. a 500 (the home fires /dashboard and
+# /home/summary/ at the same moment, so it hit this on every load). An HTTP/1.1 pool
+# gives each in-flight request its own connection. 120 s is postgrest's own default.
+_http = httpx.Client(http2=False, timeout=120, follow_redirects=True)
+supabase: Client = create_client(URL, KEY, options=SyncClientOptions(httpx_client=_http))
 
 app = FastAPI()
 
