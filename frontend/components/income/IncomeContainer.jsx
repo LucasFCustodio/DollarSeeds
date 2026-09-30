@@ -35,7 +35,8 @@ import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
 import { ft } from '../../constants/responsive';
 import { useAnalytics } from '../../lib/analytics';
 import { IconChevronLeft, IconCheck } from '../icons';
-import { resolveBudgetType } from '../../constants/budgetTypes';
+import { effectiveBudgetType, resolveBudgetType } from '../../constants/budgetTypes';
+import { useSubscription } from '../../context/SubscriptionContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -141,7 +142,10 @@ export default function IncomeContainer({ embedded = false }) {
             .catch(() => { /* fall back to the default split on failure */ });
     }, [user?.id]);
 
-    const bt = resolveBudgetType(budgetTypeKey);
+    // GET /settings/ returns the STORED choice; a lapsed subscriber's open months use
+    // the free split instead, so preview what the budget will actually do.
+    const { allowances } = useSubscription();
+    const bt = resolveBudgetType(effectiveBudgetType(budgetTypeKey, allowances?.budgetTypes));
     const parsedAmt = parseAmount(amount) ?? 0;
     const needsAmt  = parsedAmt * bt.needs;
     const wantsAmt  = parsedAmt * bt.wants;

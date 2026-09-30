@@ -14,6 +14,14 @@
  *
  * FAILURE POSTURE IS FAIL-OPEN, matching StartingBalanceGate's "never trap the user"
  * rule. An unreachable /config/ means unrestricted, never a bricked app.
+ *
+ * ALLOWANCES. `/me/entitlements/` also returns the free-tier allowances (max_goals,
+ * goals_used, budget_types, …) because this build sends `limits`. They are VALUES, not
+ * verdicts, so the free tier can change server-side and every installed build obeys —
+ * which only holds while screens render these numbers and never write their own.
+ * Missing or unreadable allowances mean "unknown", and every screen treats unknown as
+ * unrestricted: the server still refuses anything it will not allow, and the 403 it
+ * answers with is the backstop.
  */
 import React, {
     createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
@@ -23,22 +31,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 import { useAuth } from './AuthContext';
+import { premiumEntitlementKey } from '../constants/premium';
 import {
-    premiumEntitlementKey,
-    type BillingPeriod,
-} from '../constants/premium';
-import {
+    checkTrialEligibility,
     getCustomerInfo,
     hasPremiumEntitlement,
-    loadTierOptions,
+    loadPlanOptions,
     loginPurchases,
     logoutPurchases,
     purchasesAvailable,
-    purchaseTier,
+    purchasePlan,
     restorePurchases,
+    type PlanOption,
     type PurchaseResult,
     type RestoreResult,
-    type TierOption,
 } from '../lib/purchases';
 
 const BASE = 'https://dollarseeds-1.onrender.com';
@@ -56,11 +62,25 @@ export type AppConfig = {
     updateUrl: string;
 };
 
+/**
+ * What the server says this user may have. `null` counts mean unlimited, exactly as
+ * the API sends them. Never derive or default a number here — see ALLOWANCES above.
+ */
+export type Allowances = {
+    maxGoals: number | null;
+    goalsUsed: number;
+    budgetTypes: string[];
+    videoSeries: 'free_only' | 'all';
+    maxBankConnections: number | null;
+};
+
 type Entitlement = {
     premiumActive: boolean;
     expiresAt: string | null;
     productId: string | null;
     pendingProductId: string | null;
+    /** Null until a `/me/entitlements/` read carrying them has landed. */
+    allowances: Allowances | null;
 };
 
 const NO_ENTITLEMENT: Entitlement = {
@@ -68,7 +88,24 @@ const NO_ENTITLEMENT: Entitlement = {
     expiresAt: null,
     productId: null,
     pendingProductId: null,
+    allowances: null,
 };
+
+/**
+ * The allowance half of a `/me/entitlements/` body, or null if it isn't there or
+ * isn't the shape we expect. Null is read as "unknown" — never as "free tier".
+ */
+function parseAllowances(data: any): Allowances | null {
+    if (!data || !('max_goals' in data) || !Array.isArray(data.budget_types)) return null;
+    const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    return {
+        maxGoals: count(data.max_goals),
+        goalsUsed: count(data.goals_used) ?? 0,
+        budgetTypes: data.budget_types.filter((k: unknown) => typeof k === 'string'),
+        videoSeries: data.video_series === 'free_only' ? 'free_only' : 'all',
+        maxBankConnections: count(data.max_bank_connections),
+    };
+}
 
 type SubscriptionContextType = Entitlement & {
     /** False until the first entitlement answer (cache or network) has landed. */
@@ -76,10 +113,17 @@ type SubscriptionContextType = Entitlement & {
     config: AppConfig;
     /** Whether the RevenueCat SDK is usable at all on this build/platform. */
     canPurchase: boolean;
-    options: Record<BillingPeriod, TierOption[]>;
+    options: PlanOption[];
     optionsLoading: boolean;
+    /**
+     * productId → true when THIS Apple ID may take that product's free trial. A product
+     * missing from the map, or false, means no trial copy — see checkTrialEligibility.
+     */
+    trialEligible: Record<string, boolean>;
     refresh: () => Promise<void>;
-    buy: (option: TierOption) => Promise<PurchaseResult>;
+    /** Re-read `/me/entitlements/` only — for screens whose counts just moved. */
+    refreshEntitlement: () => Promise<void>;
+    buy: (option: PlanOption) => Promise<PurchaseResult>;
     restore: () => Promise<RestoreResult>;
     // The paywall opens from five places (two CTAs, a locked series card, a locked
     // lesson row, and a 403 from the player). Owning its visibility here means one
@@ -94,9 +138,11 @@ const SubscriptionContext = createContext<SubscriptionContextType>({
     entitlementLoaded: false,
     config: CONFIG_FALLBACK,
     canPurchase: false,
-    options: { monthly: [], yearly: [] },
+    options: [],
     optionsLoading: false,
+    trialEligible: {},
     refresh: async () => {},
+    refreshEntitlement: async () => {},
     buy: async () => ({ status: 'unavailable' }),
     restore: async () => ({ status: 'unavailable' }),
     paywallVisible: false,
@@ -112,10 +158,9 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
     const [entitlement, setEntitlement] = useState<Entitlement>(NO_ENTITLEMENT);
     const [entitlementLoaded, setEntitlementLoaded] = useState(false);
     const [config, setConfig] = useState<AppConfig>(CONFIG_FALLBACK);
-    const [options, setOptions] = useState<Record<BillingPeriod, TierOption[]>>({
-        monthly: [], yearly: [],
-    });
+    const [options, setOptions] = useState<PlanOption[]>([]);
     const [optionsLoading, setOptionsLoading] = useState(false);
+    const [trialEligible, setTrialEligible] = useState<Record<string, boolean>>({});
     const [paywallVisible, setPaywallVisible] = useState(false);
 
     // Resolved when lib/purchases was first imported — a plain read, not a side effect.
@@ -166,6 +211,7 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
                 expiresAt: res.data?.expires_at ?? null,
                 productId: res.data?.product_id ?? null,
                 pendingProductId: res.data?.pending_product_id ?? null,
+                allowances: parseAllowances(res.data),
             };
             setEntitlement(next);
             cacheEntitlement(userId, next.premiumActive);
@@ -186,6 +232,10 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
         await loadConfig();
         if (user?.id) await loadEntitlement(user.id);
     }, [loadConfig, loadEntitlement, user?.id]);
+
+    const refreshEntitlement = useCallback(async () => {
+        if (user?.id) await loadEntitlement(user.id);
+    }, [loadEntitlement, user?.id]);
 
     // ── Boot / user change ────────────────────────────────────────────────────
     useEffect(() => {
@@ -250,15 +300,29 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
         if (!canPurchase) return;
         let cancelled = false;
         setOptionsLoading(true);
-        loadTierOptions()
+        loadPlanOptions()
             .then(next => { if (!cancelled) setOptions(next); })
             .finally(() => { if (!cancelled) setOptionsLoading(false); });
         return () => { cancelled = true; };
     }, [canPurchase]);
 
+    // ── Trial eligibility ─────────────────────────────────────────────────────
+    // Asked each time the paywall opens rather than once at boot: eligibility belongs
+    // to the Apple ID, and it changes the moment a trial is taken or a different
+    // account signs in. Cleared first so a stale "eligible" is never shown while the
+    // new answer is in flight — no trial copy is the safe state to wait in.
+    useEffect(() => {
+        if (!paywallVisible || !canPurchase) return;
+        const ids = options.filter(o => o.freeTrial).map(o => o.productId);
+        let cancelled = false;
+        setTrialEligible({});
+        checkTrialEligibility(ids).then(next => { if (!cancelled) setTrialEligible(next); });
+        return () => { cancelled = true; };
+    }, [paywallVisible, canPurchase, options, user?.id]);
+
     // ── Purchase ──────────────────────────────────────────────────────────────
-    const buy = useCallback(async (option: TierOption): Promise<PurchaseResult> => {
-        const result = await purchaseTier(option);
+    const buy = useCallback(async (option: PlanOption): Promise<PurchaseResult> => {
+        const result = await purchasePlan(option);
         if (result.status !== 'purchased' || !user?.id) return result;
 
         // StoreKit has taken the money, but entitlement is written by the RevenueCat
@@ -279,7 +343,10 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
         // Timed out, but the purchase itself succeeded. Reflect it optimistically
         // rather than leaving the user locked out of what they just bought — the next
         // refresh (or the backend's own RevenueCat fallback) reconciles.
-        setEntitlement(prev => ({ ...prev, premiumActive: true }));
+        // The free-tier allowances from before the purchase are now wrong in the
+        // restrictive direction, so drop them to "unknown" (unrestricted) rather than
+        // keep showing locks on what was just paid for. The server stays the gate.
+        setEntitlement(prev => ({ ...prev, premiumActive: true, allowances: null }));
         return result;
     }, [loadEntitlement, user?.id]);
 
@@ -296,14 +363,17 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
         canPurchase,
         options,
         optionsLoading,
+        trialEligible,
         refresh,
+        refreshEntitlement,
         buy,
         restore,
         paywallVisible,
         openPaywall,
         closePaywall,
     }), [entitlement, entitlementLoaded, config, canPurchase, options, optionsLoading,
-         refresh, buy, restore, paywallVisible, openPaywall, closePaywall]);
+         trialEligible, refresh, refreshEntitlement, buy, restore, paywallVisible,
+         openPaywall, closePaywall]);
 
     return (
         <SubscriptionContext.Provider value={value}>

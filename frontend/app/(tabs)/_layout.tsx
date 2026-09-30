@@ -23,6 +23,8 @@ export default function TabLayout() {
             <Tabs.Screen name="index" options={{ title: 'Home' }} />
             <Tabs.Screen name="transactions" options={{ title: 'Transactions' }} /* i18n-canonical */ />
             <Tabs.Screen name="piggyBank" options={{ title: 'Goals' }} />
+            {/* Hidden from the tab bar unless DEBT_FREEDOM_ENABLED (see CustomTabBar). */}
+            <Tabs.Screen name="debts" options={{ title: 'Debts' }} />
             <Tabs.Screen name="lessons" options={{ title: 'Lessons' }} />
         </Tabs>
     );

@@ -1,0 +1,208 @@
+{
+  "header": {
+    "eyebrow": "Debt {{position}} of {{total}}",
+    "left": "{{amount}} left",
+    "paidOff": "Paid off",
+    "freeBy": "Free by {{date}}",
+    "freeSince": "Free since {{date}}",
+    "planFreeBy": "Debt-free by {{date}}",
+    "checkin": "Check your statement"
+  },
+  "actions": {
+    "add": "Add a debt",
+    "showCards": "Show as cards",
+    "showPlants": "Show as plants",
+    "markPaidOff": "Mark as paid off",
+    "skip": "Tap to skip",
+    "retry": "Try again",
+    "back": "Back",
+    "logMin": "Log min payment",
+    "minLogged": "Min payment logged",
+    "extra": "Extra",
+    "planSettings": "Plan settings"
+  },
+  "label": {
+    "minDue": "{{min}} min · due {{date}}",
+    "pctPaid": "{{pct}}% paid",
+    "missing": "--",
+    "paidOffOn": "Paid off · {{date}}",
+    "focus": "Focus",
+    "addDueDay": "Tap to add a due day"
+  },
+  "a11y": {
+    "plant": "{{name}}, {{pct}}% paid, step {{step}} of 10, debt {{position}} of {{total}}",
+    "plantPaidOff": "{{name}}, paid off, debt {{position}} of {{total}}",
+    "minToggle": "Minimum payment for {{name}}",
+    "checkinPill": "Statement check-in due for {{name}}"
+  },
+  "empty": {
+    "title": "Your garden is empty",
+    "body": "Each debt grows into a plant as you pay it down. Smallest balance first — every debt you finish waters the next one.",
+    "cta": "Plant your first debt"
+  },
+  "form": {
+    "titleNew": "New debt",
+    "titleEdit": "Edit debt",
+    "name": "Name",
+    "namePlaceholder": "e.g. Chase Visa",
+    "original": "Original balance",
+    "originalHint": "If you're not sure, use today's balance.",
+    "current": "Current balance",
+    "minPayment": "Minimum payment",
+    "apr": "Interest rate (%)",
+    "moreDetails": "More details",
+    "fewerDetails": "Fewer details",
+    "type": "Type",
+    "lender": "Lender",
+    "dueDay": "Due day of the month",
+    "dueDayPlaceholder": "1–31",
+    "payUrl": "Pay link",
+    "payUrlPlaceholder": "chase.com",
+    "autopay": "Autopay",
+    "creditLimit": "Credit limit",
+    "notes": "Notes",
+    "yes": "Yes",
+    "no": "No",
+    "notSet": "Not set",
+    "save": "Plant it",
+    "saveEdit": "Save changes",
+    "errRequired": "Fill in all six required fields.",
+    "errNumber": "{{field}} must be a number.",
+    "errDueDay": "The due day must be between 1 and 31.",
+    "errSave": "Couldn't save. Check your connection and try again.",
+    "lateFee": "Late fee",
+    "lateFeeHint": "From your card agreement. It's added automatically when a minimum is missed."
+  },
+  "type": {
+    "credit_card": "Credit card",
+    "student_loan": "Student loan",
+    "medical": "Medical",
+    "auto": "Auto loan",
+    "personal": "Personal loan",
+    "bnpl": "Buy now, pay later",
+    "family": "Family or friend",
+    "other": "Other"
+  },
+  "payment": {
+    "title": "Pay extra",
+    "extra": "Extra amount",
+    "extraHint": "Extra goes to your focus debt, the one closest to done.",
+    "submit": "Log extra payment",
+    "errNothing": "Enter an extra amount.",
+    "errFailed": "Couldn't log that payment. Try again.",
+    "cancel": "Cancel"
+  },
+  "complete": {
+    "errFailed": "Couldn't mark it paid off. Try again."
+  },
+  "detail": {
+    "position": "Debt {{position}} of {{total}}",
+    "balance": "Balance left",
+    "estPayoff": "Estimated payoff",
+    "paidOffOn": "Paid off {{date}}",
+    "type": "Type",
+    "lender": "Lender",
+    "payOnline": "Pay online",
+    "original": "Original balance",
+    "started": "Started",
+    "apr": "Interest rate",
+    "aprValue": "{{apr}}% APR",
+    "minimumLine": "{{amount}} minimum payment",
+    "suggested": "Suggested payment",
+    "suggestedHint": "Includes {{amount}} rolled over from debts you've paid off.",
+    "due": "Due day",
+    "dueValue": "Day {{day}} of the month",
+    "autopay": "Autopay",
+    "monthlyInterest": "Monthly interest",
+    "interestRemaining": "Interest remaining",
+    "creditLimit": "Credit limit",
+    "usage": "Usage",
+    "usageValue": "{{pct}}% used",
+    "history": "Payment history",
+    "historyEmpty": "No payments yet.",
+    "notes": "Notes",
+    "rollsInto": "Rolls into next",
+    "rollsIntoNone": "Nothing — this is the last one. Freedom after this.",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteBody": "This removes the debt and its payment history. It can't be undone.",
+    "cancel": "Cancel",
+    "errLoad": "Couldn't load this debt.",
+    "errDelete": "Couldn't delete this debt. Try again.",
+    "lateFee": "Late fee",
+    "checkin": "Check statement",
+    "addDueDay": "Add a due day so the app can follow each billing cycle.",
+    "addDueDayCta": "Add due day"
+  },
+  "kind": {
+    "payment_minimum": "Minimum payment",
+    "payment_extra": "Extra payment",
+    "interest": "Interest",
+    "balance_edit": "Balance updated",
+    "late_fee": "Late fee",
+    "statement_adjustment": "Statement check-in",
+    "minimum_reversal": "Minimum undone"
+  },
+  "date": {
+    "monthYearShort": "{{month}} {{year}}"
+  },
+  "toggle": {
+    "errFailed": "Couldn't update the minimum. Try again.",
+    "errClosed": "That billing cycle has closed, so its minimum can't be undone.",
+    "errAlready": "The minimum is already logged for this cycle."
+  },
+  "checkin": {
+    "title": "Check your statement",
+    "body": "Match {{name}} to your latest statement. The app fills in what it has now.",
+    "statementBalance": "Statement balance",
+    "minPayment": "Minimum payment",
+    "save": "Save",
+    "cancel": "Cancel",
+    "errFailed": "Couldn't save the check-in. Try again.",
+    "grewCard": "This card grew by {{amount}} since last month. Try to keep it in the drawer while you pay it down.",
+    "grewOther": "This balance grew by {{amount}} since last month. That happens. Keep watering it, one payment at a time.",
+    "grewTitle": "Saved",
+    "ok": "Got it"
+  },
+  "lateFee": {
+    "title": "Late fee?",
+    "bodyCard": "Your minimum wasn't logged by {{date}}. Did your card charge a late fee?",
+    "bodyOther": "Your minimum wasn't logged by {{date}}. Was a late fee charged?",
+    "amount": "Late fee amount",
+    "remember": "Save for next time",
+    "save": "Save",
+    "skip": "No fee / Skip",
+    "errFailed": "Couldn't save that. Try again."
+  },
+  "settings": {
+    "title": "Extra each month",
+    "body": "An amount you add every month on top of your minimums. It goes to your focus debt and moves your \"Free by\" dates closer. Leave it blank for {{zero}}.",
+    "label": "Extra each month",
+    "save": "Save",
+    "cancel": "Cancel",
+    "errFailed": "Couldn't save. Try again."
+  },
+  "verse": {
+    "0": {
+      "text": "The rich rule over the poor, and the borrower is slave to the lender.",
+      "ref": "Proverbs 22:7"
+    },
+    "1": {
+      "text": "Let no debt remain outstanding, except the continuing debt to love one another.",
+      "ref": "Romans 13:8"
+    },
+    "2": {
+      "text": "Let us not become weary in doing good, for at the proper time we will reap a harvest if we do not give up.",
+      "ref": "Galatians 6:9"
+    },
+    "3": {
+      "text": "The plans of the diligent lead to profit as surely as haste leads to poverty.",
+      "ref": "Proverbs 21:5"
+    },
+    "4": {
+      "text": "I can do all this through him who gives me strength.",
+      "ref": "Philippians 4:13"
+    }
+  }
+}

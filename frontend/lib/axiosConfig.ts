@@ -32,14 +32,21 @@ axios.defaults.timeout = 15000;
  *             premium_required, so the backend may show it premium series.
  *   social  — renders the creator's Instagram / LinkedIn / website rows on the series
  *             page, so GET /lessons/series/{id}/ may include those three fields.
+ *   limits  — renders the free tier: locked goals, the goal-cap upsell and the locked
+ *             budget types, and handles 403 goal_limit_reached / goal_locked /
+ *             budget_type_locked. So the backend may enforce the free-tier limits on
+ *             this build, sort GET /savings/goal/ oldest first with a `locked` flag,
+ *             and add the allowance fields to GET /me/entitlements/.
  *
- * Two tokens, not one, because two unpatchable generations are already in the wild:
- * the original App Store binary (no header at all) and the premium build (`premium`
- * only). Each keeps getting exactly the response it was written against. ADD a token
- * when a new capability lands; never repurpose an existing one, and never remove one —
- * the backend reads absence as "this build cannot handle it".
+ * Three tokens, not one, because three unpatchable generations are already in the
+ * wild: the original App Store binary (no header at all), the premium build
+ * (`premium` only) and the social build (`premium, social`). Each keeps getting exactly
+ * the response it was written against — none of them has any lock UI, so none of them
+ * is ever subject to the limits. ADD a token when a new capability lands; never
+ * repurpose an existing one, and never remove one — the backend reads absence as "this
+ * build cannot handle it".
  */
-const CLIENT_FEATURES = 'premium, social';
+const CLIENT_FEATURES = 'premium, social, limits';
 
 /** The DollarSeeds API. Screens each declare their own `BASE` constant; this is the
  *  host they all point at. */
@@ -88,9 +95,10 @@ axios.interceptors.request.use(async (config) => {
 
     // 3. CAPABILITY MARKERS (see CLIENT_FEATURES above). A request WITHOUT this
     //    header is treated as the binary already in the App Store, which has neither
-    //    the paywall nor the social rows — so the backend hides premium series from it
-    //    entirely, never gates its playback, and omits the creator link fields. That
-    //    is what keeps those users working.
+    //    the paywall nor the social rows nor any lock UI — so the backend hides premium
+    //    series from it entirely, never gates its playback, omits the creator link
+    //    fields, and never applies the free-tier limits. That is what keeps those users
+    //    working.
     //
     //    Set here rather than at each call site precisely because this interceptor is
     //    the one choke point every backend request passes through: one line covers

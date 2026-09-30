@@ -80,6 +80,31 @@ COLUMN_DEFAULTS: dict[str, dict[str, Any]] = {
     },
     "app_config": {},
     "subscription_events": {},
+    # Mirrors migration 0010. Optional columns are present-and-NULL, as select('*')
+    # returns them.
+    "debts": {
+        "debt_type": None,
+        "lender": None,
+        "due_day": None,
+        "pay_url": None,
+        "autopay": None,
+        "credit_limit": None,
+        "notes": None,
+        "species": 4,
+        "species_locked": False,
+        "status": "active",
+        "paid_off_at": None,
+        "interest_checked_through": None,
+        "updated_at": None,
+        # Migration 0011: all nullable, no DEFAULT.
+        "late_fee": None,
+        "highest_step": None,
+        "cycle_start_balance": None,
+        "checkin_due_since": None,
+        "late_fee_pending_for": None,
+    },
+    "debt_transactions": {},
+    "debt_freedom_settings": {"monthly_extra": None},
 }
 
 # UNIQUE indexes the real schema declares. The fake enforces them on insert so an
@@ -99,6 +124,7 @@ UNIQUE_KEYS: dict[str, tuple[str, ...]] = {
 # UNIQUE_KEYS, which is what Postgres' ON CONFLICT would use.
 UPSERT_KEYS: dict[str, tuple[str, ...]] = {
     "month_status": ("user_id", "month"),
+    "debt_freedom_settings": ("user_id",),   # its primary key (migration 0011)
 }
 
 

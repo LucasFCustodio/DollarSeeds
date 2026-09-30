@@ -56,7 +56,7 @@ function RootLayoutNav() {
 
     // Load custom font families via @expo-google-fonts packages
     // (files live inside node_modules — no manual TTF download needed)
-    const [fontsLoaded] = useFonts({
+    const [fontsLoaded, fontError] = useFonts({
         'InstrumentSerif-Regular':
             require('@expo-google-fonts/instrument-serif/400Regular/InstrumentSerif_400Regular.ttf'),
         'InstrumentSerif-Italic':
@@ -89,7 +89,14 @@ function RootLayoutNav() {
         }
     }, [user, initialized, segments]);
 
-    if (!initialized || !localeReady) {
+    // Wait for the fonts, not just auth + locale. The first screen used to mount before
+    // they registered, so iOS measured its text in the system font and then drew the
+    // wider Geist / JetBrains Mono glyphs into those widths — "Nee…", "50/30/" clipped on
+    // the dashboard. A failed load (`fontError`) falls through to the system font rather
+    // than holding the spinner forever.
+    const fontsReady = fontsLoaded || !!fontError;
+
+    if (!initialized || !localeReady || !fontsReady) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.bg }}>
                 <ActivityIndicator size="large" color={theme.brand} />
@@ -112,6 +119,8 @@ function RootLayoutNav() {
                 <Stack.Screen name="lessonSeries/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="lessonPlayer" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
+                <Stack.Screen name="debtDetail" options={{ headerShown: false }} />
+                <Stack.Screen name="debtForm" options={{ headerShown: false }} />
             </Stack>
             <OnboardingTour />
             <StartingBalanceGate />

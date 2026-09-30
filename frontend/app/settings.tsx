@@ -44,8 +44,10 @@ import Button from '../components/ui/Button';
 import PremiumCta from '../components/premium/PremiumCta';
 import BudgetTypeSelector from '../components/ui/BudgetTypeSelector';
 import {
-    BudgetTypeKey, BUDGET_TYPES, splitLabel, DEFAULT_BUDGET_TYPE,
+    BudgetTypeKey, BUDGET_TYPES, BUDGET_TYPE_ORDER, splitLabel, DEFAULT_BUDGET_TYPE,
+    effectiveBudgetType,
 } from '../constants/budgetTypes';
+import { premiumErrorCode, usePremiumUpsell } from '../lib/premiumErrors';
 
 const BASE = 'https://dollarseeds-1.onrender.com';
 
@@ -54,7 +56,8 @@ export default function SettingsScreen() {
     const { user } = useAuth();
     const { theme } = useTheme();
     const { replay: replayOnboarding } = useOnboarding();
-    const { restore: restorePremium } = useSubscription();
+    const { restore: restorePremium, allowances, refreshEntitlement } = useSubscription();
+    const { showUpsell } = usePremiumUpsell();
     const { t } = useTranslation(['settings', 'common', 'premium']);
     const { language, setLanguage, currency, setCurrency, formatMoney } = useLocale();
     const [restoring, setRestoring] = useState(false);
@@ -132,8 +135,22 @@ export default function SettingsScreen() {
         }
     };
 
+    // Free tier: types outside the server's `budget_types` allowance. Unknown allowances
+    // lock nothing — PATCH /settings/ refuses a gated type anyway (budget_type_locked).
+    const allowedTypes = allowances?.budgetTypes ?? null;
+    const lockedTypes = allowedTypes
+        ? BUDGET_TYPE_ORDER.filter(k => !allowedTypes.includes(k))
+        : [];
+    // What open months actually use. `budgetType` is the STORED choice from
+    // GET /settings/, which a lapse never rewrites.
+    const effectiveType = effectiveBudgetType(budgetType, allowedTypes);
+
     const handleSelectBudgetType = async (key: BudgetTypeKey) => {
-        if (!user?.id || key === budgetType) return;
+        if (!user?.id) return;
+        // A locked type — including the user's own saved choice after a lapse — answers
+        // with the upsell. Sending the PATCH would only fetch the same refusal.
+        if (lockedTypes.includes(key)) { showUpsell('budget_type_locked'); return; }
+        if (key === budgetType) return;
         const previous = budgetType;
         setBudgetType(key); // optimistic
         setSaving(true);
@@ -146,8 +163,16 @@ export default function SettingsScreen() {
                 setShowFirmPrompt(true);
             }
         } catch (err) {
-            console.error('Budget type update error:', err);
+            // Roll back first, whatever went wrong. A refused PATCH applies none of its
+            // fields server-side, so `previous` is exactly what is stored.
             setBudgetType(previous);
+            const code = premiumErrorCode(err);
+            if (code) {
+                // The allowance changed under us (or was unknown). Re-read it so the
+                // selector locks the type, and say why rather than failing silently.
+                void refreshEntitlement();
+                showUpsell(code);
+            } else console.error('Budget type update error:', err);
         } finally {
             setSaving(false);
         }
@@ -176,7 +201,8 @@ export default function SettingsScreen() {
     };
 
     const ratePct = Math.round(titheRate * 100);
-    const activeType = BUDGET_TYPES[budgetType];
+    // The tithing line describes the split this month actually uses.
+    const activeType = BUDGET_TYPES[effectiveType];
 
     return (
         <ScrollView
@@ -261,7 +287,13 @@ export default function SettingsScreen() {
                     <Text style={[styles.sectionHint, { color: theme.ink2 }]}>
                         {t('settings:budgetSplit.hint')}
                     </Text>
-                    <BudgetTypeSelector value={budgetType} onSelect={handleSelectBudgetType} disabled={saving} />
+                    <BudgetTypeSelector
+                        value={budgetType}
+                        onSelect={handleSelectBudgetType}
+                        disabled={saving}
+                        locked={lockedTypes}
+                        effective={effectiveType}
+                    />
 
                     {/* ── Premium section ─────────────────────────────────── */}
                     {/* Swaps to "Manage Subscription" once subscribed — a paying user

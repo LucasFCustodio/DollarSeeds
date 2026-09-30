@@ -26,10 +26,15 @@ export const RC_IOS_API_KEY = 'appl_SwgSURGIxQKogKwLTnMFmUzpzXi';
  */
 export const RC_ANDROID_API_KEY: string | null = null;
 
-/** The one entitlement. All eight products grant exactly this. */
+/** The one entitlement. All ten products — two Premium, eight legacy — grant exactly this. */
 export const ENTITLEMENT_ID = 'premium';
 
-/** The offering marked "current" in the RevenueCat dashboard. */
+/**
+ * The offering this build sells: `$rc_annual` and `$rc_monthly`. It is deliberately NOT
+ * the one marked "current" in the RevenueCat dashboard — that is still `default`, the
+ * eight legacy packages, because the binaries already in the App Store fetch `current`
+ * and must keep seeing the four-tier paywall they were written for.
+ */
 export const OFFERING_ID = 'premium-2026';
 
 /**
@@ -39,64 +44,69 @@ export const OFFERING_ID = 'premium-2026';
  */
 export const premiumEntitlementKey = (userId: string) => `premium_entitlement_${userId}`;
 
-// ─── Tiers ────────────────────────────────────────────────────────────────────
+// ─── Plans ────────────────────────────────────────────────────────────────────
+//
+// ONE tier, two billing periods: Premium Monthly and Premium Yearly. The old model
+// (four "support tiers" × two periods) is gone from the paywall, but its eight products
+// are still on sale to the binaries already installed and still held by subscribers,
+// so they stay recognisable here as the `legacy` plan.
 
 export type BillingPeriod = 'monthly' | 'yearly';
-export type TierKey = 'basic' | 'intermediate' | 'high' | 'max';
 
-/** Display order on the paywall: Basic → Intermediate → High → Max. */
-export const TIER_ORDER: TierKey[] = ['basic', 'intermediate', 'high', 'max'];
+/** `premium` = the two products this build sells; `legacy` = the eight support tiers. */
+export type PlanKey = 'premium' | 'legacy';
 
+export type PlanInfo = { plan: PlanKey; period: BillingPeriod };
+
+/** Display order on the paywall. Yearly first: it is the higher service level (§3). */
+export const PERIOD_ORDER: BillingPeriod[] = ['yearly', 'monthly'];
+
+export const PREMIUM_MONTHLY_ID = 'com.dollarseeds.premium.monthly';
+export const PREMIUM_YEARLY_ID = 'com.dollarseeds.premium.yearly';
 
 /**
- * RevenueCat package identifier → tier + period.
+ * Store product id → plan + period, for labelling a subscription the BACKEND reports
+ * (`/me/entitlements/` returns a product id) and for grouping what the offering serves.
  *
- * Used only to group and order what the offering returns. A package the offering
- * serves that is missing from this map is rendered last with a humanised label rather
- * than dropped, so adding a tier in the dashboard degrades gracefully instead of
- * silently hiding a product someone can pay for.
+ * The eight legacy entries must stay for as long as anyone holds one of those
+ * products (Phase 4): without them a legacy subscriber's "Current plan" line goes
+ * blank. The legacy tiers all granted the same thing, so they share one label per
+ * period rather than four names that no longer mean anything.
  */
-export const PACKAGE_MAP: Record<string, { tier: TierKey; period: BillingPeriod }> = {
-    basic_monthly: { tier: 'basic', period: 'monthly' },
-    intermediate_monthly: { tier: 'intermediate', period: 'monthly' },
-    high_monthly: { tier: 'high', period: 'monthly' },
-    max_monthly: { tier: 'max', period: 'monthly' },
-    basic_yearly: { tier: 'basic', period: 'yearly' },
-    intermediate_yearly: { tier: 'intermediate', period: 'yearly' },
-    high_yearly: { tier: 'high', period: 'yearly' },
-    max_yearly: { tier: 'max', period: 'yearly' },
+export const PRODUCT_MAP: Record<string, PlanInfo> = {
+    [PREMIUM_MONTHLY_ID]: { plan: 'premium', period: 'monthly' },
+    [PREMIUM_YEARLY_ID]: { plan: 'premium', period: 'yearly' },
+    'com.dollarseeds.support.monthly.5': { plan: 'legacy', period: 'monthly' },
+    'com.dollarseeds.support.monthly.10': { plan: 'legacy', period: 'monthly' },
+    'com.dollarseeds.support.monthly.20': { plan: 'legacy', period: 'monthly' },
+    'com.dollarseeds.support.monthly.40': { plan: 'legacy', period: 'monthly' },
+    'com.dollarseeds.support.yearly.60': { plan: 'legacy', period: 'yearly' },
+    'com.dollarseeds.support.yearly.120': { plan: 'legacy', period: 'yearly' },
+    'com.dollarseeds.support.yearly.240': { plan: 'legacy', period: 'yearly' },
+    'com.dollarseeds.support.yearly.480': { plan: 'legacy', period: 'yearly' },
 };
 
 /**
- * Product id → tier + period, for labelling a subscription the BACKEND reports.
- * `/me/entitlements/` returns a store product id, not a RevenueCat package id, so
- * "Current: Intermediate Monthly" needs this second direction.
- */
-export const PRODUCT_MAP: Record<string, { tier: TierKey; period: BillingPeriod }> = {
-    'com.dollarseeds.support.monthly.5': { tier: 'basic', period: 'monthly' },
-    'com.dollarseeds.support.monthly.10': { tier: 'intermediate', period: 'monthly' },
-    'com.dollarseeds.support.monthly.20': { tier: 'high', period: 'monthly' },
-    'com.dollarseeds.support.monthly.40': { tier: 'max', period: 'monthly' },
-    'com.dollarseeds.support.yearly.60': { tier: 'basic', period: 'yearly' },
-    'com.dollarseeds.support.yearly.120': { tier: 'intermediate', period: 'yearly' },
-    'com.dollarseeds.support.yearly.240': { tier: 'high', period: 'yearly' },
-    'com.dollarseeds.support.yearly.480': { tier: 'max', period: 'yearly' },
-};
-
-/**
- * The tier and period behind a product id, or null if we don't recognise it.
+ * The plan and period behind a product id, or null if we don't recognise it.
  *
- * Returns STRUCTURE, not prose. It used to build "Intermediate Monthly" here, which
- * meant the one string a paying subscriber sees most — "Current: …" on the paywall and
- * the Settings row — stayed English in every language. Both names are in
- * `premium:tier.*` / `premium:paywall.monthly|yearly`, so the caller composes with
- * `premium:tierPeriod` and gets a translated label plus the freedom to reorder it.
+ * Returns STRUCTURE, not prose, so the one string a paying subscriber sees most —
+ * "Current plan: …" on the paywall and the Settings row — is translated: the caller
+ * turns it into a label with `planLabelKey`.
  */
-export function describeProduct(
-    productId?: string | null,
-): { tier: TierKey; period: BillingPeriod } | null {
+export function describeProduct(productId?: string | null): PlanInfo | null {
     if (!productId) return null;
     return PRODUCT_MAP[productId] ?? null;
+}
+
+/**
+ * Catalogue key for a plan's display name. "Premium Monthly" / "Premium Yearly" are
+ * the exact names in App Store Connect (SUBSCRIPTION_REWORK.md §2).
+ */
+export function planLabelKey({ plan, period }: PlanInfo): string {
+    if (plan === 'premium') {
+        return period === 'yearly' ? 'premium:plan.premiumYearly' : 'premium:plan.premiumMonthly';
+    }
+    return period === 'yearly' ? 'premium:plan.legacyYearly' : 'premium:plan.legacyMonthly';
 }
 
 // ─── Copy ─────────────────────────────────────────────────────────────────────
@@ -106,6 +116,11 @@ export function describeProduct(
 //  - "exclusive video lessons" / "premium exclusive video series". Never "premium
 //    videos" — the App Store product descriptions say "exclusive video lessons" and
 //    the two must match. In pt-BR: "séries em vídeo exclusivas premium".
+//  - Never a free-tier NUMBER in the copy ("1 goal"). The allowances come from
+//    GET /me/entitlements/ as values so the free tier can change without a release;
+//    a number written into a sentence here would freeze it. Interpolate the server's.
+//  - A free trial is only ever mentioned when RevenueCat says THIS Apple ID is
+//    eligible for it (see checkTrialEligibility in lib/purchases.ts).
 //  - Never "donate", "donation", or "give" as a noun — and never "doar", "doação" or
 //    "dar" in Portuguese. Apple prohibits collecting donations through IAP; this is
 //    legitimately IAP because it unlocks content, and the copy has to keep making that

@@ -8,14 +8,17 @@
   },
   "paywall": {
     "heading": "Subscribe to DollarSeeds Premium",
-    "description": "DollarSeeds aims to provide everyone with the resources to budget effectively for free. That is why the only premium feature are the video lessons. Gain access to video series from successful Christian Entrepreneurs. Learn about their struggles and successes, and how they keep God first in their career",
-    "equalTiers": "Every subscription level offers the <bold>exact same</bold> benefits — unlocking premium exclusive video series. Whatever amount you choose to support with, we're thankful for it!",
-    "monthly": "Monthly",
-    "yearly": "Yearly",
-    "yearlyNote": "Same price as monthly — just paid once a year.",
+    "description": "Everything you need to budget well stays free. Premium lifts the limits for when you're ready to grow.",
+    "benefitGoals": "Unlimited savings and debt goals",
+    "benefitBudgets": "Every budget split: {{names}}",
+    "benefitVideos": "Exclusive video lessons from Christian entrepreneurs",
+    "alwaysFree": "Tithing and General Savings are free for everyone, always.",
     "perMonth": "per month",
     "perYear": "per year",
-    "current": "Current: {{tier}}",
+    "current": "Current plan: {{plan}}",
+    "currentTag": "CURRENT PLAN",
+    "startsOn": "STARTS {{date}}",
+    "startsLater": "STARTS AT RENEWAL",
     "autoRenew": "Subscriptions renew automatically at the end of each billing period unless cancelled at least 24 hours beforehand. Manage or cancel any time in your App Store account settings.",
     "restore": "Restore Purchases",
     "terms": "Terms of Service",
@@ -23,16 +26,35 @@
     "loadFailed": "Subscription options couldn't be loaded. Please try again shortly.",
     "unavailable": "Subscriptions aren't available on this device yet."
   },
-  "tier": {
-    "basic": "Basic",
-    "intermediate": "Intermediate",
-    "high": "High",
-    "max": "Max"
+  "plan": {
+    "premiumMonthly": "Premium Monthly",
+    "premiumYearly": "Premium Yearly",
+    "legacyMonthly": "Monthly support tier",
+    "legacyYearly": "Yearly support tier"
+  },
+  "trial": {
+    "unit": {
+      "day": "{{count}} day",
+      "day_plural": "{{count}} days",
+      "week": "{{count}} week",
+      "week_plural": "{{count}} weeks",
+      "month": "{{count}} month",
+      "month_plural": "{{count}} months",
+      "year": "{{count}} year",
+      "year_plural": "{{count}} years"
+    },
+    "then": "{{duration}} free, then {{price}} {{per}}",
+    "disclosure": "Your free trial starts today. Unless you cancel at least 24 hours before it ends, it becomes a paid subscription at the price shown and your App Store account is charged."
   },
   "switch": {
-    "title": "Change your support tier?",
-    "bodyWithDate": "Your new tier starts on {{date}}, when your current period ends. You keep full access until then.",
-    "bodyNoDate": "Your new tier starts when your current period ends. You keep full access until then."
+    "title": "Switch to {{plan}}?",
+    "upgradeBody": "{{plan}} starts right away. The App Store refunds the unused part of your current plan.",
+    "downgradeBodyWithDate": "Your plan changes to {{plan}} on {{date}}, when your current year ends. You keep your current plan until then.",
+    "downgradeBodyNoDate": "Your plan changes to {{plan}} when your current year ends. You keep your current plan until then.",
+    "unknownBody": "The App Store applies the change to your existing subscription. You keep full access throughout.",
+    "scheduledTitle": "Plan change scheduled",
+    "scheduledBodyWithDate": "Your plan changes to {{plan}} on {{date}}.",
+    "scheduledBodyNoDate": "Your plan changes to {{plan}} when your current term ends."
   },
   "purchase": {
     "failedTitle": "Purchase not completed",
@@ -61,5 +83,33 @@
     "playerLocked": "This lesson is part of Premium.",
     "playerCta": "View subscription options"
   },
-  "tierPeriod": "{{tier}} {{period}}"
+  "upsell": {
+    "title": "Part of DollarSeeds Premium",
+    "seePremium": "See Premium",
+    "notNow": "Not now"
+  },
+  "errors": {
+    "premium_required": "This series is part of DollarSeeds Premium.",
+    "goal_limit_reached": "Your free plan is at its goal limit. Premium gives you unlimited goals.",
+    "goal_locked": "This goal is locked on the free plan. You can still delete it, or go Premium to unlock it.",
+    "budget_type_locked": "This budget split is part of DollarSeeds Premium.",
+    "fallback": "This is part of DollarSeeds Premium."
+  },
+  "goalLock": {
+    "badge": "LOCKED",
+    "meta": "Locked on the free plan",
+    "unlock": "Unlock with Premium ›",
+    "a11y": "Locked goal"
+  },
+  "goalCap": {
+    "reached": "Your free plan includes {{count}} goal, and it's in use. Complete or delete it to start another, or go Premium for unlimited goals.",
+    "reached_plural": "Your free plan includes {{count}} goals, and they're all in use. Complete or delete one to start another, or go Premium for unlimited goals.",
+    "over": "{{count}} goal is locked because your free plan keeps {{max}} active. Delete it, or go Premium to unlock every goal.",
+    "over_plural": "{{count}} goals are locked because your free plan keeps {{max}} active. Delete them, or go Premium to unlock every goal.",
+    "cta": "See Premium ›"
+  },
+  "budgetLock": {
+    "savedChoice": "Your saved choice. It's part of Premium, so open months use {{fallback}} for now — resubscribe and {{name}} comes straight back.",
+    "inUse": "IN USE THIS MONTH"
+  }
 }

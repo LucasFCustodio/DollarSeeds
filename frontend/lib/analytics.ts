@@ -27,6 +27,12 @@ export type AnalyticsEvent =
     | 'savings_goal_funded'
     | 'debt_goal_funded'
     | 'goal_completed'
+    | 'debt_created'
+    | 'debt_payment_logged'
+    | 'debt_paid_off'
+    | 'debt_min_toggled'
+    | 'debt_checkin_saved'
+    | 'debt_late_fee_entered'
     | 'series_explore_clicked'
     | 'lesson_video_clicked'
     | 'written_lesson_opened'
@@ -64,6 +70,21 @@ export function useAnalytics() {
         debtGoalFunded: (p: { goal_id: number }) => capture('debt_goal_funded', p),
         goalCompleted: (p: { goal_id: number; goal_type: string }) =>
             capture('goal_completed', p),
+
+        // ── Debt Freedom (the Debts tab — ids / positions / kinds only) ──────────
+        debtCreated: (p: { debt_id: number; debt_type: string; position: number; total: number }) =>
+            capture('debt_created', p),
+        debtPaymentLogged: (p: { debt_id: number; kind: 'minimum' | 'extra' | 'minimum_extra'; growth_step: number }) =>
+            capture('debt_payment_logged', p),
+        debtPaidOff: (p: { debt_id: number; position: number; total: number }) =>
+            capture('debt_paid_off', p),
+        debtMinToggled: (p: { debt_id: number; state: 'on' | 'off' }) =>
+            capture('debt_min_toggled', p),
+        /** Whether the statement came in higher than the app's balance — never the amount. */
+        debtCheckinSaved: (p: { debt_id: number; balance_went_up: 0 | 1 }) =>
+            capture('debt_checkin_saved', p),
+        debtLateFeeEntered: (p: { debt_id: number; outcome: 'saved' | 'skipped' }) =>
+            capture('debt_late_fee_entered', p),
 
         // ── Lessons (ids / titles / video timing only) ───────────────────────────
         seriesExploreClicked: (p: { series_id: string; title: string }) =>

@@ -51,7 +51,8 @@
     "index": "Home",
     "transactions": "Transactions",
     "piggyBank": "Goals",
-    "lessons": "Lessons"
+    "lessons": "Lessons",
+    "debts": "Debts"
   },
   "serverTitle": {
     "General Savings": "General Savings",

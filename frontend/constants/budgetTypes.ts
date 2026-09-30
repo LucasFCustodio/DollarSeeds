@@ -46,6 +46,25 @@ export function splitLabel(t: BudgetTypeDef): string {
     return `${Math.round(t.needs * 100)}/${Math.round(t.wants * 100)}/${Math.round(t.savings * 100)}`;
 }
 
+/**
+ * The split an OPEN month actually uses, given the user's STORED choice and the
+ * `budget_types` allowance from GET /me/entitlements/.
+ *
+ * A lapsed subscriber keeps `wealth_builder` in user_settings — the server never
+ * rewrites it, so resubscribing restores it — while every unclosed month resolves to
+ * the default split (backend `_live_budget_type`). GET /settings/ returns the stored
+ * value, so any screen that PREVIEWS a split from it must pass it through here or it
+ * shows a split the budget isn't using. `allowed` null means the allowances are
+ * unknown, and the stored choice is taken as-is.
+ */
+export function effectiveBudgetType(
+    stored: string | null | undefined,
+    allowed: readonly string[] | null | undefined,
+): BudgetTypeKey {
+    const key = resolveBudgetType(stored).key;
+    return !allowed || allowed.includes(key) ? key : DEFAULT_BUDGET_TYPE;
+}
+
 /** Safely resolve a key (possibly from the API) to a definition. */
 export function resolveBudgetType(key?: string | null): BudgetTypeDef {
     return BUDGET_TYPES[(key as BudgetTypeKey)] ?? BUDGET_TYPES[DEFAULT_BUDGET_TYPE];
