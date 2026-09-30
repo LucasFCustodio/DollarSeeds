@@ -75,6 +75,7 @@
     "soonBody": "Em breve você poderá conectar seu banco aqui, e as novas transações vão esperar na sua tela inicial, prontas para arrastar ao lugar certo."
   },
   "envision": {
+    "heading": "Visão",
     "debtsPaid": "{{paid}} / {{total}} dívidas quitadas",
     "debtFreeBy": "Livre de dívidas em {{date}}",
     "almostFree": "Falta 1 mês para se livrar de {{name}}",

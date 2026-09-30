@@ -6,6 +6,10 @@
  *   Plan      "What's next?"        close-out, next debt payment, splits, logging
  *   Envision  "Where is this going?" debts paid, encouragement, the focus plant
  *
+ * The three steps are three full-bleed bands (green, cream, green), so the screen
+ * splits into them without the user having to name them. Each band overlaps the
+ * one above it under rounded top corners.
+ *
  * A good visit can take 20 seconds, as long as the user leaves encouraged and with a
  * reason to come back. This file is layout only: state and requests live in
  * components/home/useHomeData.ts, the pieces in components/home/.
@@ -14,8 +18,11 @@
  * active debt; with it off the home is complete without them.
  */
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useIsFocused } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -36,7 +43,9 @@ import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
 import { DebtsPaidLine, EncouragementCard } from '../../components/home/Encouragement';
 import FocusPlant from '../../components/home/FocusPlant';
 import ScriptureModal from '../../components/home/ScriptureModal';
-import { CARD_GAP, HOME_PAD, SECTION_GAP } from '../../components/home/homeType';
+import {
+    BAND_OVERLAP, BAND_PAD, BAND_RADIUS, CARD_GAP, HOME_PAD, SECTION_GAP, homeType,
+} from '../../components/home/homeType';
 
 const SPLIT_CATEGORY: Record<SplitKey, string> = { needs: 'Needs', wants: 'Wants', goals: 'Goals' }; // i18n-canonical
 
@@ -53,6 +62,8 @@ export default function HomeScreen() {
 function Home() {
     const router = useRouter();
     const { theme } = useTheme();
+    const { t } = useTranslation('dashboard');
+    const focused = useIsFocused();
     const insets = useSafeAreaInsets();
     const zones = useDropZones();
     const home = useHomeData();
@@ -84,6 +95,10 @@ function Home() {
     const rawDebts = DEBT_FREEDOM_ENABLED ? summary?.debts ?? null : null;
     const debts = rawDebts && rawDebts.total_count > rawDebts.paid_count ? rawDebts : null;
     const goalsNear = summary?.goals_near_completion ?? [];
+    // Envision has something to show: the debts-paid line, or a goal in the
+    // encouragement card. Otherwise the whole band, heading included, is hidden and
+    // the cream band ends the page.
+    const envision = !!debts || goalsNear.length > 0;
 
     // ── Navigation ────────────────────────────────────────────────────────────
     const openSplit = (split: SplitKey) => router.push({
@@ -99,80 +114,99 @@ function Home() {
 
     return (
         <View style={[styles.fill, { backgroundColor: theme.bg }]}>
+            {/* The top of the home is green, so the status bar content is light;
+                only while the home is the focused tab. */}
+            {focused ? <StatusBar style="light" /> : null}
             <ScrollView
-                style={styles.fill}
-                contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 120, paddingHorizontal: HOME_PAD }}
+                // Whatever shows past the last band on an overscroll matches it.
+                style={[styles.fill, { backgroundColor: envision ? theme.sectionGreen : theme.bg }]}
+                contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
                 scrollEnabled={!zones?.dragging}
             >
-                <HomeTopBar month={currentMonth} onOpenMonthPicker={() => setPickerOpen(true)} />
+                {/* Green above the first band, for the pull-down bounce. */}
+                <View style={[styles.overscroll, { backgroundColor: theme.sectionGreen }]} />
 
-                {/* ── Analyze: "Am I okay?" ─────────────────────────────── */}
-                <View style={[styles.section, { gap: CARD_GAP + 8 }]}>
-                    <IncomeHero
-                        left={totalLeft}
-                        income={total_income}
-                        spent={totalSpent}
-                        onAdd={logIncome}
-                        onOpenIncome={openIncomeList}
-                    />
-                    <StatusTitheRow
-                        debts={debts}
-                        overBudget={summary?.over_budget ?? []}
-                        tithe={{
-                            active: titheActive,
-                            amount: titheAmount,
-                            given: titheGiven,
-                            disabled: home.savingTitheGiven || monthClosed,
-                            onToggle: home.toggleTitheGiven,
-                        }}
-                        onOpenDebts={() => openDebts()}
-                        onOpenSplit={openSplit}
-                    />
+                {/* ── Band 1 · Analyze: "Am I okay?" ────────────────────── */}
+                <View style={[styles.band, { backgroundColor: theme.sectionGreen, paddingTop: insets.top + 8 }]}>
+                    <HomeTopBar month={currentMonth} onOpenMonthPicker={() => setPickerOpen(true)} />
+                    <View style={[styles.section, { gap: CARD_GAP + 8 }]}>
+                        <IncomeHero
+                            left={totalLeft}
+                            income={total_income}
+                            spent={totalSpent}
+                            onAdd={logIncome}
+                            onOpenIncome={openIncomeList}
+                        />
+                        <StatusTitheRow
+                            debts={debts}
+                            overBudget={summary?.over_budget ?? []}
+                            tithe={{
+                                active: titheActive,
+                                amount: titheAmount,
+                                given: titheGiven,
+                                disabled: home.savingTitheGiven || monthClosed,
+                                onToggle: home.toggleTitheGiven,
+                            }}
+                            onOpenDebts={() => openDebts()}
+                            onOpenSplit={openSplit}
+                        />
+                    </View>
                 </View>
 
-                {/* ── Plan: "What's next?" ──────────────────────────────── */}
-                <View style={styles.section}>
-                    {showClosePrompt ? (
-                        <CloseOutCard
-                            month={currentMonth}
-                            target={rollover?.target ?? 0}
-                            closing={home.closingMonth}
-                            onClose={home.closeMonth}
-                            onDismiss={home.dismissCloseout}
+                {/* ── Band 2 · Plan: "What's next?" ─────────────────────── */}
+                <View style={[styles.band, styles.raised, { backgroundColor: theme.bg }, !envision && styles.last]}>
+                    <View style={styles.stack}>
+                        {showClosePrompt ? (
+                            <CloseOutCard
+                                month={currentMonth}
+                                target={rollover?.target ?? 0}
+                                closing={home.closingMonth}
+                                onClose={home.closeMonth}
+                                onDismiss={home.dismissCloseout}
+                            />
+                        ) : null}
+                        {monthClosed ? (
+                            <ClosedLine
+                                month={currentMonth}
+                                amount={rollover?.amount ?? 0}
+                                busy={home.closingMonth}
+                                onReopen={home.reopenMonth}
+                            />
+                        ) : null}
+                        {debts?.next_payment ? (
+                            <NextPaymentCard payment={debts.next_payment} onPrune={() => openDebts(debts.next_payment!.id)} />
+                        ) : null}
+                        <SplitContainers budgets={budgets} spent={expenses} onOpen={openSplit} onAdd={logExpense} />
+                        <LoggingArea
+                            connected={home.bankConnected}
+                            pending={home.pending}
+                            onClassify={home.classify}
+                            daysSinceLastLog={summary?.days_since_last_log ?? null}
+                            onOpenExpense={() => logExpense()}
                         />
-                    ) : null}
-                    {monthClosed ? (
-                        <ClosedLine
-                            month={currentMonth}
-                            amount={rollover?.amount ?? 0}
-                            busy={home.closingMonth}
-                            onReopen={home.reopenMonth}
-                        />
-                    ) : null}
-                    {debts?.next_payment ? (
-                        <NextPaymentCard payment={debts.next_payment} onPrune={() => openDebts(debts.next_payment!.id)} />
-                    ) : null}
-                    <SplitContainers budgets={budgets} spent={expenses} onOpen={openSplit} onAdd={logExpense} />
-                    <LoggingArea
-                        connected={home.bankConnected}
-                        pending={home.pending}
-                        onClassify={home.classify}
-                        daysSinceLastLog={summary?.days_since_last_log ?? null}
-                        onOpenExpense={() => logExpense()}
-                    />
-                    <ConnectBankPrompt connected={home.bankConnected} />
+                        <ConnectBankPrompt connected={home.bankConnected} />
+                    </View>
                 </View>
 
-                {/* ── Envision: "Where is this going?" ──────────────────── */}
-                {debts || goalsNear.length > 0 ? (
-                    <View style={styles.section}>
-                        {debts ? <DebtsPaidLine debts={debts} /> : null}
-                        <EncouragementCard debts={debts} goals={goalsNear} />
-                        <FocusPlant summary={debts ? summary : null} />
+                {/* ── Band 3 · Envision: "Where is this going?" ─────────── */}
+                {envision ? (
+                    <View style={[styles.band, styles.raised, styles.last, { backgroundColor: theme.sectionGreen }]}>
+                        <View style={styles.stack}>
+                            <Text style={[homeType.large, { color: theme.onBrand }]}>{t('envision.heading')}</Text>
+                            <EncouragementCard debts={debts} goals={goalsNear} />
+                            {debts ? <DebtsPaidLine debts={debts} /> : null}
+                            <FocusPlant summary={debts ? summary : null} />
+                        </View>
                     </View>
                 ) : null}
             </ScrollView>
+
+            {/* The status bar area stays green however far the page is scrolled. */}
+            <View
+                pointerEvents="none"
+                style={[styles.statusBarFill, { height: insets.top, backgroundColor: theme.sectionGreen }]}
+            />
 
             <MonthPickerSheet
                 visible={pickerOpen}
@@ -187,5 +221,20 @@ function Home() {
 
 const styles = StyleSheet.create({
     fill: { flex: 1 },
-    section: { marginTop: SECTION_GAP, gap: CARD_GAP },
+    // flexGrow lets the last band fill a short page, so no strip of another colour
+    // is left under it.
+    content: { flexGrow: 1 },
+    overscroll: { position: 'absolute', left: 0, right: 0, top: -1000, height: 1000 },
+    statusBarFill: { position: 'absolute', left: 0, right: 0, top: 0 },
+    band: { paddingHorizontal: HOME_PAD, paddingBottom: BAND_OVERLAP + BAND_PAD },
+    raised: {
+        marginTop: -BAND_OVERLAP,
+        paddingTop: BAND_PAD,
+        borderTopLeftRadius: BAND_RADIUS,
+        borderTopRightRadius: BAND_RADIUS,
+    },
+    // Runs behind the floating tab bar to the end of the scroll content.
+    last: { flexGrow: 1, paddingBottom: 120 },
+    section: { marginTop: SECTION_GAP },
+    stack: { gap: CARD_GAP },
 });

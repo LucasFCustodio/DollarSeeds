@@ -59,6 +59,10 @@ export interface AppTheme {
     brand2: string;      // emerald
     brandSoft: string;   // tinted brand bg
     onBrand: string;     // text on brand bg
+    // The home's green bands (top bar + Analyze, and Envision). Sampled from the
+    // lighter end of the old dashboard hero gradient; identical in both themes, so
+    // text sitting on it is always `onBrand`.
+    sectionGreen: string;
 
     // ── Category tokens ─────────────────────────────────────────
     needs: string;    needsSoft: string;
@@ -124,6 +128,7 @@ const LIGHT: AppTheme = {
     brand2: '#10B981',
     brandSoft: '#E8F3EE',
     onBrand: '#FFFFFF',
+    sectionGreen: '#178D65',
 
     // Categories — harmonized to forest backdrop
     needs: '#C2701C',    needsSoft: '#FBEDD9',
@@ -179,6 +184,7 @@ const DARK: AppTheme = {
     brand2: '#10B981',
     brandSoft: '#0F2A20',
     onBrand: '#FFFFFF',
+    sectionGreen: '#178D65',
 
     // Categories
     needs: '#F4B860',    needsSoft: '#2C2010',

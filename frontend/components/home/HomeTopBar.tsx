@@ -1,6 +1,7 @@
 /**
  * HomeTopBar — profile, the month (tap to pick another), News and Settings.
- * Sits straight on the cream page; no container.
+ * Sits straight on the green Analyze band; no container. Its buttons are the old
+ * dashboard hero's glass buttons, with onBrand glyphs.
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -10,7 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useLocale } from '../../context/LocaleContext';
 import { useAnnouncements } from '../../context/AnnouncementsContext';
 import { IconChevronDown, IconGearMascot, IconMail, IconUser } from '../icons';
-import { homeType } from './homeType';
+import { GLASS, homeType } from './homeType';
 
 interface Props {
     month: string;
@@ -25,17 +26,17 @@ export default function HomeTopBar({ month, onOpenMonthPicker }: Props) {
     const { t: tn } = useTranslation('news');
     const { unread, open, announcements } = useAnnouncements();
 
-    const roundBtn = [styles.roundBtn, { backgroundColor: theme.surface, borderColor: theme.border }];
+    const roundBtn = [styles.roundBtn, { backgroundColor: GLASS.fill, borderColor: GLASS.border }];
 
     return (
         <View style={styles.row}>
             {/* Profile — no action yet; the future entry point for customization. */}
             <View
-                style={[styles.profile, { backgroundColor: theme.brandSoft }]}
+                style={[styles.profile, { backgroundColor: GLASS.fill, borderColor: GLASS.border }]}
                 accessibilityRole="image"
                 accessibilityLabel={t('topBar.profileA11y')}
             >
-                <IconUser size={20} color={theme.brand} />
+                <IconUser size={20} color={theme.onBrand} />
             </View>
 
             <Pressable
@@ -45,10 +46,10 @@ export default function HomeTopBar({ month, onOpenMonthPicker }: Props) {
                 hitSlop={10}
                 style={({ pressed }) => [styles.date, pressed && { opacity: 0.6 }]}
             >
-                <Text style={[homeType.small, { color: theme.ink }]}>
+                <Text style={[homeType.small, { color: theme.onBrand }]}>
                     {monthYear(month, new Date().getFullYear())}
                 </Text>
-                <IconChevronDown size={14} color={theme.ink} />
+                <IconChevronDown size={14} color={theme.onBrand} />
             </Pressable>
 
             <View style={styles.controls}>
@@ -61,9 +62,9 @@ export default function HomeTopBar({ month, onOpenMonthPicker }: Props) {
                         accessibilityLabel={tn('buttonA11y')}
                         style={({ pressed }) => [roundBtn, pressed && { opacity: 0.7 }]}
                     >
-                        <IconMail size={18} color={theme.ink} />
+                        <IconMail size={18} color={theme.onBrand} />
                         {unread ? (
-                            <View style={[styles.unreadDot, { backgroundColor: theme.harvest, borderColor: theme.surface }]} />
+                            <View style={[styles.unreadDot, { backgroundColor: theme.harvest, borderColor: theme.sectionGreen }]} />
                         ) : null}
                     </Pressable>
                 ) : null}
@@ -73,7 +74,7 @@ export default function HomeTopBar({ month, onOpenMonthPicker }: Props) {
                     accessibilityLabel={t('topBar.settingsA11y')}
                     style={({ pressed }) => [roundBtn, pressed && { opacity: 0.7 }]}
                 >
-                    <IconGearMascot size={18} color={theme.ink} />
+                    <IconGearMascot size={18} color={theme.onBrand} />
                 </Pressable>
             </View>
         </View>
@@ -82,7 +83,7 @@ export default function HomeTopBar({ month, onOpenMonthPicker }: Props) {
 
 const styles = StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    profile: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+    profile: { width: 36, height: 36, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     // Absolutely centred, so the date sits in the middle of the screen whether or
     // not the News button is showing on the right.
     date: {

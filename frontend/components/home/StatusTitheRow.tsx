@@ -7,7 +7,8 @@
  * tithing off there is no envelope and no line.
  *
  * The status block is the most important thing on the screen, so it is a solid
- * brand block rather than a line of text. Every fact in it comes from the server
+ * brand block rather than a line of text. On the lighter sectionGreen band it keeps
+ * its depth and a white hairline so it still reads as its own block. Every fact in it comes from the server
  * (/home/summary/); nothing is computed here.
  */
 import React from 'react';
@@ -41,6 +42,7 @@ interface Props {
 }
 
 const ICON = 16;
+const STATUS_EDGE = 'rgba(255,255,255,0.12)';
 
 export default function StatusTitheRow({ debts, overBudget, tithe, onOpenDebts, onOpenSplit }: Props) {
     const { theme } = useTheme();
@@ -94,7 +96,7 @@ export default function StatusTitheRow({ debts, overBudget, tithe, onOpenDebts, 
             dotActiveColor={theme.onBrand}
             style={[
                 styles.status,
-                { backgroundColor: theme.brand, ...(shadow(7) as object) },
+                { backgroundColor: theme.brand, borderColor: STATUS_EDGE, ...(shadow(7) as object) },
                 sharedRow ? { flex: 3 } : null,
             ]}
         />
@@ -113,8 +115,8 @@ export default function StatusTitheRow({ debts, overBudget, tithe, onOpenDebts, 
                     accessibilityLabel={t('tithe.undoA11y')}
                     style={({ pressed }) => [styles.givenLine, pressed && { opacity: 0.6 }]}
                 >
-                    <IconCheck size={14} color={theme.success} />
-                    <Text style={[homeType.small, styles.givenText, { color: theme.ink2 }]} numberOfLines={1}>
+                    <IconCheck size={14} color={theme.onBrand} />
+                    <Text style={[homeType.small, styles.givenText, { color: theme.onBrand }]} numberOfLines={1}>
                         {t('tithe.givenLine', { amount: formatMoney(tithe.amount) })}
                     </Text>
                     <TitheToggle
@@ -157,7 +159,7 @@ export default function StatusTitheRow({ debts, overBudget, tithe, onOpenDebts, 
 
 const styles = StyleSheet.create({
     row: { flexDirection: 'row', gap: CARD_GAP, alignItems: 'stretch' },
-    status: { borderRadius: 18, paddingHorizontal: 16, paddingVertical: 16, justifyContent: 'center', minHeight: 64 },
+    status: { borderRadius: 18, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 16, justifyContent: 'center', minHeight: 64 },
     line: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     lineText: { flexShrink: 1 },
     envelope: { flex: 2, justifyContent: 'space-between', gap: 4 },
