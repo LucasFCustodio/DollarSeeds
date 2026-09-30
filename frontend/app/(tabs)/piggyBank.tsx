@@ -60,7 +60,7 @@ import {
 } from '../../components/icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const BASE = 'https://dollarseeds-1.onrender.com';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Transaction = {

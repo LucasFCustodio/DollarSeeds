@@ -24,7 +24,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useAnalytics } from '../lib/analytics';
 import { IconChevronLeft, IconChevronRight } from '../components/icons';
 
-const BASE = 'https://dollarseeds-1.onrender.com';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 type SeriesLesson = {
     id: string;

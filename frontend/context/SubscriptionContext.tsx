@@ -47,7 +47,7 @@ import {
     type RestoreResult,
 } from '../lib/purchases';
 
-const BASE = 'https://dollarseeds-1.onrender.com';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 /** Unreachable /config/ resolves to these — i.e. exactly today's behaviour. */
 const CONFIG_FALLBACK: AppConfig = {

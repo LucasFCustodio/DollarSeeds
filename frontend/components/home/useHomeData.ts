@@ -27,7 +27,7 @@ import {
 } from '../../lib/bankTransactions';
 import { randomVerse, VERSE_IDS, type VerseId } from './ScriptureModal';
 
-const BASE = 'https://dollarseeds-1.onrender.com';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 export interface DashboardData {
     total_income: number;

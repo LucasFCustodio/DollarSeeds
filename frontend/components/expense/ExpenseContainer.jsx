@@ -42,6 +42,7 @@ import {
     IconNeedsMascot, IconWantsMascot,
     IconChevronLeft, IconCheck,
 } from '../icons';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -164,7 +165,7 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
         if (!month || !MONTHS.includes(month)) return;
         if (!day || isNaN(parsedDay) || parsedDay < 1 || parsedDay > 31) return;
         try {
-            await axios.post('https://dollarseeds-1.onrender.com/expenses/', {
+            await axios.post(`${BASE}/expenses/`, {
                 title: title.trim() || subcat,
                 sub_category: subcat,
                 amount: parsed,

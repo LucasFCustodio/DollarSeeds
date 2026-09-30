@@ -40,7 +40,7 @@ import PremiumCta from '../../components/premium/PremiumCta';
 import { IconCheck, IconLock, IconScripture, IconStar } from '../../components/icons';
 import { LESSONS } from '../../constants/lessons';
 
-const BASE = 'https://dollarseeds-1.onrender.com';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 const STORAGE_KEY = 'completed_lessons';
 
 type Series = {

@@ -46,7 +46,7 @@ import { useSubscription } from '../../context/SubscriptionContext';
 // SOURCES lives in constants/txCategories.ts, which documents why these values stay
 // English in every language: they are written to the database as `income.source`.
 
-const BASE = 'https://dollarseeds-1.onrender.com';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 // ─── Month picker ─────────────────────────────────────────────────────────────
 const ITEM_H = 46;
@@ -164,7 +164,7 @@ export default function IncomeContainer({ embedded = false, onSaved }) {
         if (!month || !MONTHS.includes(month)) return;
         if (!day || isNaN(parsedDay) || parsedDay < 1 || parsedDay > 31) return;
         try {
-            await axios.post('https://dollarseeds-1.onrender.com/income/', {
+            await axios.post(`${BASE}/income/`, {
                 amount: parsed,
                 source,
                 // A blank title stores NULL, never a copy of the source chip. Baking
