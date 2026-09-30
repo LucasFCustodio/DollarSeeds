@@ -7,6 +7,9 @@
  * ✅ Source chip drives form context
  * ✅ 50/30/20 split preview updates live with amount
  * ✅ Back chevron returns to previous screen
+ *
+ * Optional prop (backward compatible — omitted, behaviour is unchanged):
+ *   onSaved  called after a successful save (app/logIncome.tsx returns home)
  */
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -112,7 +115,7 @@ function MonthPicker({ value, onChange, theme }) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function IncomeContainer({ embedded = false }) {
+export default function IncomeContainer({ embedded = false, onSaved }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
@@ -184,6 +187,7 @@ export default function IncomeContainer({ embedded = false }) {
             setDay(String(today.getDate()));
             setSubmitted(true);
             setTimeout(() => setSubmitted(false), 2000);
+            onSaved?.();
         } catch (err) {
             // A 409 means the target month is closed (rollover feature) and read-only.
             if (err?.response?.status === 409) {

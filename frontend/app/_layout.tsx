@@ -121,6 +121,8 @@ function RootLayoutNav() {
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
                 <Stack.Screen name="debtDetail" options={{ headerShown: false }} />
                 <Stack.Screen name="debtForm" options={{ headerShown: false }} />
+                <Stack.Screen name="logExpense" options={{ headerShown: false }} />
+                <Stack.Screen name="logIncome" options={{ headerShown: false }} />
             </Stack>
             <OnboardingTour />
             <StartingBalanceGate />
