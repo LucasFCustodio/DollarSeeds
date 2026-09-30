@@ -7,6 +7,9 @@
  * ✅ Source chip drives form context
  * ✅ 50/30/20 split preview updates live with amount
  * ✅ Back chevron returns to previous screen
+ *
+ * Optional prop (backward compatible — omitted, behaviour is unchanged):
+ *   onSaved  called after a successful save (app/logIncome.tsx returns home)
  */
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -43,7 +46,7 @@ import { useSubscription } from '../../context/SubscriptionContext';
 // SOURCES lives in constants/txCategories.ts, which documents why these values stay
 // English in every language: they are written to the database as `income.source`.
 
-const BASE = 'https://dollarseeds-1.onrender.com';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 // ─── Month picker ─────────────────────────────────────────────────────────────
 const ITEM_H = 46;
@@ -112,7 +115,7 @@ function MonthPicker({ value, onChange, theme }) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function IncomeContainer({ embedded = false }) {
+export default function IncomeContainer({ embedded = false, onSaved }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
@@ -161,7 +164,7 @@ export default function IncomeContainer({ embedded = false }) {
         if (!month || !MONTHS.includes(month)) return;
         if (!day || isNaN(parsedDay) || parsedDay < 1 || parsedDay > 31) return;
         try {
-            await axios.post('https://dollarseeds-1.onrender.com/income/', {
+            await axios.post(`${BASE}/income/`, {
                 amount: parsed,
                 source,
                 // A blank title stores NULL, never a copy of the source chip. Baking
@@ -184,6 +187,7 @@ export default function IncomeContainer({ embedded = false }) {
             setDay(String(today.getDate()));
             setSubmitted(true);
             setTimeout(() => setSubmitted(false), 2000);
+            onSaved?.();
         } catch (err) {
             // A 409 means the target month is closed (rollover feature) and read-only.
             if (err?.response?.status === 409) {

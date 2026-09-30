@@ -2,8 +2,7 @@
   "action": {
     "cancel": "Cancelar",
     "retry": "Toque para tentar novamente",
-    "confirm": "Confirmar",
-    "viewAll": "Ver todos os {{label}} →"
+    "confirm": "Confirmar"
   },
   "state": {
     "genericError": "Algo deu errado. Tente novamente."
@@ -49,7 +48,6 @@
   },
   "tabs": {
     "index": "Painel",
-    "transactions": "Transações",
     "piggyBank": "Metas",
     "lessons": "Séries",
     "debts": "Dívidas"

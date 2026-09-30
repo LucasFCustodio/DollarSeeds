@@ -12,9 +12,9 @@
       "body": "Aqui você vê sua renda atual, quanto ainda pode gastar e quanto tem disponível em cada categoria de gasto"
     },
     "transactions": {
-      "eyebrow": "TRANSAÇÕES",
-      "title": "Registre suas entradas e saídas",
-      "body": "Digite um valor, escolha uma categoria, dê um nome, selecione a data e salve. Cada nova entrada é dividida automaticamente entre todas as categorias"
+      "eyebrow": "REGISTROS",
+      "title": "Registre pela tela inicial",
+      "body": "Toque no + ao lado do valor disponível para registrar renda, ou no + de Necessidades ou Desejos para registrar um gasto. Cada nova renda é dividida automaticamente entre todas as categorias"
     },
     "goals": {
       "eyebrow": "METAS",
@@ -33,7 +33,7 @@
     "eyebrow": "SÓ MAIS UMA COISA",
     "title": "Seu saldo inicial",
     "body": "O DollarSeeds acompanha seu dinheiro mês a mês. Informe o quanto você já tinha guardado ANTES de {{month}} — tudo o que você já havia separado.",
-    "note": "Não inclua as rendas nem os gastos de {{month}}. Esses você registra normalmente na aba Transações.",
+    "note": "Não inclua as rendas nem os gastos de {{month}}. Esses você registra normalmente com os botões + da tela inicial.",
     "inputLabel": "Saldo inicial",
     "add": "+ Adicionar",
     "done": "Concluir",

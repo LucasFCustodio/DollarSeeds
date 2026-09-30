@@ -6,6 +6,10 @@
  * ✅ Success flash resets form
  * ✅ Category + sub-category drive form context
  * ✅ Back chevron returns to previous screen
+ *
+ * Optional props (all backward compatible — omitted, behaviour is unchanged):
+ *   initialCategory  'needs' | 'wants' — preselects the category (the home's +)
+ *   onSaved          called after a successful save (app/logExpense.tsx returns home)
  */
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -38,6 +42,7 @@ import {
     IconNeedsMascot, IconWantsMascot,
     IconChevronLeft, IconCheck,
 } from '../icons';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -116,7 +121,7 @@ function MonthPicker({ value, onChange, theme }) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function ExpenseContainer({ embedded = false }) {
+export default function ExpenseContainer({ embedded = false, initialCategory, onSaved }) {
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
@@ -132,8 +137,10 @@ export default function ExpenseContainer({ embedded = false }) {
 
     // Form state
     const [amount, setAmount]     = useState('');
-    const [category, setCategory] = useState('needs');
-    const [subcat, setSubcat]     = useState('Groceries');
+    const startCategory = initialCategory === 'wants' ? 'wants' : 'needs';
+    const [category, setCategory] = useState(startCategory);
+    // Needs keeps its long-standing 'Groceries' default; a Wants preset starts on its first chip.
+    const [subcat, setSubcat]     = useState(startCategory === 'wants' ? SUBCATS.wants[0] : 'Groceries');
     const [title, setTitle]       = useState('');
     const [month, setMonth]       = useState(MONTHS[today.getMonth()]);
     const [day, setDay]           = useState(String(today.getDate()));
@@ -158,7 +165,7 @@ export default function ExpenseContainer({ embedded = false }) {
         if (!month || !MONTHS.includes(month)) return;
         if (!day || isNaN(parsedDay) || parsedDay < 1 || parsedDay > 31) return;
         try {
-            await axios.post('https://dollarseeds-1.onrender.com/expenses/', {
+            await axios.post(`${BASE}/expenses/`, {
                 title: title.trim() || subcat,
                 sub_category: subcat,
                 amount: parsed,
@@ -176,6 +183,7 @@ export default function ExpenseContainer({ embedded = false }) {
             setSubcat(SUBCATS[category][0]);
             setSubmitted(true);
             setTimeout(() => setSubmitted(false), 2000);
+            onSaved?.();
         } catch (err) {
             // A 409 means the target month is closed (rollover feature) and read-only.
             if (err?.response?.status === 409) {

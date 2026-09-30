@@ -49,7 +49,7 @@ import {
 } from '../constants/budgetTypes';
 import { premiumErrorCode, usePremiumUpsell } from '../lib/premiumErrors';
 
-const BASE = 'https://dollarseeds-1.onrender.com';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 export default function SettingsScreen() {
     const router = useRouter();

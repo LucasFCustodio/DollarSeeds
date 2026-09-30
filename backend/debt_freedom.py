@@ -601,3 +601,161 @@ def decorate_garden(debts: list, transactions: list, today: datetime.date,
         "plan_est_payoff_month": sim["plan"],
         "monthly_extra": money(monthly_extra) if monthly_extra is not None else None,
     }
+
+
+# ── the home summary ─────────────────────────────────────────────────────────
+#
+# GET /home/summary/ shows a few debt facts on the home screen. They are read off
+# the SAME decorated garden the Debts tab renders (decorate_garden above), so the
+# two screens can never disagree; these functions only pick from it.
+
+DUE_SOON_DAYS = 7
+
+
+def _effect(t: dict) -> float:
+    """How a transaction moved the balance: payments lower it, everything else
+    (interest, fees, edits, adjustments, reversals) is stored as the signed rise."""
+    amount = _num(t.get("amount"))
+    return -amount if t.get("kind") in PAYMENT_KINDS else amount
+
+
+def balance_at(debt: dict, transactions: list, day: datetime.date) -> float:
+    """The balance at the start of `day`: the last transaction dated before it, or
+    (none) the balance before the debt's first transaction, or (no history at all)
+    the current balance."""
+    dated = sorted((t for t in transactions if _date(t.get("occurred_on")) is not None),
+                   key=lambda t: (_date(t.get("occurred_on")), t.get("id") or 0))
+    before = [t for t in dated if _date(t.get("occurred_on")) < day]
+    if before:
+        return money(before[-1].get("balance_after"))
+    if dated:
+        first = dated[0]
+        return money(_num(first.get("balance_after")) - _effect(first))
+    return money(debt.get("current_balance"))
+
+
+def last_passed_due_date(debt: dict, today: datetime.date) -> Optional[datetime.date]:
+    """The most recent due date strictly before today that the debt existed for
+    (the same due dates process_due_dates closes), else None."""
+    due_day = debt.get("due_day")
+    if not due_day:
+        return None
+    due = due_date_in(today.year, today.month, due_day)
+    if due >= today:
+        prev = add_months(today, -1)
+        due = due_date_in(prev.year, prev.month, due_day)
+    created = _date(debt.get("created_at"))
+    if created is not None and due <= created:
+        return None
+    return due
+
+
+def missed_last_minimum(debt: dict, transactions: list, today: datetime.date) -> bool:
+    """Did the cycle that closed on the last passed due date fail the late-fee test
+    process_due_dates applies? Not paid in full, and a net minimum below
+    min(min_payment, statement)."""
+    due = last_passed_due_date(debt, today)
+    if due is None:
+        return False
+    prev_month = add_months(due, -1)
+    start = due_date_in(prev_month.year, prev_month.month, debt["due_day"]) + DAY
+    created = _date(debt.get("created_at"))
+    if created is not None and created - DAY > start:
+        start = created - DAY
+    statement = balance_at(debt, transactions, start)
+    if statement <= CENT:
+        return False
+    if net_paid(transactions, start, due) >= statement - CENT:
+        return False
+    return net_minimum(transactions, start, due) < min(_num(debt.get("min_payment")), statement) - CENT
+
+
+def is_overdue(debt: dict, transactions: list, today: datetime.date) -> bool:
+    """An active debt whose last passed due date closed without its minimum. It stays
+    overdue until a minimum is logged in the current cycle."""
+    if is_paid_off(debt):
+        return False
+    if min_logged_this_cycle(debt, transactions, today):
+        return False
+    return missed_last_minimum(debt, transactions, today)
+
+
+def is_due_soon(debt: dict, transactions: list, today: datetime.date) -> bool:
+    """Active, not overdue, next due date within DUE_SOON_DAYS of today (inclusive),
+    and no minimum logged for it yet."""
+    if is_paid_off(debt):
+        return False
+    due = next_due_date(debt.get("due_day"), today)
+    if due is None or (due - today).days > DUE_SOON_DAYS:
+        return False
+    if min_logged_this_cycle(debt, transactions, today):
+        return False
+    return not is_overdue(debt, transactions, today)
+
+
+def focus_extra(debt: dict, monthly_extra: Optional[float]) -> float:
+    """What the focus debt gets on top of its own minimum this month: the rollover
+    (suggested − minimum) plus the user's monthly extra. 0 for every other debt."""
+    if not debt.get("is_focus"):
+        return 0.0
+    rollover = _num(debt.get("suggested_payment")) - _num(debt.get("min_payment"))
+    return money(max(0.0, rollover) + max(0.0, _num(monthly_extra)))
+
+
+def next_payment(garden_debts: list) -> Optional[dict]:
+    """The active debt with the nearest next_due_date; on a shared date the focus
+    debt first, then garden order. None when no active debt has a due date."""
+    candidates = [(i, d) for i, d in enumerate(garden_debts)
+                  if not is_paid_off(d) and d.get("next_due_date")]
+    if not candidates:
+        return None
+    _, d = min(candidates, key=lambda c: (c[1]["next_due_date"], not c[1].get("is_focus"), c[0]))
+    return d
+
+
+def home_debt_summary(garden: dict, transactions: list, today: datetime.date) -> Optional[dict]:
+    """The home screen's debt block, from a decorate_garden() result. None when the
+    user has no debts at all."""
+    debts = garden.get("debts") or []
+    if not debts:
+        return None
+    by_debt = _by_debt(transactions)
+    monthly_extra = garden.get("monthly_extra")
+    active = [d for d in debts if not is_paid_off(d)]
+
+    nxt = next_payment(debts)
+    focus = next((d for d in debts if d.get("is_focus")), None)
+    next_month = month_key(add_months(today, 1))
+    almost = next((d for d in active if d.get("est_payoff_month") == next_month), None)
+
+    return {
+        "paid_count": len(debts) - len(active),
+        "total_count": len(debts),
+        "overdue_count": sum(1 for d in active if is_overdue(d, by_debt.get(d["id"], []), today)),
+        "due_soon_count": sum(1 for d in active if is_due_soon(d, by_debt.get(d["id"], []), today)),
+        "next_payment": None if nxt is None else {
+            "id": nxt["id"],
+            "name": nxt.get("name"),
+            "due_date": nxt["next_due_date"],
+            "min_payment": money(nxt.get("min_payment")),
+            "focus_extra": focus_extra(nxt, monthly_extra),
+            "is_focus": bool(nxt.get("is_focus")),
+        },
+        # The whole decorated debt, so the home can draw the same plant and pot
+        # label the Debts tab does. Its first keys are the documented summary ones.
+        "focus": None if focus is None else {
+            "id": focus["id"],
+            "name": focus.get("name"),
+            "species": focus.get("species"),
+            "growth_step": focus.get("growth_step"),
+            "pct_paid": focus.get("pct_paid"),
+            "focus_extra": focus_extra(focus, monthly_extra),
+            "debt": focus,
+        },
+        "plan_est_payoff_month": garden.get("plan_est_payoff_month"),
+        "almost_free": None if almost is None else {
+            "id": almost["id"],
+            "name": almost.get("name"),
+            "est_payoff_month": almost["est_payoff_month"],
+        },
+    }

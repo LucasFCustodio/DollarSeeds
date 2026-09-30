@@ -7,6 +7,7 @@ import { useLocale } from '../context/LocaleContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { premiumErrorCode, usePremiumUpsell } from '../lib/premiumErrors';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 interface Expense {
     id: number; title: string; amount: number; day: number; category: string; month: string;
@@ -72,7 +73,6 @@ export default function DetailsScreen() {
     };
 
     const fetchDetailedExpenses = async () => {
-        const BASE = 'https://dollarseeds-1.onrender.com';
         try {
             if (category === 'Goals') {
                 // Goals = legacy "Goals" expense rows + income-sourced savings deposits.
@@ -107,7 +107,6 @@ export default function DetailsScreen() {
     };
 
     const deleteExpense = async (item: Expense) => {
-        const BASE = 'https://dollarseeds-1.onrender.com';
         try {
             if (item.kind === 'savings') {
                 await axios.delete(`${BASE}/savings/transaction/${item.id}?user_id=${user?.id}`);
@@ -127,7 +126,7 @@ export default function DetailsScreen() {
     const fetchDetailedIncome = async () => {
         try {
             const res = await axios.get(
-                `https://dollarseeds-1.onrender.com/income/details/?month=${month}&user_id=${user?.id}`
+                `${BASE}/income/details/?month=${month}&user_id=${user?.id}`
             );
             const sorted = [...(res.data.data ?? [])].sort((a, b) => b.day - a.day);
             setIncome(sorted);
@@ -136,7 +135,7 @@ export default function DetailsScreen() {
 
     const deleteIncome = async (id: number) => {
         try {
-            await axios.delete(`https://dollarseeds-1.onrender.com/income/delete/${id}?user_id=${user?.id}`);
+            await axios.delete(`${BASE}/income/delete/${id}?user_id=${user?.id}`);
             setIncome(prev => prev.filter(i => i.id !== id));
         } catch (e) {
             if (isClosedMonthError(e)) showClosedMonthAlert();

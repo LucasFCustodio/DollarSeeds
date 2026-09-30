@@ -13,7 +13,21 @@
         "height": 129.1
       },
       "stakeTagRotation": -5,
-      "bugSteps": []
+      "bugSteps": [],
+      "artTop": [
+        782,
+        731,
+        676,
+        623,
+        567,
+        498,
+        431,
+        350,
+        266,
+        180,
+        99
+      ],
+      "artTopPaidOff": 99
     },
     "2": {
       "stakeTag": {
@@ -23,7 +37,21 @@
         "height": 129.1
       },
       "stakeTagRotation": -5,
-      "bugSteps": []
+      "bugSteps": [],
+      "artTop": [
+        782,
+        755,
+        704,
+        652,
+        608,
+        568,
+        530,
+        460,
+        398,
+        320,
+        212
+      ],
+      "artTopPaidOff": 212
     },
     "3": {
       "stakeTag": {
@@ -40,7 +68,21 @@
         8,
         9,
         10
-      ]
+      ],
+      "artTop": [
+        782,
+        757,
+        744,
+        704,
+        643,
+        419,
+        324,
+        255,
+        189,
+        139,
+        106
+      ],
+      "artTopPaidOff": 314
     },
     "4": {
       "stakeTag": {
@@ -50,7 +92,21 @@
         "height": 129.1
       },
       "stakeTagRotation": -5,
-      "bugSteps": []
+      "bugSteps": [],
+      "artTop": [
+        782,
+        754,
+        701,
+        657,
+        606,
+        570,
+        478,
+        423,
+        368,
+        322,
+        291
+      ],
+      "artTopPaidOff": 291
     }
   },
   "fragments": [

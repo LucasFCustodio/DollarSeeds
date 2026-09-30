@@ -17,7 +17,8 @@
 //   plant-3/frame-XX-bug-a|b.svg  flytrap: the bug in flight / landed (poses a, b)
 //   plant-3/frame-XX-puff.svg     flytrap: the little puff (pose d)
 //   pot-kit/*.svg                 the shared pot, soil ball, fragments, stake, seed
-//   layout.json                   bounding boxes + fragment fall transforms
+//   layout.json                   bounding boxes + fragment fall transforms, and each
+//                                 frame's top-most painted y (artTop, artTopPaidOff)
 //
 // assets/debt-freedom/.svgrrc turns off SVGO's cleanupIds for this folder, so the
 // named groups (pot_label, fragment_01, trap_2, …) survive the Metro SVG transform.
@@ -49,6 +50,13 @@ const POT_IDS = ['soil', 'pot_body', 'pot_label', 'pot_rim'];
 const DROP_IDS = ['grain', '_mock_label_text', '_flight_path'];
 const FLYTRAP_FIRST_TOP = 'trap_2'; // the trap the bug lands in
 const BUG_MIN_STEP = 5; // trap_2 is visible from frame 5
+
+// How far above its resting pose each animated layer can travel, in canvas units.
+// Must match PlantView.playBug: the bug starts its flight at translateY -260 and the
+// puff drifts up 30 as it fades. Nothing else in a growth frame rises above the
+// static art (the grow crossfade only scales down, about the pot).
+const BUG_FLIGHT_RISE = 260;
+const PUFF_RISE = 30;
 
 const browser = await chromium.launch();
 
@@ -240,6 +248,34 @@ function collect(opts) {
   return out;
 }
 
+// Runs in the page. Rasterizes each SVG layer on the full 1000 × 1250 canvas and
+// returns the first row holding any painted pixel — strokes, soft edges and all, which
+// a geometric getBBox would miss. null for an empty layer.
+async function paintedTops(svgs) {
+  const W = 1000, H = 1250;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const tops = [];
+  for (const src of svgs) {
+    const sized = src.replace('<svg', `<svg width="${W}" height="${H}"`);
+    const url = URL.createObjectURL(new Blob([sized], { type: 'image/svg+xml' }));
+    const img = new Image();
+    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(img, 0, 0, W, H);
+    URL.revokeObjectURL(url);
+    const { data } = ctx.getImageData(0, 0, W, H);
+    let top = null;
+    for (let y = 0; y < H && top == null; y++) {
+      for (let x = 0; x < W; x++) if (data[(y * W + x) * 4 + 3] > 0) { top = y; break; }
+    }
+    tops.push(top);
+  }
+  return tops;
+}
+
 function write(rel, content) {
   const file = path.join(OUT, rel);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -255,7 +291,28 @@ for (const plant of PLANTS) {
   await page.waitForFunction(() => document.querySelectorAll('svg').length > 18, null, { timeout: 60000 });
   await page.waitForTimeout(1000);
   const out = await page.evaluate(collect, { POT_IDS, DROP_IDS, GRAIN, FLYTRAP_FIRST_TOP, BUG_MIN_STEP });
+
+  // ── artTop: the top-most painted y of everything a frame can show — the pot, the
+  // plant layers, and (flytrap) the snap pose, the bug along its flight and the
+  // rising puff. The home crops the plant to it; the Debts tab keeps the full canvas.
+  const layers = [];
+  const topOf = []; // per frame: [layer index, rise]
+  out.frames.forEach((f, i) => {
+    const e = out.extras[i];
+    const entries = [[out.kit['empty-pot'], 0], [f.back, 0], [f.front, 0], [f.top, 0],
+      [e?.snap, 0], [e?.bugA, BUG_FLIGHT_RISE], [e?.bugB, 0], [e?.puff, PUFF_RISE]];
+    topOf[i] = entries.filter(([svg]) => svg).map(([svg, rise]) => [layers.push(svg) - 1, rise]);
+  });
+  const paidIndex = layers.push(out.paidOff) - 1;
+  const tops = await page.evaluate(paintedTops, layers);
   await page.close();
+  const unionTop = (list) => {
+    const ys = list.filter(([k]) => tops[k] != null).map(([k, rise]) => tops[k] - rise);
+    if (!ys.length) throw new Error(`plant-${plant.n}: a frame measured with nothing painted`);
+    return Math.max(0, Math.min(...ys));
+  };
+  const artTop = topOf.map(unionTop);
+  const artTopPaidOff = unionTop([[paidIndex, 0]]);
 
   if (out.frames.length !== 11 || out.frames.some((f) => !f)) throw new Error(`plant-${plant.n}: expected 11 growth frames, got ${out.frames.length}`);
   const dir = `plant-${plant.n}`;
@@ -292,8 +349,10 @@ for (const plant of PLANTS) {
     stakeTag: out.layout.stakeTag,
     stakeTagRotation: out.layout.stakeTagRotation,
     bugSteps: Object.keys(out.extras).map(Number),
+    artTop,
+    artTopPaidOff,
   };
-  console.log(`plant-${plant.n}: ${out.frames.length} frames, bug steps [${Object.keys(out.extras).join(',')}]`);
+  console.log(`plant-${plant.n}: ${out.frames.length} frames, bug steps [${Object.keys(out.extras).join(',')}], artTop [${artTop.join(',')}] paid-off ${artTopPaidOff}`);
 }
 
 fs.writeFileSync(path.join(OUT, 'layout.json'), JSON.stringify(layout, null, 2) + '\n');

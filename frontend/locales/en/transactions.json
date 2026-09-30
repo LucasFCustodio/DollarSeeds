@@ -1,10 +1,4 @@
 {
-  "tab": {
-    "title": "Transactions",
-    "subtitle": "Log what comes in and goes out",
-    "toggleExpense": "Expense",
-    "toggleIncome": "Income"
-  },
   "expense": {
     "screenTitle": "New Expense",
     "screenSubtitle": "Plant where it counts",

@@ -36,7 +36,7 @@ import axios from 'axios';
 import { useAuth } from './AuthContext';
 import type { Announcement } from '../lib/announcements';
 
-const BASE = 'https://dollarseeds-1.onrender.com';
+const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 /**
  * Per-user, matching the `<prefix>_<userId>` convention in constants/onboarding.ts

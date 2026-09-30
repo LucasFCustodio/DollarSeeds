@@ -21,7 +21,6 @@ export default function TabLayout() {
                 title and back-button text, so they stay English rather than being
                 wired to a second source of truth that could drift from the tab bar. */}
             <Tabs.Screen name="index" options={{ title: 'Home' }} />
-            <Tabs.Screen name="transactions" options={{ title: 'Transactions' }} /* i18n-canonical */ />
             <Tabs.Screen name="piggyBank" options={{ title: 'Goals' }} />
             {/* Hidden from the tab bar unless DEBT_FREEDOM_ENABLED (see CustomTabBar). */}
             <Tabs.Screen name="debts" options={{ title: 'Debts' }} />

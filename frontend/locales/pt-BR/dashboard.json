@@ -1,34 +1,22 @@
 {
-  "wordmark": "DollarSeeds",
-  "subline": "{{name}} · mordomo",
-  "stewardFallback": "mordomo",
-  "monthEyebrow": "MÊS DO ORÇAMENTO",
-  "totalIncome": "{{amount}} · RENDA TOTAL",
   "leftThisMonth": "disponível neste mês",
-  "viewAllIncome": "Ver toda a renda",
-  "sectionTitle": "Como suas sementes estão crescendo",
-  "budgetTypeRow": "{{name}} · {{split}}",
-  "quickAction": {
-    "expense": "Registrar gasto",
-    "income": "Registrar renda"
-  },
   "tithe": {
     "title": "Dízimo",
-    "sub": "Separado primeiro · antes de orçar",
-    "subGiven": "Entregue · já não faz parte do que resta",
-    "amountLabel": "SEPARADO",
-    "givenToggleA11y": "Dízimo entregue neste mês"
+    "givenToggleA11y": "Dízimo entregue neste mês",
+    "give": "Entregar",
+    "givenLine": "Dízimo entregue · {{amount}}",
+    "undoA11y": "Dízimo entregue. Toque para desfazer"
   },
   "rollover": {
     "closeTitle": "Pronto para fechar {{month}}?",
     "closeSub": "Você ainda tem {{amount}} para levar para a Poupança Geral.",
     "closing": "Fechando…",
     "closeButton": "Fechar e guardar {{amount}}",
-    "closedTitle": "{{month}} está fechado",
-    "closedSub": "{{amount}} foram para a Poupança Geral.",
     "reopen": "Reabrir",
     "reopenTitle": "Reabrir {{month}}?",
-    "reopenWarning": "Isso muda {{month}} para a sua divisão de orçamento atual ({{split}}) e para a sua configuração de dízimo. Se este mês precisa manter uma divisão diferente, altere-a nas Configurações antes de reabrir."
+    "reopenWarning": "Isso muda {{month}} para a sua divisão de orçamento atual ({{split}}) e para a sua configuração de dízimo. Se este mês precisa manter uma divisão diferente, altere-a nas Configurações antes de reabrir.",
+    "closedLine": "{{month}} fechado · {{amount}} foram para a Poupança Geral",
+    "dismissA11y": "Dispensar"
   },
   "scripture": {
     "modalTitle": "Muito bem, servo fiel!",
@@ -38,12 +26,61 @@
   "category": {
     "needsSub": "Aluguel, mercado, contas",
     "wantsSub": "Estilo de vida, mimos, diversão",
-    "goalsSub": "Poupança + quitação de dívidas",
-    "over": "ACIMA",
-    "left": "RESTA",
-    "spent": "{{amount}} gastos",
-    "ofBudget": "de {{amount}}",
-    "piggyBalance": "Saldo do cofrinho"
+    "goalsSub": "Poupança + quitação de dívidas"
+  },
+  "topBar": {
+    "profileA11y": "Perfil",
+    "monthA11y": "{{month}}. Toque para mudar o mês",
+    "settingsA11y": "Configurações"
+  },
+  "monthPicker": {
+    "title": "Escolha um mês",
+    "close": "Fechar"
+  },
+  "hero": {
+    "a11y": "{{amount}} disponível neste mês. Ver toda a renda",
+    "addIncomeA11y": "Registrar renda"
+  },
+  "status": {
+    "overdue": "{{count}} dívida em atraso",
+    "overdue_plural": "{{count}} dívidas em atraso",
+    "dueSoon": "{{count}} vencimento chegando",
+    "dueSoon_plural": "{{count}} vencimentos chegando",
+    "overBudget": "{{split}} passou {{amount}} do limite",
+    "allGood": "Tudo em dia"
+  },
+  "split": {
+    "needs": "Necessidades",
+    "wants": "Desejos",
+    "goals": "Poupança",
+    "leftA11y": "{{split}}: {{amount}} disponível",
+    "overA11y": "{{split}}: {{amount}} acima do orçamento",
+    "addA11y": "Registrar gasto em {{split}}"
+  },
+  "nextPayment": {
+    "due": " · vence em {{date}}",
+    "withExtra": "{{min}} + {{extra}} extra",
+    "prune": "Podar",
+    "pruneA11y": "Podar {{name}} em Dívidas"
+  },
+  "logging": {
+    "nudge": "Último registro há {{count}} dias. Mantenha seus números em dia.",
+    "bubbleExpenseA11y": "Gasto pendente: {{name}}, {{amount}}",
+    "bubbleIncomeA11y": "Renda pendente: {{name}}, {{amount}}",
+    "bubbleHint": "Toque e segure, depois arraste para onde pertence"
+  },
+  "connectBank": {
+    "prompt": "Conecte seu banco e pare de registrar à mão →",
+    "soonTitle": "A conexão com o banco está chegando",
+    "soonBody": "Em breve você poderá conectar seu banco aqui, e as novas transações vão esperar na sua tela inicial, prontas para arrastar ao lugar certo."
+  },
+  "envision": {
+    "heading": "Visão",
+    "debtsPaid": "{{paid}} / {{total}} dívidas quitadas",
+    "debtFreeBy": "Livre de dívidas em {{date}}",
+    "almostFree": "Falta 1 mês para se livrar de {{name}}",
+    "focusExtra": "{{amount}} a mais para {{name}} neste mês. Continue assim!",
+    "goalNear": "{{goal}} está {{pct}}% concluída"
   },
   "verse": {
     "proverbs-21-20": {

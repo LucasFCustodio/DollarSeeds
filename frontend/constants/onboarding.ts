@@ -52,7 +52,6 @@ export const isNewAccount = (createdAt?: string | null) => {
 // A tab route the tour navigates to for a given step.
 export type OnboardingRoute =
     | '/(tabs)'
-    | '/(tabs)/transactions'
     | '/(tabs)/piggyBank'
     | '/(tabs)/lessons';
 
@@ -72,7 +71,8 @@ export type OnboardingStep = {
 // mobile: one short sentence per step with an optional secondary line.
 export const ONBOARDING_STEPS: OnboardingStep[] = [
     { route: '/(tabs)',              key: 'dashboard' },
-    { route: '/(tabs)/transactions', key: 'transactions' },
+    // Logging lives on the home now (the + buttons), so this step stays there.
+    { route: '/(tabs)',              key: 'transactions' },
     { route: '/(tabs)/piggyBank',    key: 'goals' },
     { route: '/(tabs)/lessons',      key: 'lessons', showDisclaimer: true },
 ];

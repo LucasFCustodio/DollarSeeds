@@ -1,1350 +1,251 @@
 /**
- * Dashboard — DollarSeeds visual identity revamp
+ * Home — built around the Core Journey. Everything on it answers one of the
+ * questions the user brings to the app:
  *
- * Behavior checklist (all preserved):
- * ✅ Month navigation fetches fresh data on change
- * ✅ allGreen scripture modal fires once per month
- * ✅ Settings (gear) opens /settings — dark mode + logout live there now
- * ✅ Category cards navigate to /details with correct params
- * ✅ Piggy bank balance shown in Goals expanded state
- * ✅ Category card expand/collapse (inline accordion)
+ *   Analyze   "Am I okay?"          income left, status, tithe
+ *   Plan      "What's next?"        close-out, next debt payment, splits, logging
+ *   Envision  "Where is this going?" debts paid, encouragement, the focus plant
+ *
+ * The three steps are three full-bleed bands (green, cream, green), so the screen
+ * splits into them without the user having to name them. The top one is the old
+ * dashboard hero's gradient (HeroBg), its bottom corners curving up over the cream
+ * band; the Envision band overlaps the cream one under rounded top corners.
+ *
+ * A good visit can take 20 seconds, as long as the user leaves encouraged and with a
+ * reason to come back. This file is layout only: state and requests live in
+ * components/home/useHomeData.ts, the pieces in components/home/.
+ *
+ * Every debt element renders only with DEBT_FREEDOM_ENABLED on AND at least one
+ * active debt; with it off the home is complete without them.
  */
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import {
-    View,
-    Text,
-    ScrollView,
-    Pressable,
-    Alert,
-    Modal,
-    StyleSheet,
-    LayoutAnimation,
-    Platform,
-    UIManager,
-    ActivityIndicator,
-    Animated,
-} from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
-import axios from 'axios';
-
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useIsFocused } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { useAuth } from '../../context/AuthContext';
-import { useLocale } from '../../context/LocaleContext';
-import { useAnnouncements } from '../../context/AnnouncementsContext';
-import { maybeRequestReview } from '../../lib/storeReview';
-import { CAT_API } from '../../constants/txCategories';
-import { MONTHS } from '../../constants/months';
-import { useTheme, shadow, stickerShadow } from '../../context/ThemeContext';
-import Button from '../../components/ui/Button';
-import Card from '../../components/ui/Card';
-import AnimatedProgressBar from '../../components/ui/AnimatedProgressBar';
-import AnimatedAmount from '../../components/ui/AnimatedAmount';
+import { useTheme } from '../../context/ThemeContext';
+import { DEBT_FREEDOM_ENABLED } from '../../constants/features';
+import type { SplitKey } from '../../lib/homeSummary';
+import { useHomeData } from '../../components/home/useHomeData';
+import { DropZoneProvider, useDropZones } from '../../components/home/DropZones';
+import HomeTopBar from '../../components/home/HomeTopBar';
+import MonthPickerSheet from '../../components/home/MonthPickerSheet';
+import IncomeHero from '../../components/home/IncomeHero';
+import StatusTitheRow from '../../components/home/StatusTitheRow';
+import { ClosedLine, CloseOutCard } from '../../components/home/CloseOut';
+import NextPaymentCard from '../../components/home/NextPaymentCard';
+import SplitContainers from '../../components/home/SplitContainers';
+import LoggingArea, { BubbleFace } from '../../components/home/LoggingArea';
+import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
+import { DebtsPaidLine, EncouragementCard } from '../../components/home/Encouragement';
+import FocusPlant from '../../components/home/FocusPlant';
+import ScriptureModal from '../../components/home/ScriptureModal';
 import HeroBg from '../../components/ui/HeroBg';
-import { resolveBudgetType, splitLabel } from '../../constants/budgetTypes';
-import { ft, tv, isTablet } from '../../constants/responsive';
 import {
-    IconLeaf, IconGear,
-    IconLogoMascot, IconGearMascot,
-    IconChevronLeft, IconChevronRight,
-    IconNeeds, IconWants, IconGoals,
-    IconNeedsMascot, IconWantsMascot, IconSavingsGoalMascot,
-    IconExpense, IconIncome,
-    IconScripture, IconSavings,
-    IconMail,
-} from '../../components/icons';
+    BAND_OVERLAP, BAND_PAD, BAND_RADIUS, CARD_GAP, HOME_PAD, SECTION_GAP, homeType,
+} from '../../components/home/homeType';
 
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+/** HeroBg's bottom corner radius. */
+const HERO_RADIUS = 32;
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface DashboardData {
-    total_income: number;
-    // `given` = the user has confirmed this month's tithe actually left the account.
-    // Optional because a backend deployed before the tithe-given migration omits it;
-    // undefined is read as false, which is the pre-feature behaviour exactly.
-    tithe?: { enabled: boolean; rate: number; amount: number; given?: boolean };
-    budget_type?: { key: string; needs: number; wants: number; savings: number };
-    // The user's LIVE split setting, which is not the same thing as `budget_type`
-    // above once a month is closed — that one is the split the month was frozen
-    // with. Used to tell the user what reopening a closed month would switch it to.
-    // Optional: a backend deployed before this key existed simply omits it, and
-    // resolveBudgetType falls back to the default.
-    live_budget_type?: string;
-    // Rollover (end-of-month close-out) state for the displayed month. Purely
-    // informational — source='rollover' is excluded from every budget/score number.
-    rollover?: { closed: boolean; closed_at: string | null; amount: number; target: number };
-    budgets: { needs: number; wants: number; goals: number };
-    expenses: { needs: number; wants: number; goals: number };
-    compliance_score: { overall: number | null; needs: number; wants: number; goals: number };
-}
+const SPLIT_CATEGORY: Record<SplitKey, string> = { needs: 'Needs', wants: 'Wants', goals: 'Goals' }; // i18n-canonical
 
-// ─── Scripture verse pool ─────────────────────────────────────────────────────
-// Only the IDs live here; text and reference come from `dashboard:verse.<id>`.
-//
-// The ID is what makes the daily rotation stable: it is derived from the reference,
-// so the same verse appears on the same day in every language, and switching
-// language re-renders the same passage in the other translation rather than
-// jumping to a different verse.
-//
-// pt-BR uses João Ferreira de Almeida (public domain) — the English is NIV/NLT
-// wording, so these are the SAME passages, not string-for-string translations.
-const VERSE_IDS = [
-    'proverbs-21-20',
-    'luke-16-10',
-    'proverbs-13-11',
-    'proverbs-3-9',
-    'deuteronomy-8-18',
-    'matthew-6-33',
-    'philippians-4-19',
-    'proverbs-22-7',
-    'leviticus-27-30',
-    'deuteronomy-16-17',
-    'proverbs-11-24',
-    'hebrews-13-16',
-    '2corinthians-8-12',
-    'matthew-6-3',
-    'luke-6-38',
-] as const;
-
-type VerseId = (typeof VERSE_IDS)[number];
-
-// Verse of the day — deterministic from the calendar date, so it rotates daily and
-// every user sees the same verse on a given day. Pure local computation: no backend,
-// no storage, and stable across re-renders within the same day.
-const getDailyVerse = (): VerseId => {
-    const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 0).getTime();
-    const dayOfYear = Math.floor((now.getTime() - startOfYear) / 86_400_000);
-    return VERSE_IDS[dayOfYear % VERSE_IDS.length];
-};
-
-// ─── Real transaction type (expenses/details + savings/history) ──────────────
-interface TxItem {
-    id: number | string;
-    title: string;
-    sub_category: string;
-    amount: number;
-    day: number;
-    month: string;
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
-export default function DashboardScreen() {
-    const router = useRouter();
-    const { user } = useAuth();
-    const { theme } = useTheme();
-    const { formatMoney: fmtMoney, monthAbbr, monthLabel } = useLocale();
-    const { t } = useTranslation('dashboard');
-    const { t: tc } = useTranslation('common');
-    // The announcements button's accessibility label — modal CHROME, so it lives in
-    // the catalogue like every other string (the announcement CONTENT does not; see
-    // lib/announcements.ts).
-    const { t: tn } = useTranslation('news');
-
-    // Month state. MONTHS is the canonical English list (constants/months.ts) — it is
-    // what gets POSTed and stored, and is never translated. Display goes through
-    // monthLabel()/monthAbbr().
-    const [monthIndex, setMonthIndex] = useState(new Date().getMonth());
-    const currentMonth = MONTHS[monthIndex];
-
-    // Data state
-    const [dashboardData, setDashboardData] = useState<DashboardData>({
-        total_income: 0,
-        budgets: { needs: 0, wants: 0, goals: 0 },
-        expenses: { needs: 0, wants: 0, goals: 0 },
-        compliance_score: { overall: null, needs: 10, wants: 10, goals: 10 },
-    });
-    const [piggyBankBalance, setPiggyBankBalance] = useState(0);
-
-    // News modal — the unread dot on the mail button, and the tap that opens it.
-    const { unread: announcementUnread, open: openAnnouncements,
-            announcements } = useAnnouncements();
-
-    // Scripture modal state
-    const [showScriptureModal, setShowScriptureModal] = useState(false);
-    const [currentVerse, setCurrentVerse] = useState<VerseId>(VERSE_IDS[0]);
-    const verseShownMonthsRef = useRef<Set<string>>(new Set());
-
-    // Accordion state — which category is expanded
-    const [expandedCat, setExpandedCat] = useState<'needs' | 'wants' | 'goals' | null>(null);
-
-    // Tithe "given" toggle — true only while a POST is in flight, so a double tap
-    // cannot fire two opposite writes at once.
-    const [savingTitheGiven, setSavingTitheGiven] = useState(false);
-
-    // Rollover close-out state
-    const [closingMonth, setClosingMonth] = useState(false);
-    const [dismissedCloseout, setDismissedCloseout] = useState<Set<string>>(new Set());
-
-    // Real transaction rows for the expanded accordion (null = not yet fetched)
-    const [categoryTxs, setCategoryTxs] = useState<Record<'needs' | 'wants' | 'goals', TxItem[] | null>>({
-        needs: null, wants: null, goals: null,
-    });
-
-    // ── Data fetching ──────────────────────────────────────────────────────────
-    useFocusEffect(
-        useCallback(() => { fetchDashboardData(); }, [currentMonth])
+export default function HomeScreen() {
+    return (
+        <GestureHandlerRootView style={styles.fill}>
+            <DropZoneProvider renderGhost={tx => <BubbleFace tx={tx} />}>
+                <Home />
+            </DropZoneProvider>
+        </GestureHandlerRootView>
     );
+}
 
-    // Reset accordion + transaction cache whenever the month changes
-    useEffect(() => {
-        setExpandedCat(null);
-        setCategoryTxs({ needs: null, wants: null, goals: null });
-    }, [monthIndex]);
+function Home() {
+    const router = useRouter();
+    const { theme } = useTheme();
+    const { t } = useTranslation('dashboard');
+    const focused = useIsFocused();
+    const insets = useSafeAreaInsets();
+    const zones = useDropZones();
+    const home = useHomeData();
+    const [pickerOpen, setPickerOpen] = useState(false);
 
-    const decreaseMonth = () => {
-        const i = monthIndex === 0 ? 11 : monthIndex - 1;
-        setMonthIndex(i);
-    };
-    const increaseMonth = () => {
-        const i = monthIndex === 11 ? 0 : monthIndex + 1;
-        setMonthIndex(i);
-    };
+    const { dashboard, summary, currentMonth } = home;
+    const { total_income, budgets, expenses, tithe, rollover } = dashboard;
 
-    /**
-     * @returns whether the allGreen scripture modal was opened by this fetch. The
-     * rollover close-out below needs to know: the rating prompt must come after the
-     * celebration, never over it.
-     */
-    const fetchDashboardData = async (): Promise<boolean> => {
-        if (!user?.id) return false;
-        try {
-            const BASE = 'https://dollarseeds-1.onrender.com';
-            const [dashRes, piggyRes] = await Promise.all([
-                axios.get(`${BASE}/dashboard/${currentMonth}?user_id=${user.id}`),
-                axios.get(`${BASE}/savings/balance/?user_id=${user.id}`),
-            ]);
-            const data: DashboardData = dashRes.data;
-            setDashboardData(data);
-            setPiggyBankBalance(piggyRes.data.balance);
-
-            // Scripture modal: fires once per month when all categories are green
-            const allGreen =
-                data.total_income > 0 &&
-                data.expenses.needs <= data.budgets.needs &&
-                data.expenses.wants <= data.budgets.wants &&
-                data.expenses.goals <= data.budgets.goals;
-
-            if (allGreen && !verseShownMonthsRef.current.has(currentMonth)) {
-                verseShownMonthsRef.current.add(currentMonth);
-                setCurrentVerse(VERSE_IDS[Math.floor(Math.random() * VERSE_IDS.length)]);
-                setShowScriptureModal(true);
-                return true;
-            }
-        } catch (error) {
-            if (error instanceof Error) console.error('Dashboard fetch error:', error.message);
-        }
-        return false;
-    };
-
-    const handleCloseMonth = async () => {
-        if (!user?.id || closingMonth) return;
-        setClosingMonth(true);
-        try {
-            const BASE = 'https://dollarseeds-1.onrender.com';
-            await axios.post(`${BASE}/rollover/close/`, { user_id: user.id, month: currentMonth });
-            const openedScripture = await fetchDashboardData();
-
-            // A positive moment: the user just closed out a month. Ask for the App
-            // Store rating sheet — but only AFTER the celebration, never over it, so
-            // it is skipped entirely when closing the month also opened the allGreen
-            // scripture modal. It will be offered at the next qualifying moment.
-            //
-            // maybeRequestReview owns the throttling (60 days, never on a first
-            // session) and swallows every failure. It is a NO-OP in dev builds and
-            // TestFlight — see lib/storeReview.ts.
-            if (!openedScripture) void maybeRequestReview('month_closed');
-        } catch (err) {
-            console.error('Close month error:', err);
-        } finally {
-            setClosingMonth(false);
-        }
-    };
-
-    /**
-     * Reopen a closed month, after warning what that costs.
-     *
-     * Closing a month freezes the budget split and tithe it was closed with;
-     * reopening un-freezes it, so from that moment the month follows whatever
-     * Settings say NOW. That is the right behaviour — it is the only way to correct
-     * a month closed with the wrong split — but it is invisible, and someone
-     * reopening a month just to fix a typo would silently restate its budgets. So
-     * we name the split the month is about to adopt and let them back out.
-     */
-    const handleReopenMonth = () => {
-        if (!user?.id || closingMonth) return;
-        const liveType = resolveBudgetType(dashboardData.live_budget_type);
-        Alert.alert(
-            t('rollover.reopenTitle', { month: monthLabel(currentMonth) }),
-            // One whole interpolated sentence rather than concatenated fragments —
-            // the clause order differs in Portuguese.
-            t('rollover.reopenWarning', {
-                month: monthLabel(currentMonth),
-                split: `${tc(`budgetType.${liveType.key}.name`)} · ${splitLabel(liveType)}`,
-            }),
-            [
-                { text: tc('action.cancel'), style: 'cancel' },
-                { text: t('rollover.reopen'), onPress: () => { void doReopenMonth(); } },
-            ],
-        );
-    };
-
-    const doReopenMonth = async () => {
-        if (!user?.id || closingMonth) return;
-        setClosingMonth(true);
-        try {
-            const BASE = 'https://dollarseeds-1.onrender.com';
-            await axios.post(`${BASE}/rollover/reopen/`, { user_id: user.id, month: currentMonth });
-            await fetchDashboardData();
-        } catch (err) {
-            console.error('Reopen month error:', err);
-        } finally {
-            setClosingMonth(false);
-        }
-    };
-
-    /**
-     * Mark this month's tithe as given (or un-mark it).
-     *
-     * Optimistic: the hero amount is the whole point of the toggle, so it moves on
-     * the tap rather than after a round-trip. The previous tithe object is captured
-     * and restored on failure, which also puts the switch back where it was.
-     */
-    const handleToggleTitheGiven = async () => {
-        if (!user?.id || savingTitheGiven) return;
-        // A closed month is settled: its leftover has already been swept into General
-        // Savings, and that figure was computed with the tithe carved out. Un-marking
-        // the tithe here would add it back to the hero's "left this month" and leave
-        // the user looking at more money than actually moved. Read straight off the
-        // payload rather than the derived flag below, so the guard cannot depend on
-        // declaration order.
-        if (dashboardData.rollover?.closed) return;
-        const previousTithe = dashboardData.tithe;
-        if (!previousTithe) return;
-        const next = !previousTithe.given;
-
-        setSavingTitheGiven(true);
-        setDashboardData(prev => ({ ...prev, tithe: { ...prev.tithe!, given: next } }));
-        try {
-            const BASE = 'https://dollarseeds-1.onrender.com';
-            await axios.post(`${BASE}/tithe/given/`, {
-                user_id: user.id, month: currentMonth, given: next,
-            });
-        } catch (err) {
-            console.error('Tithe given toggle error:', err);
-            setDashboardData(prev => ({ ...prev, tithe: previousTithe }));
-        } finally {
-            setSavingTitheGiven(false);
-        }
-    };
-
-    // CAT_API covers needs/wants; 'Goals' has no picker so it is not in that table.
-    const CAT_API_MAP = { ...CAT_API, goals: 'Goals' } as const;
-
-    const fetchCategoryTxs = async (catKey: 'needs' | 'wants' | 'goals') => {
-        if (!user?.id) return;
-        try {
-            const BASE = 'https://dollarseeds-1.onrender.com';
-
-            if (catKey === 'goals') {
-                // Goals = expense "Goals" rows + savings deposits — fetch both in parallel
-                const [expRes, savRes] = await Promise.all([
-                    axios.get(`${BASE}/expenses/details/`, {
-                        params: { month: currentMonth, category: 'Goals', user_id: user.id },
-                    }),
-                    axios.get(`${BASE}/savings/history/`, {
-                        params: { user_id: user.id, month: currentMonth },
-                    }),
-                ]);
-                const expItems: TxItem[] = (expRes.data.data ?? []).map((i: any) => ({
-                    id: i.id,
-                    title: i.title || i.sub_category,
-                    sub_category: i.sub_category,
-                    amount: i.amount,
-                    day: i.day,
-                    month: i.month,
-                }));
-                const savItems: TxItem[] = (savRes.data.data ?? [])
-                    // Only income-sourced deposits count toward the Goals budget;
-                    // transfers between goals are internal moves (matches the Goals
-                    // detail view in details.tsx).
-                    .filter((i: any) => i.type === 'deposit' && i.source === 'income')
-                    .map((i: any) => ({
-                        id: `sav-${i.id}`,
-                        title: i.title,
-                        sub_category: 'Savings',
-                        amount: i.amount,
-                        day: i.day,
-                        month: i.month,
-                    }));
-                const merged = [...expItems, ...savItems]
-                    .sort((a, b) => b.day - a.day)
-                    .slice(0, 3);
-                setCategoryTxs(prev => ({ ...prev, goals: merged }));
-            } else {
-                const res = await axios.get(`${BASE}/expenses/details/`, {
-                    params: { month: currentMonth, category: CAT_API_MAP[catKey], user_id: user.id },
-                });
-                const items: TxItem[] = (res.data.data ?? []).map((i: any) => ({
-                    id: i.id,
-                    title: i.title || i.sub_category,
-                    sub_category: i.sub_category,
-                    amount: i.amount,
-                    day: i.day,
-                    month: i.month,
-                }));
-                const sorted = [...items].sort((a, b) => b.day - a.day).slice(0, 3);
-                setCategoryTxs(prev => ({ ...prev, [catKey]: sorted }));
-            }
-        } catch (err) {
-            console.error('Category tx fetch error:', err);
-            setCategoryTxs(prev => ({ ...prev, [catKey]: [] }));
-        }
-    };
-
-    // ── Derived values ─────────────────────────────────────────────────────────
-    const { total_income, budgets, expenses, tithe } = dashboardData;
+    // ── Tithe (unchanged math) ────────────────────────────────────────────────
     const titheActive = !!tithe?.enabled && (tithe?.amount ?? 0) > 0;
     const titheAmount = tithe?.amount ?? 0;
     const titheGiven = titheActive && !!tithe?.given;
-    const activeBudgetType = resolveBudgetType(dashboardData.budget_type?.key);
-    const dailyVerse = getDailyVerse();
-
-    // ── Rollover close-out visibility ──────────────────────────────────────────
-    // A month is "closeable" the moment it's over — offered from the 1st. We only
-    // ever exclude the in-progress month; any other un-closed month with income can
-    // be closed whenever the user gets to it.
-    //
-    // There used to be an extra `new Date().getDate() < 4` clause that hid last
-    // month's prompt until the 4th. It served no purpose the user could see: the
-    // month was over and its numbers were final, but the app looked like it had
-    // forgotten to ask.
-    const rollover = dashboardData.rollover;
-    const realMonthIdx = new Date().getMonth();
-    const isDisplayedMonthClosed = !!rollover?.closed;
-    const showClosePrompt =
-        !!rollover &&
-        !rollover.closed &&
-        monthIndex !== realMonthIdx &&             // not the in-progress month
-        total_income > 0 &&                        // hides empty future months
-        !dismissedCloseout.has(currentMonth);
+    const monthClosed = !!rollover?.closed;
     const totalSpent = expenses.needs + expenses.wants + expenses.goals;
-    // Until the tithe is actually given the money is still sitting in the account, so
-    // it belongs in "left this month". Once the user marks it given it is gone, and
-    // leaving it in the hero would show them money they no longer have — and read as
-    // unspent leftover when the month is closed out. Note this subtracts from what is
-    // LEFT, never from `total_income`: the income logged is a fact and does not move.
+    // Until the tithe is given the money is still in the account, so it belongs in
+    // "left this month"; once given it is gone. Subtracts from what is LEFT, never
+    // from total_income — the income logged is a fact and does not move.
     const totalLeft = Math.max(0, total_income - totalSpent - (titheGiven ? titheAmount : 0));
 
-    // ── Category definitions ───────────────────────────────────────────────────
-    const categories = [
-        {
-            key: 'needs' as const,
-            label: tc('category.Needs'),
-            pct: `${Math.round(activeBudgetType.needs * 100)}%`,
-            Icon: IconNeedsMascot,
-            color: theme.needs,
-            soft: theme.needsSoft,
-            spent: expenses.needs,
-            budget: budgets.needs,
-            sub: t('category.needsSub'),
-            navType: 'expense' as const,
-        },
-        {
-            key: 'wants' as const,
-            label: tc('category.Wants'),
-            pct: `${Math.round(activeBudgetType.wants * 100)}%`,
-            Icon: IconWantsMascot,
-            color: theme.wants,
-            soft: theme.wantsSoft,
-            spent: expenses.wants,
-            budget: budgets.wants,
-            sub: t('category.wantsSub'),
-            navType: 'expense' as const,
-        },
-        {
-            key: 'goals' as const,
-            label: tc('category.Goals'),
-            pct: `${Math.round(activeBudgetType.savings * 100)}%`,
-            Icon: IconSavingsGoalMascot,
-            color: theme.goals,
-            soft: theme.goalsSoft,
-            spent: expenses.goals,
-            budget: budgets.goals,
-            sub: t('category.goalsSub'),
-            navType: 'expense' as const,
-        },
-    ];
+    // ── Close-out (unchanged rule) ────────────────────────────────────────────
+    // Offered for any un-closed month with income except the in-progress one.
+    const showClosePrompt =
+        !!rollover && !rollover.closed &&
+        home.monthIndex !== new Date().getMonth() &&
+        total_income > 0 &&
+        !home.dismissedCloseout.has(currentMonth);
 
-    // ── Render ─────────────────────────────────────────────────────────────────
+    // ── Debts: flag on AND at least one active debt ───────────────────────────
+    const rawDebts = DEBT_FREEDOM_ENABLED ? summary?.debts ?? null : null;
+    const debts = rawDebts && rawDebts.total_count > rawDebts.paid_count ? rawDebts : null;
+    const goalsNear = summary?.goals_near_completion ?? [];
+    // Envision has something to show: the debts-paid line, or a goal in the
+    // encouragement card. Otherwise the whole band, heading included, is hidden and
+    // the cream band ends the page.
+    const envision = !!debts || goalsNear.length > 0;
+
+    // ── Navigation ────────────────────────────────────────────────────────────
+    const openSplit = (split: SplitKey) => router.push({
+        pathname: '/details',
+        params: { category: SPLIT_CATEGORY[split], month: currentMonth, type: 'expense' },
+    });
+    const openIncomeList = () => router.push({ pathname: '/details', params: { month: currentMonth, type: 'income' } } as any);
+    const logExpense = (category?: 'needs' | 'wants') =>
+        router.push({ pathname: '/logExpense', params: category ? { category } : {} } as any);
+    const logIncome = () => router.push('/logIncome' as any);
+    const openDebts = (debtId?: number) =>
+        router.push({ pathname: '/(tabs)/debts', params: debtId != null ? { debtId: String(debtId) } : {} } as any);
+
     return (
-        <ScrollView
-            style={{ flex: 1, backgroundColor: theme.bg }}
-            contentContainerStyle={{ paddingBottom: 120 }}
-            showsVerticalScrollIndicator={false}
-        >
-            {/* ── Scripture Modal (reskinned) ────────────────────────────── */}
-            <Modal visible={showScriptureModal} transparent animationType="fade">
-                <View style={styles.modalOverlay}>
-                    <Card theme={theme} depth={8} style={styles.modalCard}>
-                        {/* Icon tile */}
-                        <View style={[styles.modalIconTile, { backgroundColor: theme.brandSoft }]}>
-                            <IconScripture size={28} color={theme.brand} />
-                        </View>
-                        <Text style={[styles.modalTitle, { color: theme.ink }]}>
-                            {t('scripture.modalTitle')}
-                        </Text>
-                        <Text style={[styles.modalVerse, { color: theme.ink2 }]}>
-                            {t('scripture.quoted', { text: t(`verse.${currentVerse}.text`) })}
-                        </Text>
-                        <Text style={[styles.modalRef, { color: theme.ink3 }]}>
-                            — {t(`verse.${currentVerse}.ref`)}
-                        </Text>
-                        <Button
-                            label={t('scripture.amen')}
-                            variant="primary"
-                            size="lg"
-                            fullWidth
-                            color={theme.brand}
-                            onPress={() => setShowScriptureModal(false)}
-                        />
-                    </Card>
-                </View>
-            </Modal>
+        <View style={[styles.fill, { backgroundColor: theme.bg }]}>
+            {/* The top of the home is green, so the status bar content is light;
+                only while the home is the focused tab. */}
+            {focused ? <StatusBar style="light" /> : null}
+            <ScrollView
+                // Whatever shows past the last band on an overscroll matches it.
+                style={[styles.fill, { backgroundColor: envision ? theme.sectionGreen : theme.bg }]}
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+                scrollEnabled={!zones?.dragging}
+            >
+                {/* The hero's top colour above it, for the pull-down bounce. */}
+                <View style={[styles.overscroll, { backgroundColor: theme.brand }]} />
 
-            {/* ── Gradient Hero ──────────────────────────────────────────── */}
-            <HeroBg brand={theme.brand} brand2={theme.brand2}>
-                <View style={styles.heroInner}>
-
-                    {/* Top row: logo + wordmark + controls */}
-                    <View style={styles.heroTopRow}>
-                        {/* Logo tile + wordmark */}
-                        <View style={styles.logoGroup}>
-                            <View style={[styles.logoTile, { backgroundColor: 'rgba(255,255,255,0.16)' }]}>
-                                <IconLogoMascot size={24} />
-                            </View>
-                            <View>
-                                <Text style={styles.wordmark}>{t('wordmark')}</Text>
-                                <Text style={styles.subline}>
-                                    {t('subline', {
-                                        name: user?.email?.split('@')[0] ?? t('stewardFallback'),
-                                    })}
-                                </Text>
-                            </View>
-                        </View>
-
-                        {/* Control buttons */}
-                        <View style={styles.heroControls}>
-                            {/* Announcements. Same styles.glassBtn as the gear, unchanged,
-                                so the two are identical in size — and a WHITE glyph,
-                                because the hero is dark forest and the default ink glyph
-                                would be invisible on it (IconGearMascot does the same).
-                                Hidden until there is something to show: a button that
-                                opens an empty modal is worse than no button. */}
-                            {announcements.length > 0 ? (
-                                <Pressable
-                                    onPress={openAnnouncements}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={tn('buttonA11y')}
-                                    style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
-                                >
-                                    <IconMail size={18} color="#fff" />
-                                    {/* Without this nobody discovers the button. Cleared the
-                                        moment the modal is opened, by either route. */}
-                                    {announcementUnread ? (
-                                        <View
-                                            style={[
-                                                styles.unreadDot,
-                                                { backgroundColor: theme.harvest, borderColor: theme.brand },
-                                            ]}
-                                        />
-                                    ) : null}
-                                </Pressable>
-                            ) : null}
-
-                            {/* Settings (tithing, budget type, dark mode, log out) */}
-                            <Pressable
-                                onPress={() => router.push('/settings' as any)}
-                                style={({ pressed }) => [styles.glassBtn, pressed && { opacity: 0.7 }]}
-                            >
-                                <IconGearMascot size={18} color="#fff" />
-                            </Pressable>
-                        </View>
-                    </View>
-
-                    {/* Month navigation row */}
-                    <View style={styles.monthRow}>
-                        <Pressable
-                            onPress={decreaseMonth}
-                            style={({ pressed }) => [styles.monthChevron, pressed && { opacity: 0.7 }]}
-                        >
-                            <IconChevronLeft size={16} color="#fff" />
-                        </Pressable>
-                        <View style={styles.monthCenter}>
-                            <Text style={styles.monthEyebrow}>{t('monthEyebrow')}</Text>
-                            <Text style={styles.monthLabel}>{monthLabel(currentMonth)} {new Date().getFullYear()}</Text>
-                        </View>
-                        <Pressable
-                            onPress={increaseMonth}
-                            style={({ pressed }) => [styles.monthChevron, pressed && { opacity: 0.7 }]}
-                        >
-                            <IconChevronRight size={16} color="#fff" />
-                        </Pressable>
-                    </View>
-
-                    {/* Big amount */}
-                    <View style={{ marginTop: tv(10, 20) }}>
-                        <Text style={styles.incomeEyebrow}>
-                            {t('totalIncome', { amount: fmtMoney(total_income) })}
-                        </Text>
-                        <AnimatedAmount
-                            value={totalLeft}
-                            size={tv(64, 92)}
-                            color="#fff"
-                        />
-                        <View style={{ marginTop: tv(6, 12), flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <View style={styles.leftChip}>
-                                <Text style={styles.leftChipText}>{t('leftThisMonth')}</Text>
-                            </View>
-                            <Pressable
-                                onPress={() => router.push({
-                                    pathname: '/details',
-                                    params: { month: currentMonth, type: 'income' },
-                                } as any)}
-                                style={({ pressed }) => [styles.viewIncomeBtn, pressed && { opacity: 0.7 }]}
-                            >
-                                <Text style={styles.viewIncomeBtnText}>{t('viewAllIncome')}</Text>
-                                <IconChevronRight size={11} color="rgba(255,255,255,0.85)" />
-                            </Pressable>
-                        </View>
-                    </View>
-
-                </View>
-            </HeroBg>
-
-            {/* ── Content area (overlaps hero by 16px) ──────────────────── */}
-            <View style={[styles.contentArea, { marginTop: -16 }]}>
-
-                {/* Close-out prompt — nudge to roll last month's leftover into savings */}
-                {showClosePrompt && (
-                    <View style={[styles.rolloverCard, { backgroundColor: theme.surface, borderColor: theme.brand2, ...stickerShadow('#8A8F86') }]}>
-                        <View style={styles.rolloverHeaderRow}>
-                            <View style={[styles.rolloverIconTile, { backgroundColor: theme.brandSoft }]}>
-                                <IconSavings size={22} color={theme.brand} accent={theme.brand2} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.rolloverTitle, { color: theme.ink }]}>
-                                    {t('rollover.closeTitle', { month: monthLabel(currentMonth) })}
-                                </Text>
-                                <Text style={[styles.rolloverSub, { color: theme.ink2 }]}>
-                                    {t('rollover.closeSub', { amount: fmtMoney(rollover?.target ?? 0, 2) })}
-                                </Text>
-                            </View>
-                            <Pressable
-                                onPress={() => setDismissedCloseout(prev => new Set(prev).add(currentMonth))}
-                                hitSlop={10}
-                                style={({ pressed }) => pressed && { opacity: 0.6 }}
-                            >
-                                <Text style={[styles.rolloverDismiss, { color: theme.ink3 }]}>✕</Text>
-                            </Pressable>
-                        </View>
-                        <Button
-                            label={closingMonth
-                                ? t('rollover.closing')
-                                : t('rollover.closeButton', { amount: fmtMoney(rollover?.target ?? 0) })}
-                            variant="primary"
-                            size="md"
-                            fullWidth
-                            color={theme.brand}
-                            disabled={closingMonth}
-                            onPress={handleCloseMonth}
-                        />
-                    </View>
-                )}
-
-                {/* Closed-month banner — show the rolled-over amount + a subtle reopen */}
-                {isDisplayedMonthClosed && (
-                    <View style={[styles.rolloverClosedCard, { backgroundColor: theme.surfaceSoft, borderColor: theme.borderSoft }]}>
-                        <View style={[styles.rolloverIconTile, { backgroundColor: theme.goalsSoft }]}>
-                            <IconSavings size={20} color={theme.goals} accent={theme.brand2} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.rolloverClosedTitle, { color: theme.ink }]}>
-                                {t('rollover.closedTitle', { month: monthLabel(currentMonth) })}
-                            </Text>
-                            <Text style={[styles.rolloverSub, { color: theme.ink2 }]}>
-                                {t('rollover.closedSub', { amount: fmtMoney(rollover?.amount ?? 0, 2) })}
-                            </Text>
-                        </View>
-                        <Pressable
-                            onPress={handleReopenMonth}
-                            disabled={closingMonth}
-                            style={({ pressed }) => [styles.reopenBtn, { borderColor: theme.border }, pressed && { opacity: 0.6 }]}
-                        >
-                            <Text style={[styles.reopenBtnText, { color: theme.brand }]}>
-                                {closingMonth ? '…' : t('rollover.reopen')}
-                            </Text>
-                        </Pressable>
-                    </View>
-                )}
-
-                {/* Scripture banner */}
-                <Card
-                    theme={theme}
-                    depth={3}
-                    padding={14}
-                    style={[styles.scriptureBanner, { backgroundColor: theme.surfaceSoft }]}
-                >
-                    <View style={styles.scriptureBannerInner}>
-                        <View style={[styles.scriptureIconTile, { backgroundColor: theme.brandSoft }]}>
-                            <IconScripture size={18} color={theme.brand} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.scriptureVerse, { color: theme.ink }]}>
-                                {t('scripture.quoted', { text: t(`verse.${dailyVerse}.text`) })}
-                            </Text>
-                            <Text style={[styles.scriptureRef, { color: theme.ink3 }]}>
-                                {t(`verse.${dailyVerse}.ref`)}
-                            </Text>
-                        </View>
-                    </View>
-                </Card>
-
-                {/* Section header */}
-                <View style={styles.sectionHeader}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.sectionTitle, { color: theme.ink }]}>
-                            {t('sectionTitle')}
-                        </Text>
-                        {/* Active budget split driving these numbers (from the API) */}
-                        <View style={styles.budgetTypeRow}>
-                            <View style={[styles.budgetTypeDot, { backgroundColor: theme.brand }]} />
-                            <Text style={[styles.budgetTypeText, { color: theme.ink3 }]}>
-                                {t('budgetTypeRow', {
-                                    name: tc(`budgetType.${activeBudgetType.key}.name`),
-                                    split: splitLabel(activeBudgetType),
-                                })}
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Tithe envelope — carved out FIRST, shown above the 50/30/20 split.
-                    Only rendered when tithing is enabled; hidden entirely otherwise.
-
-                    Two visual states, driven by `titheGiven`. Not-given is the original
-                    harvest-yellow card (money still set aside, still counted as left to
-                    spend); given repaints the outline emerald and the icon tile forest,
-                    so the card reads as "done" at a glance from across the dashboard. */}
-                {titheActive && (
-                    <View style={[
-                        styles.titheCard,
-                        {
-                            backgroundColor: theme.surface,
-                            borderColor: titheGiven ? theme.brand2 : theme.harvest,
-                            ...stickerShadow('#8A8F86'),
-                        },
-                    ]}>
-                        <View style={[styles.titheIconTile, { backgroundColor: titheGiven ? theme.brand : theme.harvest }]}>
-                            {/* On solid forest the brand-coloured glyph would vanish, so the
-                                two accents swap places — harvest ink on brand, brand ink on
-                                harvest. Same rule the settings tithing tile follows. */}
-                            <IconScripture size={26} color={titheGiven ? theme.harvest : theme.brand} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <View style={styles.titheTitleRow}>
-                                <Text style={[styles.titheTitle, { color: theme.ink }]}>{t('tithe.title')}</Text>
-                                <Text style={[styles.tithePct, { color: theme.ink3 }]}>
-                                    {Math.round((tithe?.rate ?? 0.1) * 100)}%
-                                </Text>
-                            </View>
-                            {/* The wide middle column carries the state in words — the switch
-                                itself is compact and right-aligned, and a caption beside it
-                                would squeeze this column on a small phone. */}
-                            <Text style={[styles.titheSub, { color: titheGiven ? theme.brand : theme.ink2 }]}>
-                                {titheGiven ? t('tithe.subGiven') : t('tithe.sub')}
-                            </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={[styles.titheAmount, { color: theme.ink }]}>
-                                {fmtMoney(titheAmount)}
-                            </Text>
-                            <Text style={[styles.titheAmountLabel, { color: theme.ink3 }]} numberOfLines={1}>{t('tithe.amountLabel')}</Text>
-                            <TitheGivenToggle
-                                theme={theme}
-                                value={titheGiven}
-                                disabled={savingTitheGiven || isDisplayedMonthClosed}
-                                onToggle={handleToggleTitheGiven}
-                                a11yLabel={t('tithe.givenToggleA11y')}
+                {/* ── Band 1 · Analyze: "Am I okay?" ────────────────────── */}
+                <View style={styles.hero}>
+                    <HeroBg brand={theme.brand} brand2={theme.brand2} style={{ paddingHorizontal: HOME_PAD, paddingTop: insets.top + 8 }}>
+                        <HomeTopBar month={currentMonth} onOpenMonthPicker={() => setPickerOpen(true)} />
+                        <View style={[styles.section, { gap: CARD_GAP + 8 }]}>
+                            <IncomeHero
+                                left={totalLeft}
+                                income={total_income}
+                                spent={totalSpent}
+                                onAdd={logIncome}
+                                onOpenIncome={openIncomeList}
+                            />
+                            <StatusTitheRow
+                                debts={debts}
+                                overBudget={summary?.over_budget ?? []}
+                                tithe={{
+                                    active: titheActive,
+                                    amount: titheAmount,
+                                    given: titheGiven,
+                                    disabled: home.savingTitheGiven || monthClosed,
+                                    onToggle: home.toggleTitheGiven,
+                                }}
+                                onOpenDebts={() => openDebts()}
+                                onOpenSplit={openSplit}
                             />
                         </View>
-                    </View>
-                )}
-
-                {/* Category cards */}
-                {categories.map(cat => (
-                    <CategoryCard
-                        key={cat.key}
-                        cat={cat}
-                        theme={theme}
-                        expanded={expandedCat === cat.key}
-                        txs={categoryTxs[cat.key]}
-                        onToggle={() => {
-                            LayoutAnimation.configureNext(
-                                LayoutAnimation.create(320, 'easeInEaseOut', 'opacity')
-                            );
-                            const opening = expandedCat !== cat.key;
-                            setExpandedCat(prev => prev === cat.key ? null : cat.key);
-                            // Fetch real transactions on first open for this month
-                            if (opening && categoryTxs[cat.key] === null) {
-                                fetchCategoryTxs(cat.key);
-                            }
-                        }}
-                        onNavigate={() => router.push({
-                            pathname: '/details',
-                            params: {
-                                category: cat.key.charAt(0).toUpperCase() + cat.key.slice(1),
-                                month: currentMonth,
-                                type: cat.navType,
-                            },
-                        })}
-                        piggyBalance={piggyBankBalance}
-                    />
-                ))}
-
-                {/* Quick actions */}
-                <View style={styles.quickActions}>
-                    <Pressable
-                        onPress={() => router.push({ pathname: '/(tabs)/transactions', params: { type: 'expense' } } as any)}
-                        style={({ pressed }) => [
-                            styles.quickActionPrimary,
-                            { backgroundColor: theme.brand },
-                            pressed && { transform: [{ scale: 0.97 }] },
-                        ]}
-                    >
-                        <IconExpense size={16} color="#fff" />
-                        <Text style={styles.quickActionPrimaryText}>{t('quickAction.expense')}</Text>
-                    </Pressable>
-                    <Pressable
-                        onPress={() => router.push({ pathname: '/(tabs)/transactions', params: { type: 'income' } } as any)}
-                        style={({ pressed }) => [
-                            styles.quickActionSecondary,
-                            { backgroundColor: theme.surface, borderColor: theme.border },
-                            pressed && { transform: [{ scale: 0.97 }] },
-                        ]}
-                    >
-                        <IconIncome size={16} color={theme.brand} />
-                        <Text style={[styles.quickActionSecondaryText, { color: theme.brand }]}>{t('quickAction.income')}</Text>
-                    </Pressable>
-                </View>
-            </View>
-        </ScrollView>
-    );
-}
-
-// ─── TitheGivenToggle ─────────────────────────────────────────────────────────
-// A small switch for "I have given this month's tithe".
-//
-// Hand-rolled rather than react-native's <Switch> because that renders at a fixed
-// platform size (~51×31 on iOS) which does not fit under the SET ASIDE label without
-// pushing the card's middle column into truncation, and because its track colour is
-// the one thing here that has to sit in the app's palette rather than the OS's.
-// Enlarged on tablets only, like every other non-font size on this screen (tv()).
-const TOGGLE_W = tv(44, 56);
-const TOGGLE_H = tv(24, 30);
-const THUMB = tv(18, 23);
-const TOGGLE_INSET = 3;
-const THUMB_TRAVEL = TOGGLE_W - THUMB - TOGGLE_INSET * 2;
-
-function TitheGivenToggle({
-    theme, value, disabled, onToggle, a11yLabel,
-}: {
-    theme: ReturnType<typeof useTheme>['theme'];
-    value: boolean;
-    disabled: boolean;
-    onToggle: () => void;
-    a11yLabel: string;
-}) {
-    // One driver for both the slide and the track colour. useNativeDriver has to be
-    // false: backgroundColor is not a transform and cannot cross to the UI thread.
-    const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
-
-    useEffect(() => {
-        Animated.timing(anim, {
-            toValue: value ? 1 : 0,
-            duration: 180,
-            useNativeDriver: false,
-        }).start();
-    }, [value, anim]);
-
-    const trackColor = anim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [theme.borderSoft, theme.brand2],
-    });
-    const translateX = anim.interpolate({ inputRange: [0, 1], outputRange: [0, THUMB_TRAVEL] });
-
-    return (
-        <Pressable
-            onPress={onToggle}
-            disabled={disabled}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: value, disabled }}
-            accessibilityLabel={a11yLabel}
-            // The switch is deliberately small; hitSlop keeps the TAP target at the
-            // 44pt minimum in every direction.
-            hitSlop={12}
-            style={({ pressed }) => [styles.titheToggleHit, (pressed || disabled) && { opacity: 0.6 }]}
-        >
-            <Animated.View style={[styles.titheToggleTrack, { backgroundColor: trackColor }]}>
-                <Animated.View style={[styles.titheToggleThumb, { transform: [{ translateX }] }]} />
-            </Animated.View>
-        </Pressable>
-    );
-}
-
-// ─── CategoryCard ─────────────────────────────────────────────────────────────
-interface CategoryCardProps {
-    cat: {
-        key: 'needs' | 'wants' | 'goals';
-        label: string;
-        pct: string;
-        Icon: React.ComponentType<{ size?: number; accent?: string; paper?: string }>;
-        color: string;
-        soft: string;
-        spent: number;
-        budget: number;
-        sub: string;
-    };
-    theme: ReturnType<typeof useTheme>['theme'];
-    expanded: boolean;
-    txs: TxItem[] | null;
-    onToggle: () => void;
-    onNavigate: () => void;
-    piggyBalance: number;
-}
-
-function CategoryCard({ cat, theme, expanded, txs, onToggle, onNavigate, piggyBalance }: CategoryCardProps) {
-    const { formatMoney: fmtMoney, monthAbbr, subcatLabel, serverTitle } = useLocale();
-    const { t } = useTranslation('dashboard');
-    const { t: tc } = useTranslation('common');
-    const pct = cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0;
-    const left = cat.budget - cat.spent;
-    const over = pct > 100;
-    const barColor = over ? theme.danger : cat.color;
-    const { Icon } = cat;
-
-    return (
-        <View style={[styles.catCard, { backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.ink, ...stickerShadow('#8A8F86') }]}>
-            {/* Card header — tap to expand/collapse */}
-            <Pressable
-                onPress={onToggle}
-                style={({ pressed }) => [styles.catCardHeader, pressed && { opacity: 0.85 }]}
-            >
-                <View style={[styles.catIconTile, { backgroundColor: cat.soft }]}>
-                    <Icon size={28} accent={cat.color} paper={cat.soft} />
+                    </HeroBg>
                 </View>
 
-                <View style={{ flex: 1 }}>
-                    <View style={styles.catTitleRow}>
-                        <Text
-                            style={[styles.catTitle, { color: theme.ink }, isTablet && styles.catTitleTablet]}
-                            numberOfLines={1}
-                        >
-                            {cat.label}
-                        </Text>
-                        <Text style={[styles.catPct, { color: theme.ink3 }]}>{cat.pct}</Text>
-                    </View>
-                    <Text style={[styles.catSub, { color: theme.ink2 }]}>{cat.sub}</Text>
-                </View>
-
-                <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.catLeft, { color: over ? theme.danger : theme.ink }]}>
-                        {fmtMoney(Math.abs(left))}
-                    </Text>
-                    <Text style={[styles.catLeftLabel, { color: theme.ink3 }]} numberOfLines={1}>
-                        {over ? t('category.over') : t('category.left')}
-                    </Text>
-                </View>
-            </Pressable>
-
-            {/* Progress + metadata */}
-            <View style={styles.catProgress}>
-                <AnimatedProgressBar
-                    value={pct}
-                    color={barColor}
-                    bg={theme.borderSoft}
-                    height={8}
-                />
-                <View style={styles.catMeta}>
-                    <Text style={[styles.catMetaText, { color: theme.ink3 }]}>
-                        {t('category.spent', { amount: fmtMoney(cat.spent) })}
-                    </Text>
-                    <Text style={[styles.catMetaText, { color: theme.ink3 }]}>
-                        {t('category.ofBudget', { amount: fmtMoney(cat.budget) })}
-                    </Text>
-                </View>
-            </View>
-
-            {/* Expandable transaction list */}
-            {expanded && (
-                <View style={[styles.catExpanded, { backgroundColor: theme.surfaceSoft, borderTopColor: theme.borderSoft }]}>
-                    {/* Loading state */}
-                    {txs === null && (
-                        <ActivityIndicator
-                            size="small"
-                            color={cat.color}
-                            style={{ marginVertical: 14 }}
+                {/* ── Band 2 · Plan: "What's next?" ─────────────────────── */}
+                <View style={[styles.band, styles.underHero, { backgroundColor: theme.bg }, !envision && styles.last]}>
+                    <View style={styles.stack}>
+                        {showClosePrompt ? (
+                            <CloseOutCard
+                                month={currentMonth}
+                                target={rollover?.target ?? 0}
+                                closing={home.closingMonth}
+                                onClose={home.closeMonth}
+                                onDismiss={home.dismissCloseout}
+                            />
+                        ) : null}
+                        {monthClosed ? (
+                            <ClosedLine
+                                month={currentMonth}
+                                amount={rollover?.amount ?? 0}
+                                busy={home.closingMonth}
+                                onReopen={home.reopenMonth}
+                            />
+                        ) : null}
+                        {debts?.next_payment ? (
+                            <NextPaymentCard payment={debts.next_payment} onPrune={() => openDebts(debts.next_payment!.id)} />
+                        ) : null}
+                        <SplitContainers budgets={budgets} spent={expenses} onOpen={openSplit} onAdd={logExpense} />
+                        <LoggingArea
+                            connected={home.bankConnected}
+                            pending={home.pending}
+                            onClassify={home.classify}
+                            daysSinceLastLog={summary?.days_since_last_log ?? null}
+                            onOpenExpense={() => logExpense()}
                         />
-                    )}
-
-                    {/* Real transaction rows (up to 3, most recent first) */}
-                    {txs !== null && txs.length > 0 && txs.map((item, i) => (
-                        <View
-                            key={item.id}
-                            style={[
-                                styles.txRow,
-                                i < txs.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.borderSoft },
-                            ]}
-                        >
-                            <View style={[styles.txIconTile, { backgroundColor: cat.soft }]}>
-                                <cat.Icon size={16} accent={cat.color} paper={cat.soft} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.txName, { color: theme.ink }]} numberOfLines={1}>
-                                    {item.title
-                                        ? serverTitle(item.title)
-                                        : subcatLabel(item.sub_category, cat.key === 'goals' ? null : cat.key)}
-                                </Text>
-                                <Text style={[styles.txDate, { color: theme.ink3 }]}>
-                                    {monthAbbr(item.month)} {item.day}
-                                </Text>
-                            </View>
-                            <Text style={[styles.txAmount, { color: theme.ink2 }]}>
-                                {fmtMoney(item.amount, 2)}
-                            </Text>
-                        </View>
-                    ))}
-
-                    {/* Goals: show piggy bank total only when no individual transactions are loaded */}
-                    {cat.key === 'goals' && txs !== null && txs.length === 0 && (
-                        <View style={[styles.piggyRow, { backgroundColor: theme.brandSoft }]}>
-                            <IconSavings size={20} color={theme.brand} accent={theme.brand2} />
-                            <Text style={[styles.piggyLabel, { color: theme.brand }]}>{t('category.piggyBalance')}</Text>
-                            <Text style={[styles.piggyAmount, { color: theme.brand }]}>
-                                {fmtMoney(piggyBalance, 2)}
-                            </Text>
-                        </View>
-                    )}
-
-                    {/* "View all" — always shown; only element when no transactions logged */}
-                    {txs !== null && (
-                        <Pressable
-                            onPress={onNavigate}
-                            style={({ pressed }) => [
-                                styles.viewAllBtn,
-                                { borderTopColor: theme.borderSoft },
-                                pressed && { opacity: 0.7 },
-                            ]}
-                        >
-                            <Text style={[styles.viewAllText, { color: theme.brand }]}>
-                                {tc('action.viewAll', { label: cat.label.toLowerCase() })}
-                            </Text>
-                        </Pressable>
-                    )}
+                        <ConnectBankPrompt connected={home.bankConnected} />
+                    </View>
                 </View>
-            )}
+
+                {/* ── Band 3 · Envision: "Where is this going?" ─────────── */}
+                {envision ? (
+                    <View style={[styles.band, styles.raised, styles.last, { backgroundColor: theme.sectionGreen }]}>
+                        <View style={styles.stack}>
+                            <Text style={[homeType.large, { color: theme.onBrand }]}>{t('envision.heading')}</Text>
+                            <EncouragementCard debts={debts} goals={goalsNear} />
+                            {debts ? <DebtsPaidLine debts={debts} /> : null}
+                            <FocusPlant summary={debts ? summary : null} />
+                        </View>
+                    </View>
+                ) : null}
+            </ScrollView>
+
+            {/* The status bar area stays green however far the page is scrolled. */}
+            <View
+                pointerEvents="none"
+                style={[styles.statusBarFill, { height: insets.top, backgroundColor: theme.brand }]}
+            />
+
+            <MonthPickerSheet
+                visible={pickerOpen}
+                selected={home.monthIndex}
+                onPick={home.pickMonth}
+                onClose={() => setPickerOpen(false)}
+            />
+            <ScriptureModal verse={home.verse} visible={home.verseVisible} onClose={home.closeVerse} />
         </View>
     );
 }
 
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-    // Hero
-    heroInner: { paddingHorizontal: 22, paddingTop: 52, paddingBottom: 0, position: 'relative', zIndex: 1 },
-    heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 },
-    logoGroup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    logoTile: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    wordmark: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: ft(15, 1.2), letterSpacing: -0.2 },
-    subline: { color: 'rgba(255,255,255,0.65)', fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.2) },
-    heroControls: { flexDirection: 'row', gap: 8 },
-    glassBtn: {
-        width: 38, height: 38, borderRadius: 999,
-        backgroundColor: 'rgba(255,255,255,0.16)',
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
-        alignItems: 'center', justifyContent: 'center',
+    fill: { flex: 1 },
+    // flexGrow lets the last band fill a short page, so no strip of another colour
+    // is left under it.
+    content: { flexGrow: 1 },
+    overscroll: { position: 'absolute', left: 0, right: 0, top: -1000, height: 1000 },
+    statusBarFill: { position: 'absolute', left: 0, right: 0, top: 0 },
+    // Above the cream band, so the hero's curved corners sit over cream.
+    hero: { zIndex: 1 },
+    band: { paddingHorizontal: HOME_PAD, paddingBottom: BAND_OVERLAP + BAND_PAD },
+    // The cream band starts under the hero, so cream fills behind its curved corners.
+    underHero: { marginTop: -HERO_RADIUS, paddingTop: HERO_RADIUS + BAND_PAD },
+    raised: {
+        marginTop: -BAND_OVERLAP,
+        paddingTop: BAND_PAD,
+        borderTopLeftRadius: BAND_RADIUS,
+        borderTopRightRadius: BAND_RADIUS,
     },
-    // Absolutely positioned so it cannot change glassBtn's box — the mail button has
-    // to stay pixel-identical in size to the gear beside it.
-    unreadDot: {
-        position: 'absolute', top: 6, right: 6,
-        width: 9, height: 9, borderRadius: 999, borderWidth: 1.5,
-    },
-
-    // Month nav
-    monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-    monthChevron: {
-        width: 38, height: 38, borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.16)',
-        borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
-        alignItems: 'center', justifyContent: 'center',
-    },
-    monthCenter: { alignItems: 'center' },
-    monthEyebrow: {
-        color: 'rgba(255,255,255,0.65)',
-        fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: ft(10, 1.25),
-        letterSpacing: 1.8,
-    },
-    monthLabel: {
-        color: '#fff',
-        fontFamily: 'InstrumentSerif-Regular',
-        fontSize: ft(18, 1.3),
-        marginTop: 2,
-        letterSpacing: 0.2,
-    },
-
-    // Big amount
-    incomeEyebrow: {
-        color: 'rgba(255,255,255,0.7)',
-        fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: ft(12, 1.25),
-        letterSpacing: 1.2,
-        marginBottom: ft(4, 1.5),
-    },
-    leftChip: {
-        backgroundColor: 'rgba(255,255,255,0.18)',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 999,
-        alignSelf: 'flex-start',
-    },
-    leftChipText: {
-        color: '#fff',
-        fontFamily: 'Geist-SemiBold',
-        fontSize: ft(11, 1.2),
-        letterSpacing: 0.6,
-    },
-
-    // Content area
-    contentArea: { paddingHorizontal: 18 },
-
-    // Rollover close-out card
-    rolloverCard: {
-        borderRadius: 18,
-        padding: 16,
-        marginBottom: 16,
-        borderWidth: 1.5,
-        gap: 14,
-    },
-    rolloverHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-    rolloverIconTile: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-    rolloverTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(15, 1.28), letterSpacing: -0.2 },
-    rolloverSub: { fontFamily: 'Geist-Regular', fontSize: ft(12, 1.18), marginTop: 3, lineHeight: ft(17, 1.18) },
-    rolloverDismiss: { fontFamily: 'Geist-SemiBold', fontSize: ft(14, 1.2), paddingHorizontal: 2 },
-    rolloverClosedCard: {
-        borderRadius: 16,
-        padding: 14,
-        marginBottom: 16,
-        borderWidth: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    rolloverClosedTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(14, 1.28), letterSpacing: -0.2 },
-    reopenBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1 },
-    reopenBtnText: { fontFamily: 'Geist-SemiBold', fontSize: ft(12, 1.2) },
-
-    // Scripture banner
-    scriptureBanner: { marginBottom: 18 },
-    scriptureBannerInner: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-    scriptureIconTile: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    scriptureVerse: {
-        fontFamily: 'InstrumentSerif-Italic',
-        fontSize: ft(15, 1.2),
-        lineHeight: ft(20, 1.2),
-    },
-    scriptureRef: {
-        fontFamily: 'JetBrainsMono-Regular',
-        fontSize: ft(11, 1.18),
-        letterSpacing: 0.4,
-        marginTop: 6,
-    },
-
-    // Section header
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        justifyContent: 'space-between',
-        marginBottom: 12,
-        paddingHorizontal: 4,
-    },
-    sectionTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(15, 1.28), letterSpacing: -0.2 },
-    budgetTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-    budgetTypeDot: { width: 6, height: 6, borderRadius: 3 },
-    budgetTypeText: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.2), letterSpacing: 0.2 },
-
-    // Tithe envelope (above the 50/30/20 split)
-    titheCard: {
-        borderRadius: 18,
-        padding: 16,
-        marginBottom: 12,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        borderWidth: 1.5,
-    },
-    titheIconTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    titheTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-    titheTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(16, 1.28), letterSpacing: -0.2 },
-    tithePct: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.25) },
-    titheSub: { fontFamily: 'Geist-Regular', fontSize: ft(12, 1.18), marginTop: 2 },
-    titheAmount: { fontFamily: 'InstrumentSerif-Regular', fontSize: ft(22, 1.3) },
-    titheAmountLabel: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: ft(10, 1.25), letterSpacing: 1 },
-    titheToggleHit: { marginTop: 8 },
-    titheToggleTrack: {
-        width: TOGGLE_W,
-        height: TOGGLE_H,
-        borderRadius: TOGGLE_H / 2,
-        padding: TOGGLE_INSET,
-        justifyContent: 'center',
-    },
-    titheToggleThumb: {
-        width: THUMB,
-        height: THUMB,
-        borderRadius: THUMB / 2,
-        backgroundColor: '#fff',
-        // Same sticker treatment as the cards, scaled down — without it the white
-        // thumb disappears into the pale off-state track.
-        shadowColor: '#000',
-        shadowOpacity: 0.18,
-        shadowRadius: 2,
-        shadowOffset: { width: 0, height: 1 },
-        elevation: 2,
-    },
-
-    // Category card
-    catCard: {
-        borderRadius: 18,
-        marginBottom: 12,
-    },
-    catCardHeader: { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
-    catIconTile: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    catTitleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-    catTitle: { fontFamily: 'Geist-SemiBold', fontSize: ft(16, 1.3), letterSpacing: -0.2 },
-    // Tablet-only: give the heading room so the trailing "s" (Needs/Wants/Goals)
-    // is never clipped, and let it shrink instead of truncating against the %.
-    catTitleTablet: { flexShrink: 1, paddingRight: 3 },
-    catPct: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.25) },
-    catSub: { fontFamily: 'Geist-Regular', fontSize: ft(12, 1.18), marginTop: 2 },
-    catLeft: { fontFamily: 'InstrumentSerif-Regular', fontSize: ft(22, 1.3) },
-    catLeftLabel: { fontFamily: 'JetBrainsMono-SemiBold', fontSize: ft(10, 1.25), letterSpacing: 1 },
-    catProgress: { paddingHorizontal: 16, paddingBottom: 14 },
-    catMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-    catMetaText: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.2) },
-
-    // Expanded transaction rows
-    catExpanded: { borderTopWidth: 1, borderBottomLeftRadius: 18, borderBottomRightRadius: 18 },
-    txRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        padding: 12,
-        paddingHorizontal: 16,
-    },
-    txIconTile: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    txName: { fontFamily: 'Geist-Medium', fontSize: ft(13, 1.18) },
-    txDate: { fontFamily: 'JetBrainsMono-Regular', fontSize: ft(11, 1.18), marginTop: 2 },
-    txAmount: { fontFamily: 'Geist-Medium', fontSize: ft(13, 1.18) },
-
-    // Piggy row (inside Goals expanded)
-    piggyRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        margin: 12,
-        padding: 12,
-        borderRadius: 12,
-    },
-    piggyLabel: { flex: 1, fontFamily: 'Geist-SemiBold', fontSize: ft(12, 1.18) },
-    piggyAmount: { fontFamily: 'InstrumentSerif-Regular', fontSize: ft(18, 1.3) },
-
-    // "View all" link at bottom of expanded card
-    viewAllBtn: { paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, alignItems: 'center' },
-    viewAllText: { fontFamily: 'Geist-SemiBold', fontSize: ft(13, 1.2) },
-
-    // Quick actions
-    quickActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-    quickActionPrimary: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 14,
-        paddingHorizontal: 18,
-        borderRadius: 14,
-        ...shadow(5, '#0F3D2E'),
-    },
-    quickActionPrimaryText: { color: '#fff', fontFamily: 'Geist-SemiBold', fontSize: ft(14, 1.2) },
-    quickActionSecondary: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        paddingVertical: 14,
-        paddingHorizontal: 18,
-        borderRadius: 14,
-        borderWidth: 1,
-    },
-    quickActionSecondaryText: { fontFamily: 'Geist-SemiBold', fontSize: ft(14, 1.2) },
-
-    // View all Income button (hero) — matches leftChip pill style
-    viewIncomeBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        backgroundColor: 'rgba(255,255,255,0.18)',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 999,
-    },
-    viewIncomeBtnText: {
-        color: '#fff',
-        fontFamily: 'Geist-SemiBold',
-        fontSize: ft(11, 1.2),
-        letterSpacing: 0.6,
-    },
-
-    // Scripture modal
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 28,
-    },
-    modalCard: { width: '100%', alignItems: 'center', gap: 8 },
-    modalIconTile: {
-        width: 56, height: 56, borderRadius: 18,
-        alignItems: 'center', justifyContent: 'center',
-        marginBottom: 4,
-    },
-    modalTitle: { fontFamily: 'InstrumentSerif-Regular', fontSize: ft(22, 1.3), textAlign: 'center' },
-    modalVerse: {
-        fontFamily: 'InstrumentSerif-Italic',
-        fontSize: ft(15, 1.2),
-        textAlign: 'center',
-        lineHeight: ft(22, 1.2),
-    },
-    modalRef: {
-        fontFamily: 'JetBrainsMono-Regular',
-        fontSize: ft(12, 1.18),
-        letterSpacing: 0.4,
-        marginBottom: 8,
-    },
+    // Runs behind the floating tab bar to the end of the scroll content.
+    last: { flexGrow: 1, paddingBottom: 120 },
+    section: { marginTop: SECTION_GAP },
+    stack: { gap: CARD_GAP },
 });

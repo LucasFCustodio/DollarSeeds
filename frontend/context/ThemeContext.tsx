@@ -59,6 +59,10 @@ export interface AppTheme {
     brand2: string;      // emerald
     brandSoft: string;   // tinted brand bg
     onBrand: string;     // text on brand bg
+    // The home's green bands (top bar + Analyze, and Envision). Sampled from the
+    // lighter end of the old dashboard hero gradient; identical in both themes, so
+    // text sitting on it is always `onBrand`.
+    sectionGreen: string;
 
     // ── Category tokens ─────────────────────────────────────────
     needs: string;    needsSoft: string;
@@ -77,6 +81,10 @@ export interface AppTheme {
     // surface for callouts, following needsSoft/wantsSoft/goalsSoft, and DOES take
     // `ink` safely in both themes.
     harvestSoft: string;
+    // Yellow TEXT on cream. Solid harvest on bg is ~1.5:1 and unreadable, so text that
+    // must read as harvest (the home's tracking nudge, the connect-bank prompt) uses
+    // this darker ochre in light mode; dark mode can take harvest itself.
+    harvestInk: string;
 
     // ── Legacy aliases (backward compat — keep for existing code) ──
     background: string;          // → bg
@@ -120,6 +128,7 @@ const LIGHT: AppTheme = {
     brand2: '#10B981',
     brandSoft: '#E8F3EE',
     onBrand: '#FFFFFF',
+    sectionGreen: '#178D65',
 
     // Categories — harmonized to forest backdrop
     needs: '#C2701C',    needsSoft: '#FBEDD9',
@@ -131,7 +140,7 @@ const LIGHT: AppTheme = {
     success: '#0F8C5C',  successSoft: '#E5F3EC',
 
     // Accent
-    harvest: '#F4D35E',  harvestSoft: '#FCF2D4',
+    harvest: '#F4D35E',  harvestSoft: '#FCF2D4',  harvestInk: '#8A6A00',
 
     // ── Legacy aliases ──────────────────────────────────────────
     background: '#F5F1E6',
@@ -175,6 +184,7 @@ const DARK: AppTheme = {
     brand2: '#10B981',
     brandSoft: '#0F2A20',
     onBrand: '#FFFFFF',
+    sectionGreen: '#178D65',
 
     // Categories
     needs: '#F4B860',    needsSoft: '#2C2010',
@@ -186,7 +196,7 @@ const DARK: AppTheme = {
     success: '#34D399',  successSoft: '#0F2A20',
 
     // Accent
-    harvest: '#F4D35E',  harvestSoft: '#2C2712',
+    harvest: '#F4D35E',  harvestSoft: '#2C2712',  harvestInk: '#F4D35E',
 
     // ── Legacy aliases ──────────────────────────────────────────
     background: '#0A1612',
