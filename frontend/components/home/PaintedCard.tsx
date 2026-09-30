@@ -20,7 +20,7 @@ const SCRIM_OPACITY = 0.85;
 const SCRIM_END = 0.65;
 
 /** '#RRGGBB' → 'rgba(r,g,b,a)' */
-function withAlpha(hex: string, alpha: number) {
+export function withAlpha(hex: string, alpha: number) {
     const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }

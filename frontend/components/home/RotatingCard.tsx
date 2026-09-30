@@ -33,7 +33,8 @@ interface Props {
 const INTERVAL_MS = 4000;
 const SLIDE_MS = 420;
 
-function useReduceMotion() {
+/** The OS "Reduce Motion" setting, live (Reanimated's useReducedMotion is read once). */
+export function useReduceMotion() {
     const [reduce, setReduce] = useState(false);
     useEffect(() => {
         let alive = true;
@@ -44,7 +45,7 @@ function useReduceMotion() {
     return reduce;
 }
 
-function useAppActive() {
+export function useAppActive() {
     const [active, setActive] = useState(AppState.currentState === 'active');
     useEffect(() => {
         const sub = AppState.addEventListener('change', s => setActive(s === 'active'));
