@@ -10,7 +10,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, FlatList, StyleSheet, Text, View } from 'react-native';
-import { Redirect, useFocusEffect, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -48,6 +48,9 @@ function DebtsGardenScreen() {
     const insets = useSafeAreaInsets();
     const analytics = useAnalytics();
     const isFocused = useIsFocused();
+    // Optional: the home's next-payment card and focus plant open the garden on one
+    // debt. Consumed once, then cleared, so returning to the tab does not re-jump.
+    const { debtId } = useLocalSearchParams<{ debtId?: string }>();
 
     const [garden, setGarden] = useState<Garden | null>(null);
     const [error, setError] = useState(false);
@@ -91,6 +94,12 @@ function DebtsGardenScreen() {
         const queued = takeGardenAnimation();
         if (queued) pending.current = queued;
         load().then(data => {
+            const target = debtId ? Number(debtId) : null;
+            if (data && target != null && data.debts.some(d => d.id === target)) {
+                router.setParams({ debtId: undefined });
+                setMode('plants');
+                setTimeout(() => gardenRef.current?.scrollToDebt(target), 60);
+            }
             const p = pending.current;
             if (!data || !p) return;
             setMode('plants');
@@ -98,7 +107,7 @@ function DebtsGardenScreen() {
             // debt on screen; the animation plays once it settles (effect below).
             setTimeout(() => gardenRef.current?.scrollToDebt(p.debtId), 60);
         });
-    }, [load]));
+    }, [load, debtId, router]));
 
     const byId = useMemo(() => new Map((garden?.debts ?? []).map(d => [d.id, d])), [garden]);
 
