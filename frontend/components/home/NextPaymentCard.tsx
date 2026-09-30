@@ -2,13 +2,16 @@
  * NextPaymentCard — the next debt payment coming up, and a "Prune" shortcut to it.
  * The server picks the debt (nearest due date, focus first on a tie) and the focus
  * extra; this only renders them. Flag-gated by the parent.
+ *
+ * The card's surface is painted art (PaintedCard); the Prune button stays solid
+ * brand so it pops against the painting.
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Fonts, useTheme } from '../../context/ThemeContext';
 import { ft } from '../../constants/responsive';
-import Card from '../ui/Card';
+import PaintedCard from './PaintedCard';
 import type { NextPayment } from '../../lib/homeSummary';
 import { useDebtFormat } from '../debts/format';
 import { homeType } from './homeType';
@@ -23,7 +26,7 @@ export default function NextPaymentCard({ payment, onPrune }: { payment: NextPay
         : f.money(payment.min_payment);
 
     return (
-        <Card theme={theme} depth={6} padding={16}>
+        <PaintedCard source={ART} borderColor={theme.border} borderWidth={1} style={styles.card}>
             <View style={styles.row}>
                 <View style={styles.left}>
                     <Text style={homeType.small} numberOfLines={1}>
@@ -44,11 +47,14 @@ export default function NextPaymentCard({ payment, onPrune }: { payment: NextPay
                     <Text style={[styles.pruneText, { color: theme.onBrand }]}>{t('nextPayment.prune')}</Text>
                 </Pressable>
             </View>
-        </Card>
+        </PaintedCard>
     );
 }
 
+const ART = require('../../assets/images/home/next-payment-bg.png');
+
 const styles = StyleSheet.create({
+    card: { padding: 16 },
     row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     left: { flex: 1 },
     amount: { marginTop: 4 },
