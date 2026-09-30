@@ -1,7 +1,9 @@
 /**
  * SplitContainers — Needs and Wants side by side, Savings full width under them.
  *
- * Each shows what is left of its budget, three examples, and a bar. Tapping one opens
+ * Each shows what is left of its budget, three examples, and a bar. Savings is the
+ * most important money category, so its label ("Savings + debt paydown") is a bold
+ * title in the top row beside its icon instead of a hint line. Tapping one opens
  * its existing details screen (where "View all" and deleting live). Needs and Wants
  * carry a + for manual logging; Savings does not — money set aside is logged through
  * the Goals flows. Each is also a drop target for an expense bubble.
@@ -9,7 +11,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '../../context/ThemeContext';
+import { Fonts, useTheme } from '../../context/ThemeContext';
+import { ft } from '../../constants/responsive';
 import { useLocale } from '../../context/LocaleContext';
 import Card from '../ui/Card';
 import AnimatedProgressBar from '../ui/AnimatedProgressBar';
@@ -63,6 +66,7 @@ function SplitCard({ split, budget, spent, onOpen, onAdd }: {
     const pct = budget > 0 ? (spent / budget) * 100 : (spent > 0 ? 100 : 0);
     const name = t(`split.${split}`);
     const addable = split !== 'goals' && onAdd;
+    const titled = split === 'goals';
 
     return (
         <View ref={drop.ref} collapsable={false} style={split === 'goals' ? undefined : styles.half}>
@@ -83,8 +87,11 @@ function SplitCard({ split, budget, spent, onOpen, onAdd }: {
                     <View style={[styles.tile, { backgroundColor: look.soft }]}>
                         <Icon size={22} accent={look.color} paper={look.soft} />
                     </View>
+                    {titled ? (
+                        <Text style={[styles.title, { color: theme.ink }]} numberOfLines={2}>{look.examples}</Text>
+                    ) : null}
                     <Text
-                        style={[homeType.medium, styles.amount, { color: over ? theme.danger : look.color }]}
+                        style={[homeType.medium, titled ? styles.titledAmount : styles.amount, { color: over ? theme.danger : look.color }]}
                         numberOfLines={1}
                         adjustsFontSizeToFit
                         minimumFontScale={0.6}
@@ -103,14 +110,17 @@ function SplitCard({ split, budget, spent, onOpen, onAdd }: {
                         </Pressable>
                     ) : null}
                 </View>
-                <Text style={[homeType.verySmall, styles.examples, { color: theme.ink3 }]} numberOfLines={1}>
-                    {look.examples}
-                </Text>
+                {titled ? null : (
+                    <Text style={[homeType.verySmall, styles.examples, { color: theme.ink3 }]} numberOfLines={1}>
+                        {look.examples}
+                    </Text>
+                )}
                 <AnimatedProgressBar
                     value={Math.min(100, pct)}
                     color={over ? theme.danger : look.color}
                     bg={theme.borderSoft}
                     height={6}
+                    style={titled ? styles.titledBar : undefined}
                 />
             </Card>
         </View>
@@ -124,6 +134,11 @@ const styles = StyleSheet.create({
     top: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     tile: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     amount: { flex: 1, textAlign: 'right' },
+    // The small size in the heaviest Geist the app uses for titles. It may wrap to a
+    // second line (pt-BR runs long) but never truncates; the amount never shrinks.
+    title: { fontFamily: Fonts.sansSemiBold, fontSize: ft(13), flexShrink: 1, marginLeft: 4 },
+    titledAmount: { flexGrow: 1, flexShrink: 0, textAlign: 'right' },
+    titledBar: { marginTop: 12 },
     plus: { width: 24, height: 24, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
     examples: { marginTop: 10, marginBottom: 8 },
 });
