@@ -38,9 +38,20 @@
     "a11y": "{{amount}} left this month. View all income",
     "addIncomeA11y": "Log income"
   },
-  "status": {
-    "overdue": "{{count}} debt overdue",
-    "overdue_plural": "{{count}} debts overdue"
+  "overdueAlert": {
+    "title": "{{name}} needs attention",
+    "titleMany": "{{count}} debt needs attention",
+    "titleMany_plural": "{{count}} debts need attention",
+    "wasDue": "was due {{date}} · {{count}} day ago",
+    "wasDue_plural": "was due {{date}} · {{count}} days ago",
+    "row": "{{name}} · {{amount}} · due {{date}}",
+    "more": "+{{count}} more",
+    "payNow": "Pay now",
+    "review": "Review",
+    "a11y": "{{name}} needs attention. {{amount}} was due {{date}}, {{count}} day ago.",
+    "a11y_plural": "{{name}} needs attention. {{amount}} was due {{date}}, {{count}} days ago.",
+    "payA11y": "Pay {{name}} online",
+    "reviewA11y": "Review in Debts"
   },
   "split": {
     "needs": "Needs",

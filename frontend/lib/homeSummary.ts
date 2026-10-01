@@ -52,10 +52,23 @@ export interface DueSoonDebt {
     min_payment: number;
 }
 
+/** An overdue debt (server rule), longest overdue first. */
+export interface OverdueDebt {
+    id: number;
+    name: string;
+    min_payment: number;
+    /** YYYY-MM-DD: the last passed due date whose minimum was not logged. */
+    missed_due_date: string;
+    days_overdue: number;
+    pay_url: string | null;
+}
+
 export interface HomeDebts {
     paid_count: number;
     total_count: number;
     overdue_count: number;
+    /** Absent from a backend older than this field; fall back to overdue_count. */
+    overdue?: OverdueDebt[];
     due_soon_count: number;
     /** Absent from a backend older than this field; read it as []. */
     due_soon?: DueSoonDebt[];

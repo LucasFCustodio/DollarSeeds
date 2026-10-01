@@ -38,9 +38,20 @@
     "a11y": "{{amount}} disponível neste mês. Ver toda a renda",
     "addIncomeA11y": "Registrar renda"
   },
-  "status": {
-    "overdue": "{{count}} dívida em atraso",
-    "overdue_plural": "{{count}} dívidas em atraso"
+  "overdueAlert": {
+    "title": "{{name}} precisa de atenção",
+    "titleMany": "{{count}} dívida precisa de atenção",
+    "titleMany_plural": "{{count}} dívidas precisam de atenção",
+    "wasDue": "venceu em {{date}} · há {{count}} dia",
+    "wasDue_plural": "venceu em {{date}} · há {{count}} dias",
+    "row": "{{name}} · {{amount}} · venceu em {{date}}",
+    "more": "+{{count}} outras",
+    "payNow": "Pagar agora",
+    "review": "Revisar",
+    "a11y": "{{name}} precisa de atenção. {{amount}} venceu em {{date}}, há {{count}} dia.",
+    "a11y_plural": "{{name}} precisa de atenção. {{amount}} venceu em {{date}}, há {{count}} dias.",
+    "payA11y": "Pagar {{name}} online",
+    "reviewA11y": "Revisar em Dívidas"
   },
   "split": {
     "needs": "Necessidades",

@@ -147,7 +147,7 @@ function Home() {
                                 onOpenIncome={openIncomeList}
                             />
                             {debts && debts.overdue_count > 0 ? (
-                                <OverdueStatus count={debts.overdue_count} onOpenDebts={() => openDebts()} />
+                                <OverdueStatus count={debts.overdue_count} debts={debts.overdue} onOpenDebts={openDebts} />
                             ) : null}
                             {nextPayment ? (
                                 <NextPaymentCard
