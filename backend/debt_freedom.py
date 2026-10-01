@@ -731,13 +731,30 @@ def home_debt_summary(garden: dict, transactions: list, today: datetime.date) ->
         ((i, d) for i, d in enumerate(active) if is_due_soon(d, by_debt.get(d["id"], []), today)),
         key=lambda c: (c[1]["next_due_date"], c[0]),
     )
+    # Every overdue debt, longest overdue first (garden order on a tie). The missed
+    # due date is the one missed_last_minimum tested: last_passed_due_date.
+    overdue = []
+    for i, d in enumerate(active):
+        if not is_overdue(d, by_debt.get(d["id"], []), today):
+            continue
+        missed = last_passed_due_date(d, today)
+        overdue.append((i, d, missed))
+    overdue.sort(key=lambda c: (-(today - c[2]).days, c[0]))
     next_month = month_key(add_months(today, 1))
     almost = next((d for d in active if d.get("est_payoff_month") == next_month), None)
 
     return {
         "paid_count": len(debts) - len(active),
         "total_count": len(debts),
-        "overdue_count": sum(1 for d in active if is_overdue(d, by_debt.get(d["id"], []), today)),
+        "overdue_count": len(overdue),
+        "overdue": [{
+            "id": d["id"],
+            "name": d.get("name"),
+            "min_payment": money(d.get("min_payment")),
+            "missed_due_date": missed.isoformat(),
+            "days_overdue": (today - missed).days,
+            "pay_url": d.get("pay_url") or None,
+        } for _, d, missed in overdue],
         "due_soon_count": len(due_soon),
         "due_soon": [{
             "id": d["id"],
