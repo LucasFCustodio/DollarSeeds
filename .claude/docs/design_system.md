@@ -50,7 +50,8 @@ const { theme } = useTheme();
 | `brand2` | `#10B981` (emerald) | `#10B981` | Gradient end, goals color |
 | `brandSoft` | `#E8F3EE` | `#0F2A20` | Secondary buttons, active-tab pill bg |
 | `onBrand` | `#FFFFFF` | `#FFFFFF` | Text on brand-colored backgrounds |
-| `sectionGreen` | `#178D65` | `#178D65` | The home's green Envision band (the top bar + Analyze band is the `HeroBg` gradient). Text on it is `onBrand`; buttons on it use the glass style (`rgba(255,255,255,0.16)` fill, `rgba(255,255,255,0.22)` border) |
+| `paintedForest` | `#0E3C2D` | `#0E3C2D` | The dark forest edge of the home's painted band art (`assets/images/home/analyze-bg.png`), sampled from its top rows. The bands' fill while the art loads, the overscroll colour and the fixed status-bar strip |
+| `sectionGreen` | `#178D65` | `#178D65` | **Unused since the painted bands** (kept, not removed). Was the home's flat Envision band fill. Text on it is `onBrand`; buttons on it use the glass style (`rgba(255,255,255,0.16)` fill, `rgba(255,255,255,0.22)` border) |
 
 ### Budget Categories
 | Token | Light | Dark | Why |

@@ -76,7 +76,7 @@ export default function HomeTopBar({ month, selected, onPickMonth }: Props) {
                     >
                         <IconMail size={18} color={theme.onBrand} />
                         {unread ? (
-                            <View style={[styles.unreadDot, { backgroundColor: theme.harvest, borderColor: theme.sectionGreen }]} />
+                            <View style={[styles.unreadDot, { backgroundColor: theme.harvest, borderColor: theme.paintedForest }]} />
                         ) : null}
                     </Pressable>
                 ) : null}

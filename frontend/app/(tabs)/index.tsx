@@ -7,9 +7,10 @@
  *   Envision  "Where is this going?" debts paid, encouragement, the focus plant
  *
  * The three steps are three full-bleed bands (green, cream, green), so the screen
- * splits into them without the user having to name them. The top one is the old
- * dashboard hero's gradient (HeroBg), its bottom corners curving up over the cream
- * band; the Envision band overlaps the cream one under rounded top corners.
+ * splits into them without the user having to name them. Both green bands are the
+ * same painted watercolour wash (PaintedBand): the top one as painted, its bottom
+ * corners curving up over the cream band; Envision flipped, overlapping the cream
+ * under rounded top corners, so the page opens and closes on the same green.
  *
  * A good visit can take 20 seconds, as long as the user leaves encouraged and with a
  * reason to come back. This file is layout only: state and requests live in
@@ -27,7 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { useTheme } from '../../context/ThemeContext';
+import { shadow, useTheme } from '../../context/ThemeContext';
 import { DEBT_FREEDOM_ENABLED } from '../../constants/features';
 import type { SplitKey } from '../../lib/homeSummary';
 import { useHomeData } from '../../components/home/useHomeData';
@@ -44,12 +45,12 @@ import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
 import { DebtsPaidLine, EncouragementCard } from '../../components/home/Encouragement';
 import FocusPlant from '../../components/home/FocusPlant';
 import ScriptureModal from '../../components/home/ScriptureModal';
-import HeroBg from '../../components/ui/HeroBg';
+import PaintedBand from '../../components/home/PaintedBand';
 import {
     BAND_OVERLAP, BAND_PAD, BAND_RADIUS, CARD_GAP, HOME_PAD, SECTION_GAP, homeType,
 } from '../../components/home/homeType';
 
-/** HeroBg's bottom corner radius. */
+/** The top band's bottom corner radius (as the old HeroBg's). */
 const HERO_RADIUS = 32;
 
 const SPLIT_CATEGORY: Record<SplitKey, string> = { needs: 'Needs', wants: 'Wants', goals: 'Goals' }; // i18n-canonical
@@ -126,17 +127,22 @@ function Home() {
             {focused ? <StatusBar style="light" /> : null}
             <ScrollView
                 // Whatever shows past the last band on an overscroll matches it.
-                style={[styles.fill, { backgroundColor: envision ? theme.sectionGreen : theme.bg }]}
+                style={[styles.fill, { backgroundColor: envision ? theme.paintedForest : theme.bg }]}
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
                 scrollEnabled={!zones?.dragging}
             >
                 {/* The hero's top colour above it, for the pull-down bounce. */}
-                <View style={[styles.overscroll, { backgroundColor: theme.brand }]} />
+                <View style={[styles.overscroll, { backgroundColor: theme.paintedForest }]} />
 
                 {/* ── Band 1 · Analyze: "Am I okay?" ────────────────────── */}
                 <View style={styles.hero}>
-                    <HeroBg brand={theme.brand} brand2={theme.brand2} style={{ paddingHorizontal: HOME_PAD, paddingTop: insets.top + 8 }}>
+                    {/* The field stays pinned at the bottom; a shorter band (no overdue
+                        alert) crops the calm forest off the top. */}
+                    <PaintedBand
+                        anchor="bottom"
+                        style={[styles.top, { paddingTop: insets.top + 8 }, shadow(6, theme.brand) as object]}
+                    >
                         <HomeTopBar month={currentMonth} selected={home.monthIndex} onPickMonth={home.pickMonth} />
                         <View style={[styles.section, { gap: CARD_GAP + 8 }]}>
                             <IncomeHero
@@ -165,7 +171,7 @@ function Home() {
                                 />
                             ) : null}
                         </View>
-                    </HeroBg>
+                    </PaintedBand>
                 </View>
 
                 {/* ── Band 2 · Plan: "What's next?" ─────────────────────── */}
@@ -202,21 +208,23 @@ function Home() {
 
                 {/* ── Band 3 · Envision: "Where is this going?" ─────────── */}
                 {envision ? (
-                    <View style={[styles.band, styles.raised, styles.last, { backgroundColor: theme.sectionGreen }]}>
+                    // Flipped: the misty field is at the top, pinned; any crop comes off
+                    // the solid forest at the bottom, behind the tab bar.
+                    <PaintedBand flipped anchor="top" style={[styles.band, styles.raised, styles.last]}>
                         <View style={styles.stack}>
                             <Text style={[homeType.large, { color: theme.onBrand }]}>{t('envision.heading')}</Text>
                             <EncouragementCard debts={debts} goals={goalsNear} />
                             {debts ? <DebtsPaidLine debts={debts} /> : null}
                             <FocusPlant summary={debts ? summary : null} />
                         </View>
-                    </View>
+                    </PaintedBand>
                 ) : null}
             </ScrollView>
 
             {/* The status bar area stays green however far the page is scrolled. */}
             <View
                 pointerEvents="none"
-                style={[styles.statusBarFill, { height: insets.top, backgroundColor: theme.brand }]}
+                style={[styles.statusBarFill, { height: insets.top, backgroundColor: theme.paintedForest }]}
             />
 
             <ScriptureModal verse={home.verse} visible={home.verseVisible} onClose={home.closeVerse} />
@@ -233,6 +241,11 @@ const styles = StyleSheet.create({
     statusBarFill: { position: 'absolute', left: 0, right: 0, top: 0 },
     // Above the cream band, so the hero's curved corners sit over cream.
     hero: { zIndex: 1 },
+    // What HeroBg gave the band: its padding and its curved bottom corners.
+    top: {
+        paddingHorizontal: HOME_PAD, paddingBottom: 36,
+        borderBottomLeftRadius: HERO_RADIUS, borderBottomRightRadius: HERO_RADIUS,
+    },
     band: { paddingHorizontal: HOME_PAD, paddingBottom: BAND_OVERLAP + BAND_PAD },
     // The cream band starts under the hero, so cream fills behind its curved corners.
     underHero: { marginTop: -HERO_RADIUS, paddingTop: HERO_RADIUS + BAND_PAD },
