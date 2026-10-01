@@ -27,7 +27,7 @@ export default function TitheEnvelope({ amount, given, disabled, onToggle }: Pro
     const { t } = useTranslation('dashboard');
 
     return (
-        <Card theme={theme} depth={6} padding={14} style={{ borderColor: theme.harvest }}>
+        <Card theme={theme} depth={6} padding={14}>
             <View style={styles.row}>
                 <IconScripture size={16} color={theme.brand} />
                 <Text style={[homeType.small, styles.label, { color: theme.ink2 }]} numberOfLines={1}>
