@@ -4,7 +4,7 @@
  *
  *   Analyze   "Am I okay?"          income left, overdue status, next debt payment, tithe
  *   Plan      "What's next?"        close-out, splits, logging
- *   Envision  "Where is this going?" debts paid, encouragement, the focus plant
+ *   Envision  "Where is this going?" encouragement, debts paid
  *
  * The three steps are three full-bleed bands (green, cream, green), so the screen
  * splits into them without the user having to name them. Both green bands are the
@@ -43,7 +43,6 @@ import SplitContainers from '../../components/home/SplitContainers';
 import LoggingArea, { BubbleFace } from '../../components/home/LoggingArea';
 import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
 import { DebtsPaidLine, EncouragementCard } from '../../components/home/Encouragement';
-import FocusPlant from '../../components/home/FocusPlant';
 import ScriptureModal from '../../components/home/ScriptureModal';
 import PaintedBand from '../../components/home/PaintedBand';
 import {
@@ -215,7 +214,6 @@ function Home() {
                             <Text style={[homeType.large, { color: theme.onBrand }]}>{t('envision.heading')}</Text>
                             <EncouragementCard debts={debts} goals={goalsNear} />
                             {debts ? <DebtsPaidLine debts={debts} /> : null}
-                            <FocusPlant summary={debts ? summary : null} />
                         </View>
                     </PaintedBand>
                 ) : null}
