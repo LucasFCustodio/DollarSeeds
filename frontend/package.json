@@ -13,7 +13,8 @@
     "verify-i18n": "node scripts/verify-i18n.mjs",
     "verify-goal-rate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-goal-rate.mjs",
     "verify-review-prompt": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-review-prompt.mjs",
-    "verify-announcements": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-announcements.mjs"
+    "verify-announcements": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-announcements.mjs",
+    "verify-plan-pricing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-plan-pricing.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",

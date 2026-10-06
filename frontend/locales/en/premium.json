@@ -7,12 +7,31 @@
     "sectionLabel": "PREMIUM"
   },
   "paywall": {
-    "heading": "Subscribe to DollarSeeds Premium",
-    "description": "Everything you need to budget well stays free. Premium lifts the limits for when you're ready to grow.",
-    "benefitGoals": "Unlimited savings and debt goals",
-    "benefitBudgets": "Every budget split: {{names}}",
-    "benefitVideos": "Exclusive video lessons from Christian entrepreneurs",
-    "alwaysFree": "Tithing and General Savings are free for everyone, always.",
+    "close": "Close",
+    "headline": "Begin Your Journey of Debt Freedom",
+    "benefit": {
+      "debt": {
+        "title": "A Future Without Debt",
+        "body": "Log unlimited debts and pay them off one by one with the debt snowball plan."
+      },
+      "budget": {
+        "title": "A Budget That Fits You",
+        "body": "Unlock 2 new budget types - Choose the one that best fits your situation"
+      },
+      "wisdom": {
+        "title": "Become Financially Wise",
+        "body": "Learn valuable lessons on being successful in your profession and finances, while keeping God first"
+      }
+    },
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "discount": "-{{percent}}%",
+    "perMonthShort": "{{price}}/mo",
+    "cta": "Free My Wallet",
+    "ctaTrial": "No payment due now",
+    "switchCta": "Switch to {{plan}}",
+    "note": "{{price}} {{per}}. Cancel anytime",
+    "noteTrial": "{{duration}} free, then {{price}} {{per}}. Cancel anytime",
     "perMonth": "per month",
     "perYear": "per year",
     "current": "Current plan: {{plan}}",
@@ -43,7 +62,6 @@
       "year": "{{count}} year",
       "year_plural": "{{count}} years"
     },
-    "then": "{{duration}} free, then {{price}} {{per}}",
     "disclosure": "Your free trial starts today. Unless you cancel at least 24 hours before it ends, it becomes a paid subscription at the price shown and your App Store account is charged."
   },
   "switch": {

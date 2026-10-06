@@ -44,6 +44,13 @@ export type PlanOption = {
     storeTitle: string;
     known: boolean;
     priceString: string;      // ALWAYS from the store — never computed or hardcoded
+    /**
+     * The same price as a number, with the store's ISO currency code. Used ONLY to
+     * derive the Annual card's comparison figures (lib/planPricing.ts) — never to
+     * render an amount the user is billed; that is always `priceString`.
+     */
+    price: number;
+    currencyCode: string;
     productId: string;
     /**
      * The introductory offer configured on the product, if any — NOT a promise the user
@@ -192,15 +199,19 @@ function freeTrialOf(pkg: PurchasesPackage): PlanOption['freeTrial'] {
  * The purchasable plans, yearly first.
  *
  * `priceString` is taken straight from the store, already localised and
- * currency-correct. Nothing here derives a price, and nothing may: the app is sold in
- * the US, Canada and Brazil, so a hardcoded "$9.99" would be wrong in two of three.
+ * currency-correct, and it is the only form in which a BILLED amount is ever rendered:
+ * the app is sold in the US, Canada and Brazil, so a hardcoded or recomputed "$9.99"
+ * would be wrong in two of three. `price` and `currencyCode` ride along solely so the
+ * paywall can derive its comparison figures (twelve-month price, per-month equivalent,
+ * discount) in lib/planPricing.ts.
  *
  * Legacy support-tier products are never offered here, even if an offering serves
  * them — `currentOffering()` falls back to `default` when `premium-2026` is missing,
  * and that holds only the eight legacy packages. Selling those from the new paywall
- * would be mislabelled and pointless. A product we don't recognise at all IS shown
- * (under the store's own title), because a plan someone can buy must never be
- * invisible.
+ * would be mislabelled and pointless. A product we don't recognise at all IS kept
+ * (named in alerts by the store's own title). The paywall shows ONE card per billing
+ * period — the first option of each in this order — so known plans always win a card
+ * over an unrecognised one with the same period.
  */
 export async function loadPlanOptions(): Promise<PlanOption[]> {
     const offering = await currentOffering();
@@ -216,6 +227,8 @@ export async function loadPlanOptions(): Promise<PlanOption[]> {
             storeTitle: pkg.product.title,
             known: !!mapped,
             priceString: pkg.product.priceString,
+            price: pkg.product.price,
+            currencyCode: pkg.product.currencyCode,
             productId: pkg.product.identifier,
             freeTrial: freeTrialOf(pkg),
             pkg,

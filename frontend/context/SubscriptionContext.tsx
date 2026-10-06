@@ -310,9 +310,13 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
     // Asked each time the paywall opens rather than once at boot: eligibility belongs
     // to the Apple ID, and it changes the moment a trial is taken or a different
     // account signs in. Cleared first so a stale "eligible" is never shown while the
-    // new answer is in flight — no trial copy is the safe state to wait in.
+    // new answer is in flight — no trial copy is the safe state to wait in. Cleared on
+    // close as well: the paywall is always mounted, so an answer left over from the last
+    // visit would otherwise render for the first frame of the next one and could promise
+    // a free month the fresh check then withdraws.
     useEffect(() => {
-        if (!paywallVisible || !canPurchase) return;
+        if (!paywallVisible) { setTrialEligible({}); return; }
+        if (!canPurchase) return;
         const ids = options.filter(o => o.freeTrial).map(o => o.productId);
         let cancelled = false;
         setTrialEligible({});

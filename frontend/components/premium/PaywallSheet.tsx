@@ -1,50 +1,71 @@
 /**
- * PaywallSheet — the subscription screen.
+ * PaywallSheet — the subscription screen. The ONLY one: every entry point (both CTAs,
+ * locked series and lesson rows, locked goals, the connect-bank prompt, a 403 from the
+ * player, the premium-error upsell alert) calls `openPaywall()` and lands here, with
+ * one layout for all of them.
  *
- * A modal, not a route: it opens over whatever the user was doing (a locked series, a
- * locked goal, a settings row, a 403 from the player) and returns them there. Built on
- * RN's `Modal` with a `theme.surface` card and `shadow(10)`, matching the app's other
- * modals — no sheet library, no new dependency.
+ * A modal, not a route: it opens over whatever the user was doing and returns them
+ * there on close or after a purchase. Full-screen and opaque on `theme.bg`, sliding up
+ * from the bottom — RN's `Modal`, no sheet library, no new dependency.
  *
- * It MUST scroll. There is more here than fits a phone screen, and everything App
- * Review requires has to be reachable: per-option price and period, an auto-renewal
- * disclosure, the trial terms when a trial is offered, Restore Purchases, and links to
- * Terms and Privacy.
+ * LAYOUT. Close button fixed at the top; the CTA, its note and the legal row fixed at
+ * the bottom; everything between scrolls, because on an iPhone SE it does not fit. The
+ * App Review requirements stay reachable: per-plan price and period, the auto-renewal
+ * disclosure, the trial terms whenever trial copy is on screen, Restore Purchases, and
+ * links to Terms and Privacy.
  *
- * ONE TIER, TWO PERIODS. Premium Yearly and Premium Monthly, both on screen at once and
- * yearly first. There is no "best value" badge and no computed saving: every amount
- * rendered is `option.priceString` off the RevenueCat package — already localised for
- * the US, Canada and Brazil — and nothing here computes a price or a percentage.
+ * SELECT, THEN BUY. Tapping a plan card selects it; only the CTA purchases, and it buys
+ * the selected plan through `handleBuy`. Annual is preselected on every visit —
+ * subscribers start on the plan they do NOT hold.
  *
- * NO FREE-TIER NUMBERS. The benefit list says "unlimited goals", never "1 goal on the
- * free plan": the free allowance is a server value that can change without a release.
+ * PRICES. Every amount the user is BILLED — both card prices and the figure in the note
+ * under the CTA — is `option.priceString` off the RevenueCat package, already localised
+ * for the US, Canada and Brazil. Three comparison figures on the Annual card ARE
+ * derived, in lib/planPricing.ts: the crossed-out twelve-month price, the per-month
+ * equivalent and the discount (floored, never rounded up). They are hidden together
+ * whenever they can't be trusted — a plan missing, mismatched currencies, or no saving.
+ * Apple requires the billed price to dominate its card, so the derived figures are
+ * always set smaller and muted.
+ *
+ * NO FREE-TIER NUMBERS. The free allowance is a server value that can change without a
+ * release, so nothing here says what the free plan includes.
  *
  * THE TRIAL IS CHECKED, NOT PROMISED. Trial copy renders only for a product RevenueCat
- * says this Apple ID is eligible for (`trialEligible`). Anyone who took a trial on a
- * legacy tier is ineligible, because all ten products share one subscription group.
+ * says this Apple ID is eligible for (`trialEligible`), and never to a subscriber.
+ * While the answer is pending the screen uses the non-trial wording, so it can never
+ * promise a free month and then withdraw it. Anyone who took a trial on a legacy tier
+ * is ineligible, because all ten products share one subscription group.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View,
+    ActivityIndicator, Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 
 import { useTranslation } from 'react-i18next';
-import { useTheme, shadow, Fonts } from '../../context/ThemeContext';
+import { useTheme, Fonts } from '../../context/ThemeContext';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useLocale } from '../../context/LocaleContext';
 import { useAnalytics } from '../../lib/analytics';
+import { derivePlanPricing } from '../../lib/planPricing';
 import { ft } from '../../constants/responsive';
 import { MONTHS } from '../../constants/months';
 import { PRIVACY_URL, TERMS_URL } from '../../constants/legal';
-import { BUDGET_TYPE_ORDER } from '../../constants/budgetTypes';
 import { IconCheck, IconClose } from '../icons';
 import {
     describeProduct,
     planLabelKey,
+    type BillingPeriod,
     type PlanInfo,
 } from '../../constants/premium';
 import type { PlanOption } from '../../lib/purchases';
+
+/** The three benefit rows, in order. Copy lives at premium:paywall.benefit.<key>. */
+const BENEFITS = ['debt', 'budget', 'wisdom'] as const;
+
+/** Selection cross-fade. Only colours change between states, so nothing shifts on tap. */
+const SELECT_FADE_MS = 150;
 
 /**
  * What buying `target` does to the subscription the user already holds, per the
@@ -71,8 +92,9 @@ function changeKind(active: boolean, current: PlanInfo | null, target: PlanOptio
 export default function PaywallSheet() {
     const { theme } = useTheme();
     const { t } = useTranslation(['premium', 'common']);
-    const { dayMonthYear } = useLocale();
+    const { dayMonthYear, numberFormat } = useLocale();
     const analytics = useAnalytics();
+    const insets = useSafeAreaInsets();
     const {
         paywallVisible, closePaywall, options, optionsLoading, canPurchase,
         premiumActive, productId, pendingProductId, expiresAt, trialEligible, buy, restore,
@@ -80,12 +102,21 @@ export default function PaywallSheet() {
 
     const [busyKey, setBusyKey] = useState<string | null>(null);
     const [restoring, setRestoring] = useState(false);
+    /** The period tapped on this visit; null means "this visit's default". */
+    const [picked, setPicked] = useState<BillingPeriod | null>(null);
 
     useEffect(() => {
         if (paywallVisible) analytics.paywallViewed();
         // `analytics` wraps a stable PostHog client; including it would re-fire on
         // every render.
         // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [paywallVisible]);
+
+    // Every visit starts on the default plan. Reset on CLOSE rather than on open: the
+    // sheet stays mounted, so resetting on open would render last visit's choice for
+    // the first frame of the slide-in.
+    useEffect(() => {
+        if (!paywallVisible) setPicked(null);
     }, [paywallVisible]);
 
     /** "14 March 2027", in the app's language rather than the device's. */
@@ -107,7 +138,30 @@ export default function PaywallSheet() {
     // RevenueCat's periodUnit is one of DAY / WEEK / MONTH / YEAR; each has a key.
     const trialLabel = (trial: { unit: string; units: number }) =>
         t(`premium:trial.unit.${trial.unit.toLowerCase()}`, { count: trial.units });
-    const anyTrialShown = options.some(o => trialFor(o));
+
+    // One card per period. loadPlanOptions sorts known plans first, so the first option
+    // of each period is the Premium product whenever the offering carries it.
+    const monthly = options.find(o => o.period === 'monthly') ?? null;
+    const yearly = options.find(o => o.period === 'yearly') ?? null;
+
+    const isCurrent = (o: PlanOption) => premiumActive && o.productId === productId;
+    const isPending = (o: PlanOption) =>
+        premiumActive && o.productId === pendingProductId && pendingProductId !== productId;
+
+    // Annual by default; a Yearly subscriber starts on the plan they don't hold.
+    const defaultPeriod: BillingPeriod = yearly && isCurrent(yearly) ? 'monthly' : 'yearly';
+    const wanted = picked ?? defaultPeriod;
+    const selected = (wanted === 'yearly' ? yearly : monthly) ?? yearly ?? monthly;
+
+    const pricing = useMemo(
+        () => derivePlanPricing(monthly, yearly, numberFormat),
+        [monthly, yearly, numberFormat],
+    );
+
+    const selectedTrial = selected ? trialFor(selected) : null;
+    const per = (o: PlanOption) => o.period === 'monthly'
+        ? t('premium:paywall.perMonth')
+        : t('premium:paywall.perYear');
 
     const handleClose = () => {
         if (busyKey || restoring) return;   // never yank the sheet mid-purchase
@@ -194,290 +248,399 @@ export default function PaywallSheet() {
     };
 
     const pendingDate = formatDate(expiresAt);
-    const benefits = [
-        t('premium:paywall.benefitGoals'),
-        // Names from the catalogue, so they match Settings and the dashboard exactly.
-        t('premium:paywall.benefitBudgets', {
-            names: BUDGET_TYPE_ORDER.map(k => t(`common:budgetType.${k}.name`)).join(' · '),
-        }),
-        t('premium:paywall.benefitVideos'),
-    ];
+    const busy = !!busyKey || restoring;
+
+    /** "CURRENT PLAN" / "STARTS 14 March 2027" on the card of a plan the user holds. */
+    const tagFor = (o: PlanOption) => {
+        if (isCurrent(o)) return { text: t('premium:paywall.currentTag'), color: theme.brand };
+        if (isPending(o)) {
+            return {
+                text: pendingDate
+                    ? t('premium:paywall.startsOn', { date: pendingDate })
+                    : t('premium:paywall.startsLater'),
+                color: theme.ink2,
+            };
+        }
+        return null;
+    };
+
+    // The CTA is disabled, not hidden, when there is nothing it can buy: no plans, or
+    // the selected plan is the one already held or already scheduled.
+    const ctaBlocked = !selected || isCurrent(selected) || isPending(selected);
+    const ctaLabel = premiumActive && selected
+        ? t('premium:paywall.switchCta', { plan: optionName(selected) })
+        : t('premium:paywall.cta');
 
     return (
         <Modal
             visible={paywallVisible}
-            transparent
-            animationType="fade"
+            animationType="slide"
+            presentationStyle="fullScreen"
+            statusBarTranslucent
             onRequestClose={handleClose}
         >
-            <View style={styles.overlay}>
-                <View style={[styles.card, { backgroundColor: theme.surface, ...shadow(10) }]}>
-                    {/* Close */}
+            <View style={[styles.screen, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
+                {/* Fixed top: close */}
+                <View style={styles.topBar}>
                     <Pressable
                         onPress={handleClose}
-                        hitSlop={10}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('premium:paywall.close')}
                         style={({ pressed }) => [
                             styles.closeBtn,
-                            { backgroundColor: theme.surfaceSoft },
+                            { backgroundColor: theme.surface },
                             pressed && { opacity: 0.6 },
                         ]}
                     >
-                        <IconClose size={16} color={theme.ink2} />
+                        <IconClose size={18} color={theme.ink2} />
                     </Pressable>
+                </View>
 
-                    <ScrollView
-                        contentContainerStyle={styles.scrollBody}
-                        showsVerticalScrollIndicator={false}
-                    >
-                        <Text style={[styles.heading, { color: theme.ink }]}>
-                            {t('premium:paywall.heading')}
-                        </Text>
+                <ScrollView
+                    style={styles.scroll}
+                    contentContainerStyle={styles.scrollBody}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Instrument Serif ships in regular only — size carries the
+                        emphasis; a bold weight would be faux-bold. */}
+                    <Text style={[styles.headline, { color: theme.ink }]} accessibilityRole="header">
+                        {t('premium:paywall.headline')}
+                    </Text>
 
-                        <Text style={[styles.description, { color: theme.ink2 }]}>
-                            {t('premium:paywall.description')}
-                        </Text>
-
-                        {/* What Premium adds. No free-tier numbers — see the header. */}
-                        <View style={styles.benefits}>
-                            {benefits.map(line => (
-                                <View key={line} style={styles.benefitRow}>
-                                    <View style={[styles.benefitTick, { backgroundColor: theme.brandSoft }]}>
-                                        <IconCheck size={12} color={theme.brand} />
-                                    </View>
-                                    <Text style={[styles.benefitText, { color: theme.ink }]}>{line}</Text>
+                    {/* What Premium adds. No free-tier numbers — see the header. */}
+                    <View style={[styles.benefits, { backgroundColor: theme.surface }]}>
+                        {BENEFITS.map(key => (
+                            <View key={key} style={styles.benefitRow}>
+                                <View style={[styles.benefitTick, { backgroundColor: theme.brandSoft }]}>
+                                    <IconCheck size={14} color={theme.brand} />
                                 </View>
-                            ))}
-                        </View>
-
-                        {/* What stays free. Harvest, NOT danger: this is the warmest
-                            message on the screen, and the tithing envelope is the part
-                            of the app that is never gated. */}
-                        <View style={[styles.callout, { backgroundColor: theme.harvestSoft }]}>
-                            <Text style={[styles.calloutText, { color: theme.ink }]}>
-                                {t('premium:paywall.alwaysFree')}
-                            </Text>
-                        </View>
-
-                        {/* Current subscription, and a change the store has scheduled */}
-                        {premiumActive && current && (
-                            <View style={[styles.currentRow, { backgroundColor: theme.brandSoft }]}>
-                                <Text style={[styles.currentText, { color: theme.brand }]}>
-                                    {t('premium:paywall.current', { plan: t(planLabelKey(current)) })}
-                                </Text>
-                                {pending && pendingProductId !== productId && (
-                                    <Text style={[styles.pendingText, { color: theme.ink2 }]}>
-                                        {pendingDate
-                                            ? t('premium:switch.scheduledBodyWithDate', { plan: t(planLabelKey(pending)), date: pendingDate })
-                                            : t('premium:switch.scheduledBodyNoDate', { plan: t(planLabelKey(pending)) })}
+                                <View style={styles.benefitCopy}>
+                                    <Text style={[styles.benefitTitle, { color: theme.ink }]}>
+                                        {t(`premium:paywall.benefit.${key}.title`)}
                                     </Text>
-                                )}
+                                    <Text style={[styles.benefitBody, { color: theme.ink2 }]}>
+                                        {t(`premium:paywall.benefit.${key}.body`)}
+                                    </Text>
+                                </View>
                             </View>
-                        )}
+                        ))}
+                    </View>
 
-                        {/* Plans */}
-                        {optionsLoading ? (
-                            <View style={styles.planLoading}>
-                                <ActivityIndicator color={theme.brand} />
-                            </View>
-                        ) : options.length === 0 ? (
-                            <Text style={[styles.unavailable, { color: theme.ink3 }]}>
-                                {canPurchase
-                                    ? t('premium:paywall.loadFailed')
-                                    : t('premium:paywall.unavailable')}
+                    {/* Current subscription, and a change the store has scheduled */}
+                    {premiumActive && current && (
+                        <View style={[styles.currentRow, { backgroundColor: theme.brandSoft }]}>
+                            <Text style={[styles.currentText, { color: theme.brand }]}>
+                                {t('premium:paywall.current', { plan: t(planLabelKey(current)) })}
                             </Text>
-                        ) : (
-                            <View style={styles.planList}>
-                                {options.map(option => {
-                                    const isCurrent = premiumActive && option.productId === productId;
-                                    const isPending = premiumActive && option.productId === pendingProductId
-                                        && pendingProductId !== productId;
-                                    const busy = busyKey === option.key;
-                                    const trial = trialFor(option);
-                                    const per = option.period === 'monthly'
-                                        ? t('premium:paywall.perMonth')
-                                        : t('premium:paywall.perYear');
-                                    return (
-                                        <Pressable
-                                            key={option.key}
-                                            onPress={() => handleBuy(option)}
-                                            disabled={!!busyKey || isCurrent || isPending}
-                                            style={({ pressed }) => [
-                                                styles.planCard,
-                                                {
-                                                    backgroundColor: isCurrent ? theme.brandSoft : theme.surface,
-                                                    borderColor: isCurrent ? theme.brand : theme.border,
-                                                },
-                                                pressed && { transform: [{ scale: 0.98 }] },
-                                                !!busyKey && !busy && { opacity: 0.5 },
-                                            ]}
-                                        >
-                                            {busy ? (
-                                                <ActivityIndicator color={theme.brand} style={{ flex: 1 }} />
-                                            ) : (
-                                                <>
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text style={[styles.planName, { color: theme.ink }]}>
-                                                            {optionName(option)}
-                                                        </Text>
-                                                        {trial ? (
-                                                            <Text style={[styles.planTrial, { color: theme.brand }]}>
-                                                                {t('premium:trial.then', {
-                                                                    duration: trialLabel(trial),
-                                                                    price: option.priceString,
-                                                                    per,
-                                                                })}
-                                                            </Text>
-                                                        ) : isCurrent ? (
-                                                            <Text style={[styles.planTag, { color: theme.brand }]}>
-                                                                {t('premium:paywall.currentTag')}
-                                                            </Text>
-                                                        ) : isPending ? (
-                                                            <Text style={[styles.planTag, { color: theme.ink2 }]}>
-                                                                {pendingDate
-                                                                    ? t('premium:paywall.startsOn', { date: pendingDate })
-                                                                    : t('premium:paywall.startsLater')}
-                                                            </Text>
-                                                        ) : null}
-                                                    </View>
-                                                    <View style={styles.planPriceCol}>
-                                                        <Text style={[styles.planPrice, { color: theme.brand }]}>
-                                                            {option.priceString}
-                                                        </Text>
-                                                        <Text style={[styles.planPer, { color: theme.ink3 }]}>{per}</Text>
-                                                    </View>
-                                                </>
-                                            )}
-                                        </Pressable>
-                                    );
-                                })}
-                            </View>
-                        )}
-
-                        {/* App Review: the trial's terms, whenever a trial is on screen */}
-                        {anyTrialShown && (
-                            <Text style={[styles.disclosure, { color: theme.ink3 }]}>
-                                {t('premium:trial.disclosure')}
-                            </Text>
-                        )}
-
-                        {/* App Review: auto-renewal disclosure */}
-                        <Text style={[styles.disclosure, { color: theme.ink3 }]}>
-                            {t('premium:paywall.autoRenew')}
-                        </Text>
-
-                        {/* App Review: Restore Purchases */}
-                        <Pressable
-                            onPress={handleRestore}
-                            disabled={restoring || !!busyKey}
-                            style={({ pressed }) => [
-                                styles.restoreBtn,
-                                { borderColor: theme.border },
-                                pressed && { opacity: 0.6 },
-                            ]}
-                        >
-                            {restoring ? (
-                                <ActivityIndicator color={theme.brand} />
-                            ) : (
-                                <Text style={[styles.restoreText, { color: theme.brand }]}>
-                                    {t('premium:paywall.restore')}
+                            {pending && pendingProductId !== productId && (
+                                <Text style={[styles.pendingText, { color: theme.ink2 }]}>
+                                    {pendingDate
+                                        ? t('premium:switch.scheduledBodyWithDate', { plan: t(planLabelKey(pending)), date: pendingDate })
+                                        : t('premium:switch.scheduledBodyNoDate', { plan: t(planLabelKey(pending)) })}
                                 </Text>
                             )}
-                        </Pressable>
-
-                        {/* App Review: policy links */}
-                        <View style={styles.legalRow}>
-                            <Pressable onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)} hitSlop={8}>
-                                <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.terms')}</Text>
-                            </Pressable>
-                            <Text style={[styles.legalDot, { color: theme.ink3 }]}>·</Text>
-                            <Pressable onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)} hitSlop={8}>
-                                <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.privacy')}</Text>
-                            </Pressable>
                         </View>
-                    </ScrollView>
+                    )}
+
+                    {/* Plans */}
+                    {optionsLoading ? (
+                        <View style={styles.planLoading}>
+                            <ActivityIndicator color={theme.brand} />
+                        </View>
+                    ) : !monthly && !yearly ? (
+                        <Text style={[styles.unavailable, { color: theme.ink3 }]}>
+                            {canPurchase
+                                ? t('premium:paywall.loadFailed')
+                                : t('premium:paywall.unavailable')}
+                        </Text>
+                    ) : (
+                        <View style={styles.priceRow} accessibilityRole="radiogroup">
+                            {monthly && (
+                                <PriceCard
+                                    label={t('premium:paywall.monthly')}
+                                    price={monthly.priceString}
+                                    sub={t('premium:paywall.perMonth')}
+                                    tag={tagFor(monthly)}
+                                    selected={selected?.key === monthly.key}
+                                    disabled={busy}
+                                    onSelect={() => setPicked('monthly')}
+                                />
+                            )}
+                            {yearly && (
+                                <PriceCard
+                                    label={t('premium:paywall.annual')}
+                                    badge={pricing ? t('premium:paywall.discount', { percent: pricing.discountPercent }) : null}
+                                    struck={pricing?.twelveMonths ?? null}
+                                    price={yearly.priceString}
+                                    sub={pricing
+                                        ? t('premium:paywall.perMonthShort', { price: pricing.perMonth })
+                                        : t('premium:paywall.perYear')}
+                                    tag={tagFor(yearly)}
+                                    selected={selected?.key === yearly.key}
+                                    disabled={busy}
+                                    onSelect={() => setPicked('yearly')}
+                                />
+                            )}
+                        </View>
+                    )}
+
+                    {/* App Review: the trial's terms, whenever trial copy is on screen */}
+                    {selectedTrial && (
+                        <Text style={[styles.disclosure, { color: theme.ink3 }]}>
+                            {t('premium:trial.disclosure')}
+                        </Text>
+                    )}
+
+                    {/* App Review: auto-renewal disclosure */}
+                    <Text style={[styles.disclosure, { color: theme.ink3 }]}>
+                        {t('premium:paywall.autoRenew')}
+                    </Text>
+                </ScrollView>
+
+                {/* Fixed bottom: CTA, its note, legal links */}
+                <View
+                    style={[
+                        styles.footer,
+                        { borderTopColor: theme.borderSoft, paddingBottom: Math.max(insets.bottom, 14) },
+                    ]}
+                >
+                    {/* The ONLY solid forest block on the screen. Same height with one
+                        line or two, so the late trial-eligibility answer moves nothing. */}
+                    <Pressable
+                        onPress={() => { if (selected) handleBuy(selected); }}
+                        disabled={ctaBlocked || busy}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: ctaBlocked || busy, busy: !!busyKey }}
+                        style={({ pressed }) => [
+                            styles.cta,
+                            { backgroundColor: theme.brand },
+                            pressed && { opacity: 0.88 },
+                            (ctaBlocked || restoring) && { opacity: 0.45 },
+                        ]}
+                    >
+                        {busyKey ? (
+                            <ActivityIndicator color={theme.onBrand} />
+                        ) : (
+                            <>
+                                <Text style={[styles.ctaText, { color: theme.onBrand }]} numberOfLines={1}>
+                                    {ctaLabel}
+                                </Text>
+                                {selectedTrial && (
+                                    <Text style={[styles.ctaSub, { color: theme.onBrand }]} numberOfLines={1}>
+                                        {t('premium:paywall.ctaTrial')}
+                                    </Text>
+                                )}
+                            </>
+                        )}
+                    </Pressable>
+
+                    {selected && (
+                        <Text style={[styles.note, { color: theme.ink2 }]}>
+                            {selectedTrial
+                                ? t('premium:paywall.noteTrial', {
+                                    duration: trialLabel(selectedTrial),
+                                    price: selected.priceString,
+                                    per: per(selected),
+                                })
+                                : t('premium:paywall.note', {
+                                    price: selected.priceString,
+                                    per: per(selected),
+                                })}
+                        </Text>
+                    )}
+
+                    {/* App Review: Restore Purchases and the policy links */}
+                    <View style={styles.legalRow}>
+                        <Pressable
+                            onPress={handleRestore}
+                            disabled={busy}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            style={({ pressed }) => pressed && { opacity: 0.6 }}
+                        >
+                            {restoring ? (
+                                <ActivityIndicator size="small" color={theme.brand} />
+                            ) : (
+                                <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.restore')}</Text>
+                            )}
+                        </Pressable>
+                        <Text style={[styles.legalDot, { color: theme.ink3 }]}>·</Text>
+                        <Pressable onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)} hitSlop={8} accessibilityRole="link">
+                            <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.terms')}</Text>
+                        </Pressable>
+                        <Text style={[styles.legalDot, { color: theme.ink3 }]}>·</Text>
+                        <Pressable onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)} hitSlop={8} accessibilityRole="link">
+                            <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.privacy')}</Text>
+                        </Pressable>
+                    </View>
                 </View>
             </View>
         </Modal>
     );
 }
 
+type PriceCardProps = {
+    label: string;
+    /** The billed amount — `priceString`, always the dominant figure on the card. */
+    price: string;
+    /** "per month", or the derived per-month equivalent on the Annual card. */
+    sub: string;
+    /** "-41%" — derived, so omitted whenever the saving can't be trusted. */
+    badge?: string | null;
+    /** The twelve-month price, struck through — derived, same rule as `badge`. */
+    struck?: string | null;
+    tag: { text: string; color: string } | null;
+    selected: boolean;
+    disabled: boolean;
+    onSelect: () => void;
+};
+
+/**
+ * One plan card. Both states draw the SAME geometry — 2px border, same size, no
+ * shadow — and the selected look is a layer cross-faded over the unselected one, so a
+ * tap changes colour only and nothing on the screen moves.
+ */
+function PriceCard({ label, price, sub, badge, struck, tag, selected, disabled, onSelect }: PriceCardProps) {
+    const { theme } = useTheme();
+    const on = useRef(new Animated.Value(selected ? 1 : 0)).current;
+
+    useEffect(() => {
+        Animated.timing(on, {
+            toValue: selected ? 1 : 0,
+            duration: SELECT_FADE_MS,
+            useNativeDriver: true,
+        }).start();
+    }, [selected, on]);
+
+    return (
+        <Pressable
+            onPress={onSelect}
+            disabled={disabled}
+            accessibilityRole="radio"
+            accessibilityState={{ selected, checked: selected, disabled }}
+            style={[styles.priceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+        >
+            {/* Selected layer: forest border over the neutral one, plus a faint emerald
+                wash. Inset by the border width so it lands exactly on top of it. */}
+            <Animated.View
+                pointerEvents="none"
+                style={[styles.selectedLayer, { borderColor: theme.brand, opacity: on }]}
+            >
+                <View style={[styles.wash, { backgroundColor: theme.brand2 }]} />
+            </Animated.View>
+
+            {/* Corner indicator: an empty ring, with a filled forest check faded in. */}
+            <View style={[styles.radio, { borderColor: theme.border }]} pointerEvents="none">
+                <Animated.View style={[styles.radioOn, { backgroundColor: theme.brand, opacity: on }]}>
+                    <IconCheck size={12} color={theme.onBrand} />
+                </Animated.View>
+            </View>
+
+            <View style={styles.cardHead}>
+                <Text style={[styles.cardLabel, { color: theme.ink }]}>{label}</Text>
+                {badge ? (
+                    <View style={[styles.pill, { backgroundColor: theme.brand2 }]}>
+                        <Text style={[styles.pillText, { color: theme.brand }]}>{badge}</Text>
+                    </View>
+                ) : null}
+            </View>
+
+            <View style={styles.priceLine}>
+                {struck ? (
+                    <Text style={[styles.struck, { color: theme.ink3 }]}>{struck}</Text>
+                ) : null}
+                <Text
+                    style={[styles.price, { color: theme.ink }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                >
+                    {price}
+                </Text>
+            </View>
+
+            <Text style={[styles.sub, { color: theme.ink2 }]}>{sub}</Text>
+
+            {tag && (
+                <Text style={[styles.tag, { color: tag.color }]}>{tag.text}</Text>
+            )}
+        </Pressable>
+    );
+}
+
+const CARD_RADIUS = 16;
+const CARD_BORDER = 2;
+
 const styles = StyleSheet.create({
-    overlay: {
+    screen: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',   // scrim — matches the app's other modals
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
     },
-    card: {
-        width: '100%',
-        maxWidth: 460,
-        maxHeight: '88%',      // the sheet scrolls inside this rather than overflowing
-        borderRadius: 22,
-        paddingTop: 20,
+    topBar: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 4,
     },
     closeBtn: {
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        zIndex: 2,
-        width: 30,
-        height: 30,
-        borderRadius: 15,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
     },
+    scroll: {
+        flex: 1,
+    },
     scrollBody: {
-        paddingHorizontal: 22,
+        width: '100%',
+        maxWidth: 560,          // tablets: keep the cards a readable size
+        alignSelf: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 4,
         paddingBottom: 24,
     },
-    heading: {
+    headline: {
         fontFamily: Fonts.serif,
-        fontSize: ft(28, 1.25),
-        lineHeight: ft(32, 1.25),
-        letterSpacing: -0.4,
-        marginTop: 8,
-        marginBottom: 12,
-        paddingRight: 32,      // clears the close button
-    },
-    description: {
-        fontFamily: Fonts.sans,
-        fontSize: ft(13, 1.18),
-        lineHeight: ft(20, 1.18),
-        marginBottom: 14,
+        fontSize: ft(40, 1.25),
+        lineHeight: ft(44, 1.25),
+        letterSpacing: -0.6,
+        marginBottom: 24,
     },
     benefits: {
-        gap: 10,
-        marginBottom: 16,
+        marginHorizontal: 6,    // slightly narrower than the content width
+        borderRadius: 18,
+        paddingVertical: 18,
+        paddingHorizontal: 16,
+        gap: 16,
+        marginBottom: 24,
     },
     benefitRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        gap: 10,
+        gap: 12,
     },
     benefitTick: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 1,
     },
-    benefitText: {
+    benefitCopy: {
         flex: 1,
-        fontFamily: Fonts.sansMedium,
-        fontSize: ft(14, 1.18),
-        lineHeight: ft(20, 1.18),
+        gap: 3,
     },
-    callout: {
-        borderRadius: 14,
-        padding: 14,
-        marginBottom: 18,
+    benefitTitle: {
+        fontFamily: Fonts.sansSemiBold,
+        fontSize: ft(16, 1.2),
+        lineHeight: ft(21, 1.2),
     },
-    calloutText: {
+    benefitBody: {
         fontFamily: Fonts.sans,
         fontSize: ft(13, 1.18),
-        lineHeight: ft(20, 1.18),
+        lineHeight: ft(19, 1.18),
     },
     currentRow: {
         borderRadius: 10,
@@ -506,46 +669,101 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         paddingVertical: 28,
     },
-    planList: {
+    priceRow: {
+        flexDirection: 'row',
+        alignItems: 'stretch',  // equal heights
         gap: 12,
     },
-    planCard: {
+    priceCard: {
+        flex: 1,                // equal widths
+        borderRadius: CARD_RADIUS,
+        borderWidth: CARD_BORDER,
+        paddingTop: 14,
+        paddingBottom: 14,
+        paddingHorizontal: 14,
+    },
+    selectedLayer: {
+        position: 'absolute',
+        top: -CARD_BORDER,
+        left: -CARD_BORDER,
+        right: -CARD_BORDER,
+        bottom: -CARD_BORDER,
+        borderRadius: CARD_RADIUS,
+        borderWidth: CARD_BORDER,
+    },
+    wash: {
+        ...StyleSheet.absoluteFillObject,
+        borderRadius: CARD_RADIUS - CARD_BORDER,
+        opacity: 0.06,
+    },
+    radio: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 2,
+    },
+    radioOn: {
+        position: 'absolute',
+        top: -2,
+        left: -2,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cardHead: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        minHeight: 76,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        paddingVertical: 14,
-        paddingHorizontal: 16,
+        flexWrap: 'wrap',
+        gap: 6,
+        paddingRight: 26,       // clears the corner indicator
+        minHeight: 22,
     },
-    planName: {
+    cardLabel: {
         fontFamily: Fonts.sansSemiBold,
         fontSize: ft(15, 1.2),
     },
-    planTrial: {
-        fontFamily: Fonts.sansMedium,
-        fontSize: ft(12, 1.18),
-        lineHeight: ft(17, 1.18),
-        marginTop: 3,
+    pill: {
+        borderRadius: 999,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
     },
-    planTag: {
-        fontFamily: Fonts.monoSemiBold,
+    pillText: {
+        fontFamily: Fonts.sansBold,
+        fontSize: ft(11, 1.18),
+    },
+    priceLine: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        flexWrap: 'wrap',
+        columnGap: 6,
+        marginTop: 10,
+    },
+    struck: {
+        fontFamily: Fonts.serif,
+        fontSize: ft(15, 1.2),
+        textDecorationLine: 'line-through',
+    },
+    price: {
+        fontFamily: Fonts.serif,
+        fontSize: ft(28, 1.25),
+        lineHeight: ft(34, 1.25),
+        flexShrink: 1,
+    },
+    sub: {
+        fontFamily: Fonts.sans,
+        fontSize: ft(12, 1.18),
+        marginTop: 2,
+    },
+    tag: {
+        fontFamily: Fonts.sansSemiBold,
         fontSize: ft(10, 1.18),
         letterSpacing: 1,
-        marginTop: 4,
-    },
-    planPriceCol: {
-        alignItems: 'flex-end',
-    },
-    planPrice: {
-        fontFamily: Fonts.serif,
-        fontSize: ft(24, 1.25),
-        lineHeight: ft(28, 1.25),
-    },
-    planPer: {
-        fontFamily: Fonts.mono,
-        fontSize: ft(10, 1.18),
+        marginTop: 8,
     },
     disclosure: {
         fontFamily: Fonts.sans,
@@ -553,23 +771,46 @@ const styles = StyleSheet.create({
         lineHeight: ft(17, 1.18),
         marginTop: 18,
     },
-    restoreBtn: {
-        marginTop: 16,
-        paddingVertical: 12,
-        borderRadius: 12,
-        borderWidth: 1.5,
-        alignItems: 'center',
+    footer: {
+        width: '100%',
+        maxWidth: 560,
+        alignSelf: 'center',
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
     },
-    restoreText: {
+    cta: {
+        minHeight: 60,          // fits two lines, so one line and two are the same size
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+    },
+    ctaText: {
         fontFamily: Fonts.sansSemiBold,
-        fontSize: ft(14, 1.2),
+        fontSize: ft(17, 1.2),
+    },
+    ctaSub: {
+        fontFamily: Fonts.sans,
+        fontSize: ft(12, 1.18),
+        marginTop: 2,
+        opacity: 0.85,
+    },
+    note: {
+        fontFamily: Fonts.sans,
+        fontSize: ft(12, 1.18),
+        lineHeight: ft(17, 1.18),
+        textAlign: 'center',
+        marginTop: 10,
     },
     legalRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'center',
         alignItems: 'center',
         gap: 8,
-        marginTop: 16,
+        marginTop: 10,
     },
     legalLink: {
         fontFamily: Fonts.sans,

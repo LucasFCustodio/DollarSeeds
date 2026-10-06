@@ -7,12 +7,31 @@
     "sectionLabel": "PREMIUM"
   },
   "paywall": {
-    "heading": "Assine o DollarSeeds Premium",
-    "description": "Tudo o que você precisa para se organizar bem continua de graça. O Premium tira os limites para quando você estiver pronto para crescer.",
-    "benefitGoals": "Metas de poupança e de dívida ilimitadas",
-    "benefitBudgets": "Todas as divisões de orçamento: {{names}}",
-    "benefitVideos": "Séries em vídeo exclusivas premium com empreendedores cristãos",
-    "alwaysFree": "O dízimo e a Poupança Geral são gratuitos para todos, sempre.",
+    "close": "Fechar",
+    "headline": "Comece sua jornada rumo à liberdade das dívidas",
+    "benefit": {
+      "debt": {
+        "title": "Um futuro sem dívidas",
+        "body": "Registre dívidas ilimitadas e quite uma por uma com o método bola de neve."
+      },
+      "budget": {
+        "title": "Um orçamento do seu jeito",
+        "body": "Desbloqueie 2 novos tipos de orçamento - Escolha o que melhor se encaixa na sua situação"
+      },
+      "wisdom": {
+        "title": "Torne-se sábio com o dinheiro",
+        "body": "Aprenda lições valiosas para ter sucesso na sua profissão e nas suas finanças, sempre colocando Deus em primeiro lugar"
+      }
+    },
+    "monthly": "Mensal",
+    "annual": "Anual",
+    "discount": "-{{percent}}%",
+    "perMonthShort": "{{price}}/mês",
+    "cta": "Libertar minha carteira",
+    "ctaTrial": "Nada a pagar agora",
+    "switchCta": "Mudar para {{plan}}",
+    "note": "{{price}} {{per}}. Cancele quando quiser",
+    "noteTrial": "{{duration}} grátis, depois {{price}} {{per}}. Cancele quando quiser",
     "perMonth": "por mês",
     "perYear": "por ano",
     "current": "Plano atual: {{plan}}",
@@ -43,7 +62,6 @@
       "year": "{{count}} ano",
       "year_plural": "{{count}} anos"
     },
-    "then": "{{duration}} grátis, depois {{price}} {{per}}",
     "disclosure": "Seu período de teste grátis começa hoje. A não ser que você cancele pelo menos 24 horas antes do fim, ele vira uma assinatura paga pelo preço mostrado e sua conta da App Store é cobrada."
   },
   "switch": {

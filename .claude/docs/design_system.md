@@ -66,7 +66,7 @@ const { theme } = useTheme();
 | `danger` / `dangerSoft` | `#B91C1C` / `#FBE7E7` | `#F87171` / `#2C1818` | Delete, overspend |
 | `success` / `successSoft` | `#0F8C5C` / `#E5F3EC` | `#34D399` / `#0F2A20` | Completed goals, positive balances |
 | `harvest` | `#F4D35E` | `#F4D35E` | Budget-health bar, savings jar fill, tithing + premium accent |
-| `harvestSoft` | `#FCF2D4` | `#2C2712` | Tinted callouts on a harvest theme (paywall equal-tiers note, locked-series banner) |
+| `harvestSoft` | `#FCF2D4` | `#2C2712` | Tinted callouts on a harvest theme (locked-series banner) |
 | `harvestInk` | `#8A6A00` | `#F4D35E` | Harvest-coloured **text** on `bg`/`surface` (home tracking nudge, connect-bank prompt). Solid `harvest` on cream is ~1.5:1 — unreadable as text |
 
 > **`harvest` is the one token that is identical in light and dark.** `ink` inverts, so
