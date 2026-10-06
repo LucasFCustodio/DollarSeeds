@@ -2,10 +2,7 @@
   "leftThisMonth": "disponível neste mês",
   "tithe": {
     "title": "Dízimo",
-    "givenToggleA11y": "Dízimo entregue neste mês",
-    "give": "Entregar",
-    "givenLine": "Dízimo entregue · {{amount}}",
-    "undoA11y": "Dízimo entregue. Toque para desfazer"
+    "givenToggleA11y": "Dízimo entregue neste mês"
   },
   "rollover": {
     "closeTitle": "Pronto para fechar {{month}}?",
@@ -41,13 +38,20 @@
     "a11y": "{{amount}} disponível neste mês. Ver toda a renda",
     "addIncomeA11y": "Registrar renda"
   },
-  "status": {
-    "overdue": "{{count}} dívida em atraso",
-    "overdue_plural": "{{count}} dívidas em atraso",
-    "dueSoon": "{{count}} vencimento chegando",
-    "dueSoon_plural": "{{count}} vencimentos chegando",
-    "overBudget": "{{split}} passou {{amount}} do limite",
-    "allGood": "Tudo em dia"
+  "overdueAlert": {
+    "title": "{{name}} precisa de atenção",
+    "titleMany": "{{count}} dívida precisa de atenção",
+    "titleMany_plural": "{{count}} dívidas precisam de atenção",
+    "wasDue": "venceu em {{date}} · há {{count}} dia",
+    "wasDue_plural": "venceu em {{date}} · há {{count}} dias",
+    "row": "{{name}} · {{amount}} · venceu em {{date}}",
+    "more": "+{{count}} outras",
+    "payNow": "Pagar agora",
+    "review": "Revisar",
+    "a11y": "{{name}} precisa de atenção. {{amount}} venceu em {{date}}, há {{count}} dia.",
+    "a11y_plural": "{{name}} precisa de atenção. {{amount}} venceu em {{date}}, há {{count}} dias.",
+    "payA11y": "Pagar {{name}} online",
+    "reviewA11y": "Revisar em Dívidas"
   },
   "split": {
     "needs": "Necessidades",
@@ -60,6 +64,8 @@
   "nextPayment": {
     "due": " · vence em {{date}}",
     "withExtra": "{{min}} + {{extra}} extra",
+    "comingUp": "{{count}} pagamento a vencer:",
+    "comingUp_plural": "{{count}} pagamentos a vencer:",
     "prune": "Podar",
     "pruneA11y": "Podar {{name}} em Dívidas"
   },

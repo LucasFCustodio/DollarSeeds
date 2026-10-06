@@ -64,7 +64,7 @@ export function DebtsPaidLine({ debts }: { debts: HomeDebts }) {
         return () => cancelAnimation(gold);
     }, [running, gold]);
 
-    // Gold is low-contrast on sectionGreen: a brand glow grows in with it.
+    // Gold is low-contrast on the painted green band: a brand glow grows in with it.
     const ink = theme.ink;
     const harvest = theme.harvest;
     const glowOn = theme.brand;

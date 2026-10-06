@@ -3,6 +3,10 @@
  * The server picks the debt (nearest due date, focus first on a tie) and the focus
  * extra; this only renders them. Flag-gated by the parent.
  *
+ * Under it, the other payments due within 7 days as a bullet list ("2 payments
+ * coming up:"). The parent passes them with the next payment already left out; with
+ * none, that part does not render.
+ *
  * The card's surface is painted art (PaintedCard); the Prune button stays solid
  * brand so it pops against the painting.
  */
@@ -12,11 +16,16 @@ import { useTranslation } from 'react-i18next';
 import { Fonts, useTheme } from '../../context/ThemeContext';
 import { ft } from '../../constants/responsive';
 import PaintedCard from './PaintedCard';
-import type { NextPayment } from '../../lib/homeSummary';
+import type { DueSoonDebt, NextPayment } from '../../lib/homeSummary';
 import { useDebtFormat } from '../debts/format';
 import { homeType } from './homeType';
 
-export default function NextPaymentCard({ payment, onPrune }: { payment: NextPayment; onPrune: () => void }) {
+export default function NextPaymentCard({ payment, upcoming, onPrune }: {
+    payment: NextPayment;
+    /** Due soon, excluding `payment` itself. */
+    upcoming: DueSoonDebt[];
+    onPrune: () => void;
+}) {
     const { theme } = useTheme();
     const { t } = useTranslation('dashboard');
     const f = useDebtFormat();
@@ -26,7 +35,7 @@ export default function NextPaymentCard({ payment, onPrune }: { payment: NextPay
         : f.money(payment.min_payment);
 
     return (
-        <PaintedCard source={ART} borderColor={theme.border} borderWidth={1} style={styles.card}>
+        <PaintedCard source={ART} borderColor={theme.ink} borderWidth={1.5} style={styles.card}>
             <View style={styles.row}>
                 <View style={styles.left}>
                     <Text style={homeType.small} numberOfLines={1}>
@@ -47,6 +56,20 @@ export default function NextPaymentCard({ payment, onPrune }: { payment: NextPay
                     <Text style={[styles.pruneText, { color: theme.onBrand }]}>{t('nextPayment.prune')}</Text>
                 </Pressable>
             </View>
+            {upcoming.length > 0 ? (
+                <View style={styles.upcoming}>
+                    <Text style={[homeType.small, { color: theme.ink2 }]}>
+                        {t('nextPayment.comingUp', { count: upcoming.length })}
+                    </Text>
+                    {upcoming.map(d => (
+                        <Text key={d.id} style={[homeType.small, styles.bullet]} numberOfLines={1}>
+                            <Text style={{ color: theme.ink2 }}>{'•  '}{d.name}</Text>
+                            <Text style={{ color: theme.ink3 }}>{t('nextPayment.due', { date: f.dayMonthOf(d.due_date) })}</Text>
+                            <Text style={{ color: theme.ink2 }}>{' · '}{f.money(d.min_payment)}</Text>
+                        </Text>
+                    ))}
+                </View>
+            ) : null}
         </PaintedCard>
     );
 }
@@ -58,6 +81,8 @@ const styles = StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     left: { flex: 1 },
     amount: { marginTop: 4 },
+    upcoming: { marginTop: 12, gap: 2 },
+    bullet: { marginLeft: 4 },
     prune: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
     pruneText: { fontFamily: Fonts.sansSemiBold, fontSize: ft(13) },
 });

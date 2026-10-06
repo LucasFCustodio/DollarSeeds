@@ -63,6 +63,10 @@ export interface AppTheme {
     // lighter end of the old dashboard hero gradient; identical in both themes, so
     // text sitting on it is always `onBrand`.
     sectionGreen: string;
+    // The dark forest edge of the home's painted band art (analyze-bg.png), sampled
+    // from its top rows. Shows while the art loads, on overscroll and in the fixed
+    // status-bar strip, so none of them reads as a different green from the painting.
+    paintedForest: string;
 
     // ── Category tokens ─────────────────────────────────────────
     needs: string;    needsSoft: string;
@@ -129,6 +133,7 @@ const LIGHT: AppTheme = {
     brandSoft: '#E8F3EE',
     onBrand: '#FFFFFF',
     sectionGreen: '#178D65',
+    paintedForest: '#0E3C2D',
 
     // Categories — harmonized to forest backdrop
     needs: '#C2701C',    needsSoft: '#FBEDD9',
@@ -185,6 +190,7 @@ const DARK: AppTheme = {
     brandSoft: '#0F2A20',
     onBrand: '#FFFFFF',
     sectionGreen: '#178D65',
+    paintedForest: '#0E3C2D',
 
     // Categories
     needs: '#F4B860',    needsSoft: '#2C2010',

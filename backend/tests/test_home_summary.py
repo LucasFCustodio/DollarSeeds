@@ -142,6 +142,7 @@ def test_home_debt_summary_counts_and_picks():
     s = df.home_debt_summary(garden, [], TODAY)
     assert (s["paid_count"], s["total_count"]) == (1, 3)
     assert (s["overdue_count"], s["due_soon_count"]) == (1, 1)
+    assert s["due_soon"] == [{"id": 2, "name": s["due_soon"][0]["name"], "due_date": "2026-09-30", "min_payment": 100.0}]
     nxt = s["next_payment"]
     assert (nxt["id"], nxt["due_date"], nxt["is_focus"]) == (2, "2026-09-30", True)
     # Rollover of the paid-off debt's 50 minimum + 50 monthly extra.
@@ -198,7 +199,7 @@ def on_today(monkeypatch):
 
 
 KEYS = {"last_logged_at", "days_since_last_log", "over_budget", "debts", "goals_near_completion"}
-DEBT_KEYS = {"paid_count", "total_count", "overdue_count", "due_soon_count", "next_payment",
+DEBT_KEYS = {"paid_count", "total_count", "overdue_count", "overdue", "due_soon_count", "due_soon", "next_payment",
              "focus", "plan_est_payoff_month", "almost_free"}
 
 
@@ -248,3 +249,55 @@ def test_summary_is_scoped_to_the_caller(client, supabase_db, on_today):
                                   "day": 1, "month": "September"})
     body = client.get("/home/summary/", headers=auth(USER_A), params={"month": "September"}).json()
     assert body["debts"] is None and body["last_logged_at"] is None
+
+
+def test_home_debt_summary_lists_due_soon_nearest_first():
+    rows = [
+        card(1, 900.0, minimum=90.0, due_day=5, created="2026-09-10T00:00:00+00:00"),
+        card(2, 800.0, minimum=80.0, due_day=30, created="2026-09-01T00:00:00+00:00"),
+        card(3, 700.0, minimum=70.0, due_day=20, created="2026-09-01T00:00:00+00:00"),
+    ]
+    s = df.home_debt_summary(df.decorate_garden(rows, [], TODAY), [], TODAY)
+    # Sep 30 and Oct 5 are within 7 days of Sep 28; Oct 20 is not.
+    assert [(d["id"], d["due_date"]) for d in s["due_soon"]] == [(2, "2026-09-30"), (1, "2026-10-05")]
+    assert s["due_soon_count"] == 2
+
+
+# ── the overdue list ─────────────────────────────────────────────────────────
+
+def _summary(rows, txns=()):
+    txns = list(txns)
+    return df.home_debt_summary(df.decorate_garden(rows, txns, TODAY), txns, TODAY)
+
+
+def test_overdue_lists_one_debt_with_its_missed_due_date():
+    s = _summary([card(1, 1000.0, minimum=150.0, due_day=14, checked="2026-09-14")])
+    assert s["overdue_count"] == 1
+    assert s["overdue"] == [{
+        "id": 1, "name": "D1", "min_payment": 150.0,
+        "missed_due_date": "2026-09-14", "days_overdue": 14, "pay_url": None,
+    }]
+
+
+def test_overdue_is_ordered_longest_overdue_first():
+    s = _summary([
+        card(1, 1000.0, due_day=20, checked="2026-09-20"),   # missed Sep 20: 8 days
+        card(2, 1000.0, due_day=14, checked="2026-09-14"),   # missed Sep 14: 14 days
+    ])
+    assert [(d["id"], d["days_overdue"]) for d in s["overdue"]] == [(2, 14), (1, 8)]
+    assert s["overdue_count"] == len(s["overdue"]) == 2
+
+
+def test_an_overdue_debt_drops_off_once_its_minimum_is_logged():
+    rows = [card(1, 1000.0, due_day=14, checked="2026-09-14")]
+    assert _summary(rows)["overdue_count"] == 1
+    s = _summary(rows, [txn("2026-09-27", debt_id=1)])
+    assert (s["overdue_count"], s["overdue"]) == (0, [])
+
+
+def test_overdue_carries_the_pay_url_or_null():
+    s = _summary([
+        {**card(1, 1000.0, due_day=14, checked="2026-09-14"), "pay_url": "https://pay.example.com"},
+        {**card(2, 1000.0, due_day=14, checked="2026-09-14"), "pay_url": ""},
+    ])
+    assert {d["id"]: d["pay_url"] for d in s["overdue"]} == {1: "https://pay.example.com", 2: None}

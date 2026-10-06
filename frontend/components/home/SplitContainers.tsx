@@ -1,7 +1,9 @@
 /**
  * SplitContainers — Needs and Wants side by side, Savings full width under them.
  *
- * Each shows what is left of its budget, three examples, and a bar. Savings is the
+ * Each shows what is left of its budget, three examples, and a bar. Past its budget a
+ * container turns red: red outline, red icon tile, red bar, and the amount left goes
+ * negative by however much it is over. That is the only over-budget warning. Savings is the
  * most important money category, so its label ("Savings + debt paydown") is a bold
  * title in the top row beside its icon instead of a hint line. Tapping one opens
  * its existing details screen (where "View all" and deleting live). Needs and Wants
@@ -75,7 +77,12 @@ function SplitCard({ split, budget, spent, onOpen, onAdd }: {
                 depth={6}
                 padding={12}
                 onPress={() => onOpen(split)}
-                style={drop.valid ? { borderColor: look.color, backgroundColor: drop.over ? look.soft : theme.surface } : undefined}
+                // No outline at rest (red once over budget). The border stays,
+                // transparent, so the drop highlight can colour it without shifting
+                // the layout.
+                style={drop.valid
+                    ? { borderColor: look.color, backgroundColor: drop.over ? look.soft : theme.surface }
+                    : over ? { borderColor: theme.danger } : styles.noOutline}
             >
                 <View
                     style={styles.top}
@@ -84,8 +91,12 @@ function SplitCard({ split, budget, spent, onOpen, onAdd }: {
                         ? t('split.overA11y', { split: name, amount: formatMoney(-left) })
                         : t('split.leftA11y', { split: name, amount: formatMoney(left) })}
                 >
-                    <View style={[styles.tile, { backgroundColor: look.soft }]}>
-                        <Icon size={22} accent={look.color} paper={look.soft} />
+                    <View style={[styles.tile, { backgroundColor: over ? theme.danger : look.soft }]}>
+                        <Icon
+                            size={22}
+                            accent={over ? theme.onBrand : look.color}
+                            paper={over ? theme.danger : look.soft}
+                        />
                     </View>
                     {titled ? (
                         <Text style={[styles.title, { color: theme.ink }]} numberOfLines={2}>{look.examples}</Text>
@@ -141,4 +152,5 @@ const styles = StyleSheet.create({
     titledBar: { marginTop: 12 },
     plus: { width: 24, height: 24, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
     examples: { marginTop: 10, marginBottom: 8 },
+    noOutline: { borderColor: 'transparent' },
 });

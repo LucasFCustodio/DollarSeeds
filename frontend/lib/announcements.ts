@@ -87,8 +87,9 @@ export const INTERNAL_LINK_ROUTES = [
     '/settings',
 ] as const;
 
-/** An external link must be a real absolute http(s) URL — nothing else opens. */
-function isSafeExternal(target: string): boolean {
+/** An external link must be a real absolute http(s) URL — nothing else opens. Also
+ *  the guard for a debt's pay_url on the home's overdue alert. */
+export function isSafeExternal(target: string): boolean {
     // Deliberately not `new URL()`: it accepts `javascript:` and every other scheme,
     // and it is the scheme we care about, not the parse.
     if (!/^https?:\/\//i.test(target)) return false;

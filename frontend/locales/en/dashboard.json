@@ -2,10 +2,7 @@
   "leftThisMonth": "left this month",
   "tithe": {
     "title": "Tithe",
-    "givenToggleA11y": "Tithe given this month",
-    "give": "Give",
-    "givenLine": "Tithe given · {{amount}}",
-    "undoA11y": "Tithe given. Tap to undo"
+    "givenToggleA11y": "Tithe given this month"
   },
   "rollover": {
     "closeTitle": "Ready to close out {{month}}?",
@@ -41,13 +38,20 @@
     "a11y": "{{amount}} left this month. View all income",
     "addIncomeA11y": "Log income"
   },
-  "status": {
-    "overdue": "{{count}} debt overdue",
-    "overdue_plural": "{{count}} debts overdue",
-    "dueSoon": "{{count}} due date coming up",
-    "dueSoon_plural": "{{count}} due dates coming up",
-    "overBudget": "{{split}} is {{amount}} over",
-    "allGood": "All up to date"
+  "overdueAlert": {
+    "title": "{{name}} needs attention",
+    "titleMany": "{{count}} debt needs attention",
+    "titleMany_plural": "{{count}} debts need attention",
+    "wasDue": "was due {{date}} · {{count}} day ago",
+    "wasDue_plural": "was due {{date}} · {{count}} days ago",
+    "row": "{{name}} · {{amount}} · due {{date}}",
+    "more": "+{{count}} more",
+    "payNow": "Pay now",
+    "review": "Review",
+    "a11y": "{{name}} needs attention. {{amount}} was due {{date}}, {{count}} day ago.",
+    "a11y_plural": "{{name}} needs attention. {{amount}} was due {{date}}, {{count}} days ago.",
+    "payA11y": "Pay {{name}} online",
+    "reviewA11y": "Review in Debts"
   },
   "split": {
     "needs": "Needs",
@@ -60,6 +64,8 @@
   "nextPayment": {
     "due": " · due {{date}}",
     "withExtra": "{{min}} + {{extra}} extra",
+    "comingUp": "{{count}} payment coming up:",
+    "comingUp_plural": "{{count}} payments coming up:",
     "prune": "Prune",
     "pruneA11y": "Prune {{name}} in Debts"
   },

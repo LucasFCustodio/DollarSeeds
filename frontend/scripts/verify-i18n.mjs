@@ -54,10 +54,10 @@ check('lessons title via getFixedT(en)',
   i18next.getFixedT('en', 'lessons')('written.ants.title'), 'Saving for the Unexpected');
 check('plural singular', i18next.t('lessons:series.lessonCount', { count: 1 }), '1 AULA');
 check('plural plural', i18next.t('lessons:series.lessonCount', { count: 4 }), '4 AULAS');
-check('home status plural singular', i18next.t('dashboard:status.overdue', { count: 1 }), '1 dívida em atraso');
-check('home status plural plural', i18next.t('dashboard:status.dueSoon', { count: 3 }), '3 vencimentos chegando');
-check('home status plural (en)',
-  i18next.getFixedT('en', 'dashboard')('status.overdue', { count: 2 }), '2 debts overdue');
+check('overdue alert plural singular', i18next.t('dashboard:overdueAlert.titleMany', { count: 1 }), '1 dívida precisa de atenção');
+check('next payment coming-up plural', i18next.t('dashboard:nextPayment.comingUp', { count: 3 }), '3 pagamentos a vencer:');
+check('overdue alert plural (en)',
+  i18next.getFixedT('en', 'dashboard')('overdueAlert.wasDue', { date: 'Sep 14', count: 6 }), 'was due Sep 14 · 6 days ago');
 check('serverTitle rollover',
   i18next.t('serverTitle.rollover', { month: 'agosto' }), 'Sobra de agosto');
 check('subcategory needs Other', i18next.t('subcategory.needs.Other'), 'Outro');
