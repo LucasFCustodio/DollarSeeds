@@ -43,6 +43,7 @@ export interface AppTheme {
 
     // ── New surface tokens ──────────────────────────────────────
     bg: string;
+    bgDeep: string;  // a step deeper than bg: the home's Envision band
     surface: string;
     surfaceSoft: string;
     surfaceElev: string;
@@ -117,6 +118,7 @@ const LIGHT: AppTheme = {
 
     // New surface
     bg: '#F5F1E6',
+    bgDeep: '#EBE4D2',
     surface: '#FFFFFF',
     surfaceSoft: '#FAF6EB',
     surfaceElev: '#FFFFFF',
@@ -175,6 +177,7 @@ const DARK: AppTheme = {
 
     // New surface
     bg: '#0A1612',
+    bgDeep: '#060F0C',
     surface: '#13231C',
     surfaceSoft: '#1A2D24',
     surfaceElev: '#1E332A',

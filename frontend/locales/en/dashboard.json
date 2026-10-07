@@ -81,8 +81,6 @@
     "soonBody": "You'll be able to connect your bank here, and new transactions will wait on your home, ready to drag into place."
   },
   "envision": {
-    "heading": "Envision",
-    "debtsPaid": "{{paid}} / {{total}} debts paid",
     "debtFreeBy": "Debt-free by {{date}}",
     "almostFree": "1 month to be free from {{name}}",
     "focusExtra": "{{amount}} extra for {{name}} this month. Keep going!",

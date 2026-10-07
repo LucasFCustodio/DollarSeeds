@@ -4,13 +4,14 @@
  *
  *   Analyze   "Am I okay?"          income left, overdue status, next debt payment, tithe
  *   Plan      "What's next?"        close-out, splits, logging
- *   Envision  "Where is this going?" encouragement, debts paid
+ *   Envision  "Where is this going?" the Envision dashboard, encouragement
  *
- * The three steps are three full-bleed bands (green, cream, green), so the screen
- * splits into them without the user having to name them. Both green bands are the
- * same painted watercolour wash (PaintedBand): the top one as painted, its bottom
- * corners curving up over the cream band; Envision flipped, overlapping the cream
- * under rounded top corners, so the page opens and closes on the same green.
+ * The three steps are three full-bleed bands (green, cream, deeper cream), so the
+ * screen splits into them without the user having to name them. The top band is the
+ * painted watercolour wash (PaintedBand), its bottom corners curving up over the
+ * cream band. Envision is a flat bgDeep fill overlapping the cream under rounded top
+ * corners, so the green stays reserved for the top. It always renders: its dashboard
+ * has an empty state for every row.
  *
  * A good visit can take 20 seconds, as long as the user leaves encouraged and with a
  * reason to come back. This file is layout only: state and requests live in
@@ -20,11 +21,10 @@
  * active debt; with it off the home is complete without them.
  */
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -42,11 +42,11 @@ import NextPaymentCard from '../../components/home/NextPaymentCard';
 import SplitContainers from '../../components/home/SplitContainers';
 import LoggingArea, { BubbleFace } from '../../components/home/LoggingArea';
 import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
-import { DebtsPaidLine, EncouragementCard } from '../../components/home/Encouragement';
+import { EncouragementCard } from '../../components/home/Encouragement';
 import ScriptureModal from '../../components/home/ScriptureModal';
 import PaintedBand from '../../components/home/PaintedBand';
 import {
-    BAND_OVERLAP, BAND_PAD, BAND_RADIUS, CARD_GAP, HOME_PAD, SECTION_GAP, homeType,
+    BAND_OVERLAP, BAND_PAD, BAND_RADIUS, CARD_GAP, HOME_PAD, SECTION_GAP,
 } from '../../components/home/homeType';
 
 /** The top band's bottom corner radius (as the old HeroBg's). */
@@ -67,7 +67,6 @@ export default function HomeScreen() {
 function Home() {
     const router = useRouter();
     const { theme } = useTheme();
-    const { t } = useTranslation('dashboard');
     const focused = useIsFocused();
     const insets = useSafeAreaInsets();
     const zones = useDropZones();
@@ -102,10 +101,6 @@ function Home() {
     const nextPayment = debts?.next_payment ?? null;
     // The next payment is already on the card; the list is only the others.
     const upcoming = (debts?.due_soon ?? []).filter(d => d.id !== nextPayment?.id);
-    // Envision has something to show: the debts-paid line, or a goal in the
-    // encouragement card. Otherwise the whole band, heading included, is hidden and
-    // the cream band ends the page.
-    const envision = !!debts || goalsNear.length > 0;
 
     // ── Navigation ────────────────────────────────────────────────────────────
     const openSplit = (split: SplitKey) => router.push({
@@ -126,7 +121,7 @@ function Home() {
             {focused ? <StatusBar style="light" /> : null}
             <ScrollView
                 // Whatever shows past the last band on an overscroll matches it.
-                style={[styles.fill, { backgroundColor: envision ? theme.paintedForest : theme.bg }]}
+                style={[styles.fill, { backgroundColor: theme.bgDeep }]}
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
                 scrollEnabled={!zones?.dragging}
@@ -174,7 +169,7 @@ function Home() {
                 </View>
 
                 {/* ── Band 2 · Plan: "What's next?" ─────────────────────── */}
-                <View style={[styles.band, styles.underHero, { backgroundColor: theme.bg }, !envision && styles.last]}>
+                <View style={[styles.band, styles.underHero, { backgroundColor: theme.bg }]}>
                     <View style={styles.stack}>
                         {showClosePrompt ? (
                             <CloseOutCard
@@ -206,17 +201,11 @@ function Home() {
                 </View>
 
                 {/* ── Band 3 · Envision: "Where is this going?" ─────────── */}
-                {envision ? (
-                    // Flipped: the misty field is at the top, pinned; any crop comes off
-                    // the solid forest at the bottom, behind the tab bar.
-                    <PaintedBand flipped anchor="top" style={[styles.band, styles.raised, styles.last]}>
-                        <View style={styles.stack}>
-                            <Text style={[homeType.large, { color: theme.onBrand }]}>{t('envision.heading')}</Text>
-                            <EncouragementCard debts={debts} goals={goalsNear} />
-                            {debts ? <DebtsPaidLine debts={debts} /> : null}
-                        </View>
-                    </PaintedBand>
-                ) : null}
+                <View style={[styles.band, styles.raised, styles.last, { backgroundColor: theme.bgDeep }]}>
+                    <View style={styles.stack}>
+                        <EncouragementCard debts={debts} goals={goalsNear} />
+                    </View>
+                </View>
             </ScrollView>
 
             {/* The status bar area stays green however far the page is scrolled. */}

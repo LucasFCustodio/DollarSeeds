@@ -30,6 +30,7 @@ const { theme } = useTheme();
 | Token | Light | Dark | Use |
 |-------|-------|------|-----|
 | `bg` | `#F5F1E6` (warm cream) | `#0A1612` | Page / ScrollView background |
+| `bgDeep` | `#EBE4D2` | `#060F0C` | A step deeper and warmer than `bg` (lighter than `border`). The home's Envision band, so the green stays reserved for the top band |
 | `surface` | `#FFFFFF` | `#13231C` | Cards, modals, tab bar |
 | `surfaceSoft` | `#FAF6EB` | `#1A2D24` | Pressed state, input backgrounds |
 | `surfaceElev` | `#FFFFFF` | `#1E332A` | Dropdowns, popovers |
