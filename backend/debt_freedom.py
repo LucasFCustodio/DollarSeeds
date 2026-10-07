@@ -788,3 +788,122 @@ def home_debt_summary(garden: dict, transactions: list, today: datetime.date) ->
             "est_payoff_month": almost["est_payoff_month"],
         },
     }
+
+
+# ── the home progress dashboard ──────────────────────────────────────────────
+#
+# GET /home/progress/ feeds the home's Envision dashboard: one pot per debt (count
+# view) and the money paid toward debt over time (amount view). Like the home
+# summary, everything is read off the SAME decorated garden the Debts tab renders.
+
+STAGE_EMPTY = "empty"
+STAGE_STARTED = "started"
+STAGE_FINISHING = "finishing"
+STAGE_COMPLETED = "completed"
+
+STAGE_STARTED_AT = 0.10
+STAGE_FINISHING_AT = 0.50
+
+
+def pot_stage(debt: dict) -> str:
+    """The home's mini-plant stage for a garden debt. `completed` only once the debt
+    is marked paid off — a debt at 100% that is not completed yet stays `finishing`."""
+    if is_paid_off(debt):
+        return STAGE_COMPLETED
+    pct = _num(debt.get("pct_paid"))
+    if pct >= STAGE_FINISHING_AT:
+        return STAGE_FINISHING
+    if pct >= STAGE_STARTED_AT:
+        return STAGE_STARTED
+    return STAGE_EMPTY
+
+
+def debt_payment_events(transactions: list) -> list:
+    """(date, signed amount) for every dollar the user paid toward a debt: minimum
+    and extra payments in, minimum reversals (the toggle's undo) out, dated by
+    occurred_on. Interest, late fees, balance edits and statement adjustments are
+    what the debt cost, not what was paid, so they are ignored. A payment counts in
+    full even when part of it only covered interest."""
+    out = []
+    for t in transactions:
+        kind = t.get("kind")
+        if kind in PAYMENT_KINDS:
+            sign = 1.0
+        elif kind == KIND_MINIMUM_REVERSAL:
+            sign = -1.0
+        else:
+            continue
+        day = _date(t.get("occurred_on"))
+        if day is None:
+            continue
+        out.append((day, sign * _num(t.get("amount"))))
+    return out
+
+
+def _month_index(d: datetime.date) -> int:
+    return d.year * 12 + (d.month - 1)
+
+
+def monthly_cumulative(events: list, today: datetime.date) -> list:
+    """One point per calendar month, from the month of the earliest event to today's
+    month, each the running total through the end of that month. A month with no
+    activity carries the previous value forward, so there are no gaps. Events dated
+    after today's month are folded into it, so the last point always equals the
+    sum of every event. [] when there are no events."""
+    if not events:
+        return []
+    current = _month_index(today)
+    by_month: dict = {}
+    for day, amount in events:
+        idx = min(_month_index(day), current)
+        by_month[idx] = by_month.get(idx, 0.0) + amount
+    running = 0.0
+    out = []
+    for idx in range(min(by_month), current + 1):
+        running += by_month.get(idx, 0.0)
+        out.append({"month": f"{idx // 12:04d}-{idx % 12 + 1:02d}", "cumulative": money(running)})
+    return out
+
+
+def amount_in_year(events: list, year: int) -> float:
+    return money(sum(amount for day, amount in events if day.year == year))
+
+
+def debt_milestones(garden_debts: list) -> list:
+    """Each paid-off debt at the month of its paid_off_at, earliest first."""
+    dated = []
+    for d in garden_debts:
+        if not is_paid_off(d):
+            continue
+        day = _date(d.get("paid_off_at"))
+        if day is not None:
+            dated.append((day, d.get("id") or 0, d.get("name")))
+    dated.sort()
+    return [{"month": month_key(day), "name": name} for day, _, name in dated]
+
+
+def home_progress_debts(garden: dict, transactions: list, today: datetime.date) -> Optional[dict]:
+    """The Envision dashboard's debt block, from a decorate_garden() result. None
+    when the user has no debts at all."""
+    debts = garden.get("debts") or []
+    if not debts:
+        return None
+    focus = next((d for d in debts if d.get("is_focus")), None)
+    events = debt_payment_events(transactions)
+    return {
+        "paid_count": sum(1 for d in debts if is_paid_off(d)),
+        "total_count": len(debts),
+        # Garden order (`position`), so the pots line up the way the Debts tab does.
+        "pots": [{
+            "id": d["id"],
+            "name": d.get("name"),
+            "pct_paid": d.get("pct_paid"),
+            "stage": pot_stage(d),
+            "is_focus": bool(d.get("is_focus")),
+        } for d in debts],
+        "focus_name": focus.get("name") if focus else None,
+        "total_paid": money(sum(amount for _, amount in events)),
+        "paid_this_year": amount_in_year(events, today.year),
+        "series": monthly_cumulative(events, today),
+        "milestones": debt_milestones(debts),
+    }

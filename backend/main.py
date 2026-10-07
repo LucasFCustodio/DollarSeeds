@@ -12,6 +12,7 @@ import uuid
 import httpx
 import jwt
 import debt_freedom as df
+import home_progress as hp
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -3520,4 +3521,33 @@ def get_home_summary(month: str,
         "over_budget": over_budget_splits(nums["budgets"], nums["expenses"]),
         "debts": df.home_debt_summary(garden, txns, local_today),
         "goals_near_completion": goals_near_completion(_with_allocated(goals, user_id)),
+    }
+
+
+# ══ Home progress ════════════════════════════════════════════════════════════
+# The home's Envision dashboard: debts paid and goals completed (count view), and
+# money paid toward debt / saved toward goals over time (amount view). Read-only and
+# additive, like /home/summary/: the debt half runs the same lazy cycle processing
+# every /debt-freedom/ read does, and no existing endpoint changed. Every number is
+# computed here (debt_freedom.py, home_progress.py) — the client computes nothing.
+
+@app.get("/home/progress/")
+def get_home_progress(today: Optional[datetime.date] = None,
+                      user_id: str = Depends(get_current_user_id)):
+    local_today = _df_today(today)
+
+    garden, debt_txns = _df_garden(user_id, local_today)
+
+    goals = supabase.table("savings_goals").select("*").eq("user_id", user_id).execute().data or []
+    # allocated_amount on the in-progress goals, from the same helper the Goals tab
+    # uses, so "{goal} is {pct}% there" matches the tab.
+    active = _with_allocated([g for g in goals if not g.get("completed")], user_id)
+    goals = active + [g for g in goals if g.get("completed")]
+    savings_txns = (supabase.table("savings_transactions")
+                    .select("id, goal_id, amount, type, created_at")
+                    .eq("user_id", user_id).execute().data or [])
+
+    return {
+        "debts": df.home_progress_debts(garden, debt_txns, local_today),
+        "goals": hp.home_progress_goals(goals, savings_txns, local_today),
     }
