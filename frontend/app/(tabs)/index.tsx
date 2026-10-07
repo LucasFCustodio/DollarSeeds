@@ -6,12 +6,10 @@
  *   Plan      "What's next?"        close-out, splits, logging
  *   Envision  "Where is this going?" encouragement, the Envision dashboard
  *
- * The three steps are three full-bleed bands (green, cream, deeper cream), so the
- * screen splits into them without the user having to name them. The top band is the
- * painted watercolour wash (PaintedBand), its bottom corners curving up over the
- * cream band. Envision is a flat bgDeep fill overlapping the cream under rounded top
- * corners, so the green stays reserved for the top. It always renders: its dashboard
- * has an empty state for every row.
+ * The top band is the painted watercolour wash (PaintedBand), its bottom corners
+ * curving up over the cream. Plan and Envision share the cream `bg` and run on as one
+ * surface, so the green stays reserved for the top. Envision always renders: its
+ * dashboard has an empty state for every row.
  *
  * A good visit can take 20 seconds, as long as the user leaves encouraged and with a
  * reason to come back. This file is layout only: state and requests live in
@@ -125,7 +123,7 @@ function Home() {
             {focused ? <StatusBar style="light" /> : null}
             <ScrollView
                 // Whatever shows past the last band on an overscroll matches it.
-                style={[styles.fill, { backgroundColor: theme.bgDeep }]}
+                style={[styles.fill, { backgroundColor: theme.bg }]}
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
                 scrollEnabled={!zones?.dragging}
@@ -205,7 +203,7 @@ function Home() {
                 </View>
 
                 {/* ── Band 3 · Envision: "Where is this going?" ─────────── */}
-                <View style={[styles.band, styles.raised, styles.last, { backgroundColor: theme.bgDeep }]}>
+                <View style={[styles.band, styles.raised, styles.last, { backgroundColor: theme.bg }]}>
                     <View style={styles.stack}>
                         <EncouragementCard debts={debts} goals={goalsNear} />
                         {/* Hidden when /home/progress/ failed (or isn't deployed yet);

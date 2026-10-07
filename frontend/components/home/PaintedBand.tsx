@@ -2,7 +2,7 @@
  * PaintedBand — a home band drawn on the painted watercolour wash (analyze-bg.png),
  * the same Version A style as the painted cards. Only the top (Analyze) band uses
  * it: calm forest at the top, the misty field at the bottom. The green is reserved
- * for that band; Envision sits on the flat bgDeep cream.
+ * for that band; Plan and Envision sit on the cream `bg`.
  *
  * - The band's height comes from its children, never from the image: the art is
  *   `cover`, so a short band crops it and a tall one scales it.
