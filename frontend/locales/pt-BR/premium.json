@@ -7,12 +7,33 @@
     "sectionLabel": "PREMIUM"
   },
   "paywall": {
-    "heading": "Assine o DollarSeeds Premium",
-    "description": "Tudo o que você precisa para se organizar bem continua de graça. O Premium tira os limites para quando você estiver pronto para crescer.",
-    "benefitGoals": "Metas de poupança e de dívida ilimitadas",
-    "benefitBudgets": "Todas as divisões de orçamento: {{names}}",
-    "benefitVideos": "Séries em vídeo exclusivas premium com empreendedores cristãos",
-    "alwaysFree": "O dízimo e a Poupança Geral são gratuitos para todos, sempre.",
+    "close": "Fechar",
+    "headline": "Comece sua jornada para sair das dívidas",
+    "benefit": {
+      "debt": {
+        "title": "Um futuro sem dívidas",
+        "body": "Registre todas as dívidas e quite uma por vez com a bola de neve."
+      },
+      "budget": {
+        "title": "Um orçamento do seu jeito",
+        "body": "Mais 2 divisões de orçamento para escolher a que combina com você."
+      },
+      "wisdom": {
+        "title": "Mais sabedoria com o dinheiro",
+        "body": "Podcasts exclusivos com cristãos que colocam Deus em primeiro lugar."
+      }
+    },
+    "monthly": "Mensal",
+    "annual": "Anual",
+    "discount": "-{{percent}}%",
+    "cta": "Começar minha jornada",
+    "ctaFree": "Começar minha jornada - Grátis",
+    "ctaTrial": "Nada a pagar agora",
+    "trialPillA11y": "Inclui {{duration}} de teste grátis.",
+    "switchCta": "Mudar para {{plan}}",
+    "note": "{{price}} {{per}}. Cancele quando quiser",
+    "noteTrialMonthly": "{{duration}} grátis, depois {{price}}/mês. Cancele quando quiser",
+    "noteTrialYearly": "{{duration}} grátis, depois {{price}}/ano. Cancele quando quiser",
     "perMonth": "por mês",
     "perYear": "por ano",
     "current": "Plano atual: {{plan}}",
@@ -21,8 +42,8 @@
     "startsLater": "COMEÇA NA RENOVAÇÃO",
     "autoRenew": "As assinaturas são renovadas automaticamente ao fim de cada período de cobrança, a não ser que sejam canceladas com pelo menos 24 horas de antecedência. Gerencie ou cancele quando quiser nas configurações da sua conta na App Store.",
     "restore": "Restaurar compras",
-    "terms": "Termos de Serviço",
-    "privacy": "Política de Privacidade",
+    "terms": "Termos",
+    "privacy": "Privacidade",
     "loadFailed": "Não foi possível carregar as opções de assinatura. Tente novamente em instantes.",
     "unavailable": "As assinaturas ainda não estão disponíveis neste dispositivo."
   },
@@ -43,14 +64,23 @@
       "year": "{{count}} ano",
       "year_plural": "{{count}} anos"
     },
-    "then": "{{duration}} grátis, depois {{price}} {{per}}",
-    "disclosure": "Seu período de teste grátis começa hoje. A não ser que você cancele pelo menos 24 horas antes do fim, ele vira uma assinatura paga pelo preço mostrado e sua conta da App Store é cobrada."
+    "first": {
+      "day": "Primeiro dia grátis",
+      "day_plural": "Primeiros {{count}} dias grátis",
+      "week": "Primeira semana grátis",
+      "week_plural": "Primeiras {{count}} semanas grátis",
+      "month": "Primeiro mês grátis",
+      "month_plural": "Primeiros {{count}} meses grátis",
+      "year": "Primeiro ano grátis",
+      "year_plural": "Primeiros {{count}} anos grátis"
+    },
+    "disclosure": "Seu teste grátis começa hoje. Se você não cancelar pelo menos 24 horas antes do fim do teste, ele se torna uma assinatura paga pelo preço mostrado, cobrada na sua conta da App Store."
   },
   "switch": {
     "title": "Mudar para {{plan}}?",
     "upgradeBody": "O {{plan}} começa na hora. A App Store reembolsa a parte não usada do seu plano atual.",
-    "downgradeBodyWithDate": "Seu plano muda para {{plan}} em {{date}}, quando o seu ano atual terminar. Você mantém o plano atual até lá.",
-    "downgradeBodyNoDate": "Seu plano muda para {{plan}} quando o seu ano atual terminar. Você mantém o plano atual até lá.",
+    "downgradeBodyWithDate": "Seu plano muda para {{plan}} em {{date}}, quando o seu ciclo anual atual terminar. Você mantém o plano atual até lá.",
+    "downgradeBodyNoDate": "Seu plano muda para {{plan}} quando o seu ciclo anual atual terminar. Você mantém o plano atual até lá.",
     "unknownBody": "A App Store aplica a mudança à sua assinatura atual. Você mantém o acesso completo o tempo todo.",
     "scheduledTitle": "Mudança de plano agendada",
     "scheduledBodyWithDate": "Seu plano muda para {{plan}} em {{date}}.",
@@ -58,6 +88,7 @@
   },
   "purchase": {
     "failedTitle": "Compra não concluída",
+    "failedBody": "A App Store não conseguiu concluir a compra. Tente novamente.",
     "unavailableBody": "As compras ainda não estão disponíveis neste dispositivo."
   },
   "restore": {
@@ -67,7 +98,8 @@
     "nothingBody": "Nenhuma assinatura anterior foi encontrada para esta conta.",
     "unavailableTitle": "Indisponível",
     "unavailableBody": "As compras ainda não estão disponíveis neste dispositivo.",
-    "failedTitle": "Não foi possível restaurar"
+    "failedTitle": "Não foi possível restaurar",
+    "failedBody": "A App Store não conseguiu restaurar suas compras. Tente novamente."
   },
   "deleteAccountWarning": "Excluir sua conta não cancela sua assinatura. As assinaturas são cobradas pela App Store e precisam ser canceladas separadamente nas configurações da sua conta na App Store.",
   "updateGate": {

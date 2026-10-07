@@ -6,11 +6,16 @@
  * inside the binary and are safe in the repo. The `sk_` secret key and the webhook
  * secret are server-side only and must never appear anywhere in `frontend/`.
  *
- * PRICES ARE NOT HERE, DELIBERATELY. Every price the user sees comes from
+ * PRICES ARE NOT HERE, DELIBERATELY. Every amount the user is BILLED is rendered from
  * `package.product.priceString` on the RevenueCat offering, so a reprice or a new tier
  * is a dashboard change rather than an app release — which matters, because a release
  * only reaches the phones that take the update. The product ids below exist to ORDER
  * and LABEL the packages, never to look up a price.
+ *
+ * The paywall does DERIVE two comparison figures from the store's numeric prices —
+ * the crossed-out twelve-month price and the discount percentage (lib/planPricing.ts). Those are computed at render from whatever the store
+ * returns, so they still follow a dashboard reprice with no release. Nothing else is
+ * computed, and no price or percentage is ever written into the copy.
  */
 
 // ─── RevenueCat ───────────────────────────────────────────────────────────────

@@ -7,12 +7,33 @@
     "sectionLabel": "PREMIUM"
   },
   "paywall": {
-    "heading": "Subscribe to DollarSeeds Premium",
-    "description": "Everything you need to budget well stays free. Premium lifts the limits for when you're ready to grow.",
-    "benefitGoals": "Unlimited savings and debt goals",
-    "benefitBudgets": "Every budget split: {{names}}",
-    "benefitVideos": "Exclusive video lessons from Christian entrepreneurs",
-    "alwaysFree": "Tithing and General Savings are free for everyone, always.",
+    "close": "Close",
+    "headline": "Begin Your Journey to Debt Freedom",
+    "benefit": {
+      "debt": {
+        "title": "A Future Without Debt",
+        "body": "Log unlimited debts and pay them off one by one with the debt snowball plan."
+      },
+      "budget": {
+        "title": "A Budget That Fits You",
+        "body": "Unlock 2 new budget splits and choose the one that fits your situation."
+      },
+      "wisdom": {
+        "title": "A Wiser Way With Money",
+        "body": "Watch exclusive podcasts about finances from Christian professionals who've put God first in their careers."
+      }
+    },
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "discount": "-{{percent}}%",
+    "cta": "Begin My Journey",
+    "ctaFree": "Begin My Journey - Free",
+    "ctaTrial": "No payment due now",
+    "trialPillA11y": "Includes {{duration}} free.",
+    "switchCta": "Switch to {{plan}}",
+    "note": "{{price}} {{per}}. Cancel anytime",
+    "noteTrialMonthly": "{{duration}} free, then {{price}} per month. Cancel anytime",
+    "noteTrialYearly": "{{duration}} free, then {{price}} per year. Cancel anytime",
     "perMonth": "per month",
     "perYear": "per year",
     "current": "Current plan: {{plan}}",
@@ -43,7 +64,16 @@
       "year": "{{count}} year",
       "year_plural": "{{count}} years"
     },
-    "then": "{{duration}} free, then {{price}} {{per}}",
+    "first": {
+      "day": "First day free",
+      "day_plural": "First {{count}} days free",
+      "week": "First week free",
+      "week_plural": "First {{count}} weeks free",
+      "month": "First month free",
+      "month_plural": "First {{count}} months free",
+      "year": "First year free",
+      "year_plural": "First {{count}} years free"
+    },
     "disclosure": "Your free trial starts today. Unless you cancel at least 24 hours before it ends, it becomes a paid subscription at the price shown and your App Store account is charged."
   },
   "switch": {
@@ -58,6 +88,7 @@
   },
   "purchase": {
     "failedTitle": "Purchase not completed",
+    "failedBody": "The App Store couldn't complete the purchase. Please try again.",
     "unavailableBody": "Purchases are not available on this device yet."
   },
   "restore": {
@@ -67,7 +98,8 @@
     "nothingBody": "No previous subscription was found for this account.",
     "unavailableTitle": "Unavailable",
     "unavailableBody": "Purchases are not available on this device yet.",
-    "failedTitle": "Could not restore"
+    "failedTitle": "Could not restore",
+    "failedBody": "The App Store couldn't restore your purchases. Please try again."
   },
   "deleteAccountWarning": "Deleting your account does not cancel your subscription. Subscriptions are billed by the App Store and must be cancelled separately in your App Store account settings.",
   "updateGate": {
