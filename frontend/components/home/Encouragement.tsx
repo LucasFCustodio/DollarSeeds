@@ -1,6 +1,6 @@
 /**
- * Envision — "Where is this going?": the encouragement card, the last element of the
- * Envision band (under the Envision dashboard).
+ * Envision — "Where is this going?": the encouragement card, the first element of
+ * the Envision band (above the Envision dashboard).
  *
  * Every item renders only when its data exists; the card hides when none do. The
  * debt items are flag-gated by the parent passing `debts = null`. Goals near

@@ -1,6 +1,6 @@
 /**
- * EnvisionDashboard — the top of the Envision band: "Where is this going?" in two
- * rows, debts (flag-gated) over goals, on one surface card.
+ * EnvisionDashboard — the Envision band, under the encouragement card: "Where is
+ * this going?" in two rows, debts (flag-gated) over goals, on one surface card.
  *
  * The card is a two-page horizontal pager — COUNT and AMOUNT — and each page holds
  * both rows, so one swipe flips both together; the rows never swipe on their own.

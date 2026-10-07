@@ -4,7 +4,7 @@
  *
  *   Analyze   "Am I okay?"          income left, overdue status, next debt payment, tithe
  *   Plan      "What's next?"        close-out, splits, logging
- *   Envision  "Where is this going?" the Envision dashboard, encouragement
+ *   Envision  "Where is this going?" encouragement, the Envision dashboard
  *
  * The three steps are three full-bleed bands (green, cream, deeper cream), so the
  * screen splits into them without the user having to name them. The top band is the
@@ -207,6 +207,7 @@ function Home() {
                 {/* ── Band 3 · Envision: "Where is this going?" ─────────── */}
                 <View style={[styles.band, styles.raised, styles.last, { backgroundColor: theme.bgDeep }]}>
                     <View style={styles.stack}>
+                        <EncouragementCard debts={debts} goals={goalsNear} />
                         {/* Hidden when /home/progress/ failed (or isn't deployed yet);
                             the rest of the band renders without it. */}
                         {home.progress ? (
@@ -219,7 +220,6 @@ function Home() {
                                 onAddGoal={addGoal}
                             />
                         ) : null}
-                        <EncouragementCard debts={debts} goals={goalsNear} />
                     </View>
                 </View>
             </ScrollView>
