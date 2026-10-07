@@ -12,7 +12,7 @@ import Button from '../ui/Button';
 import InputField from '../ui/InputField';
 import { saveSettings } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
-import Sheet, { sheetStyles } from './Sheet';
+import Sheet, { sheetStyles } from '../ui/Sheet';
 
 interface Props {
     visible: boolean;

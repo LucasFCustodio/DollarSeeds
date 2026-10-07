@@ -14,7 +14,7 @@ import InputField from '../ui/InputField';
 import { useAnalytics } from '../../lib/analytics';
 import { saveCheckin, type CheckinResult, type Debt } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
-import Sheet, { sheetStyles } from './Sheet';
+import Sheet, { sheetStyles } from '../ui/Sheet';
 
 interface Props {
     debt: Debt | null;
