@@ -187,6 +187,7 @@ function Graph({ series, milestones, color, merged, onYear }: {
     const [viewW, setViewW] = useState(0);
     const scroller = useRef<ScrollView>(null);
     const atEnd = useRef(false);
+    const contentWidth = useRef(0);
     const shownYear = useRef('');
 
     const n = series.length;
@@ -219,13 +220,23 @@ function Graph({ series, milestones, color, merged, onYear }: {
     };
     const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => report(e.nativeEvent.contentOffset.x);
 
-    // Opens at today, the right end — once, after the content has its width.
-    const onContentSize = (w: number) => {
-        if (atEnd.current || !viewW) return;
+    // Opens at today, the right end — once, as soon as BOTH the viewport and the
+    // content have been measured, whichever lands last.
+    const scrollToToday = () => {
+        if (atEnd.current || !viewW || !contentWidth.current) return;
         atEnd.current = true;
         scroller.current?.scrollToEnd({ animated: false });
-        report(Math.max(0, w - viewW));
+        report(Math.max(0, contentWidth.current - viewW));
     };
+    const onContentSize = (w: number) => {
+        contentWidth.current = w;
+        scrollToToday();
+    };
+    useEffect(() => {
+        scrollToToday();
+        // Only the viewport's first measurement matters; scrollToToday guards repeats.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewW]);
 
     return (
         <View style={[styles.graph, { height }]}>
