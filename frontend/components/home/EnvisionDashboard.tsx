@@ -15,6 +15,14 @@
  *
  * The server computes every number (lib/homeProgress.ts); this file only lays them
  * out. With no debts or no goals a row shows its empty state in both views.
+ *
+ * PAINTED. The card is a PaintedCard (envision-dashboard-bg.png) under an even
+ * surface wash, outlined like the encouragement card so the two read as a pair. The
+ * painting stays still; only the pager's rows slide. A few colours differ from a
+ * plain card because the painting needs them to, measured worst-case against the
+ * washed art: very small text and chevrons are ink2 (ink3 is 2.7:1 even on plain
+ * white), and the ring track, hairline and segments are borderStrong, the inactive
+ * dot ink3 (borderSoft and border all but vanish on the painting).
  */
 import React, { useState } from 'react';
 import {
@@ -23,16 +31,18 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import Svg, { Circle } from 'react-native-svg';
-import { shadow, useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useLocale } from '../../context/LocaleContext';
 import { IconChevronRight, IconPlus } from '../icons';
 import type { DebtProgress, GoalProgress, HomeProgress } from '../../lib/homeProgress';
 import MiniPlant, { miniPlantHeight } from './MiniPlant';
 import Sparkline from './Sparkline';
 import ProgressGraphSheet, { type GraphKind } from './ProgressGraphSheet';
+import PaintedCard, { PAINTED_OUTLINE } from './PaintedCard';
 import { homeType } from './homeType';
 
 const RADIUS = 18;
+const ART = require('../../assets/images/home/envision-dashboard-bg.png');
 const ROW_PAD_X = 16;
 const ROW_PAD_Y = 10;
 const GOAL_ROW_H = 90;
@@ -107,7 +117,7 @@ export default function EnvisionDashboard({
             {showDebts ? (
                 <>
                     <DebtsRow view={view} debts={debts} onOpenDebts={onOpenDebts} onAddDebt={onAddDebt} onOpenGraph={() => setGraph('debts')} />
-                    <View style={[styles.hairline, { backgroundColor: theme.borderSoft }]} />
+                    <View style={[styles.hairline, { backgroundColor: theme.borderStrong }]} />
                 </>
             ) : null}
             <GoalsRow view={view} goals={goals} onOpenCompleted={onOpenCompletedGoals} onAddGoal={onAddGoal} onOpenGraph={() => setGraph('goals')} />
@@ -115,7 +125,7 @@ export default function EnvisionDashboard({
     );
 
     return (
-        <View style={[styles.shell, { backgroundColor: theme.surface, ...(shadow(6) as object) }]}>
+        <PaintedCard source={ART} borderColor={theme.ink} borderWidth={PAINTED_OUTLINE} scrim="even">
             <View style={styles.clip} onLayout={onLayout}>
                 {width > 0 ? (
                     <ScrollView
@@ -137,7 +147,7 @@ export default function EnvisionDashboard({
                 ) : null}
                 <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
                     {[0, 1].map(i => (
-                        <View key={i} style={[styles.dot, { backgroundColor: page === i ? theme.brand : theme.border }]} />
+                        <View key={i} style={[styles.dot, { backgroundColor: page === i ? theme.brand : theme.ink3 }]} />
                     ))}
                 </View>
             </View>
@@ -147,7 +157,7 @@ export default function EnvisionDashboard({
                 progress={progress}
                 onClose={() => setGraph(null)}
             />
-        </View>
+        </PaintedCard>
     );
 }
 
@@ -166,7 +176,7 @@ function Row({ height, onPress, chevron = true, children }: RowProps) {
     const body = (
         <>
             <View style={styles.rowBody}>{children}</View>
-            {onPress && chevron ? <IconChevronRight size={16} color={theme.ink3} /> : null}
+            {onPress && chevron ? <IconChevronRight size={16} color={theme.ink2} /> : null}
         </>
     );
     if (!onPress) return <View style={[styles.row, { height }]}>{body}</View>;
@@ -238,7 +248,7 @@ function DebtsRow({ view, debts, onOpenDebts, onAddDebt, onOpenGraph }: {
                                 style={[styles.segment, {
                                     backgroundColor: p.stage === 'completed'
                                         ? theme.brand
-                                        : p.is_focus ? theme.harvest : theme.borderSoft,
+                                        : p.is_focus ? theme.harvest : theme.borderStrong,
                                 }]}
                             />
                         ))}
@@ -260,7 +270,7 @@ function DebtsRow({ view, debts, onOpenDebts, onAddDebt, onOpenGraph }: {
                 <Text style={[homeType.medium, { color: theme.ink }]}>
                     {t('progress.debtsOf', { paid: debts.paid_count, total: debts.total_count })}
                 </Text>
-                <Text style={[homeType.verySmall, { color: theme.ink3 }]}>{tail}</Text>
+                <Text style={[homeType.verySmall, { color: theme.ink2 }]}>{tail}</Text>
             </Text>
         </Row>
     );
@@ -330,15 +340,15 @@ function AmountRow({ height, total, caption, series, color, firstLine, onPress }
                     <Text style={[homeType.medium, { color: theme.ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                         {formatMoney(total)}
                     </Text>
-                    <Text style={[homeType.verySmall, { color: theme.ink3 }]} numberOfLines={1}>{caption}</Text>
+                    <Text style={[homeType.verySmall, { color: theme.ink2 }]} numberOfLines={1}>{caption}</Text>
                 </View>
                 <View style={styles.flex} onLayout={e => setSparkW(Math.floor(e.nativeEvent.layout.width))}>
                     {empty ? (
                         <>
-                            <Text style={[homeType.verySmall, styles.firstLine, { color: theme.ink3 }]} numberOfLines={2}>
+                            <Text style={[homeType.verySmall, styles.firstLine, { color: theme.ink2 }]} numberOfLines={2}>
                                 {firstLine}
                             </Text>
-                            <Sparkline values={[]} baseline color={theme.border} width={sparkW} height={8} />
+                            <Sparkline values={[]} baseline color={theme.borderStrong} width={sparkW} height={8} />
                         </>
                     ) : (
                         <Sparkline values={series.slice(-12)} color={color} width={sparkW} height={SPARK_H} />
@@ -349,7 +359,7 @@ function AmountRow({ height, total, caption, series, color, firstLine, onPress }
     );
 }
 
-/** 56 pt ring: borderSoft track, goals progress with a round cap, "{done}/{total}". */
+/** 56 pt ring: borderStrong track, goals progress with a round cap, "{done}/{total}". */
 function Ring({ completed, total }: { completed: number; total: number }) {
     const { theme } = useTheme();
     const r = (RING - RING_STROKE) / 2;
@@ -358,7 +368,7 @@ function Ring({ completed, total }: { completed: number; total: number }) {
     return (
         <View style={styles.ring}>
             <Svg width={RING} height={RING} style={styles.ringSvg}>
-                <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={theme.borderSoft} strokeWidth={RING_STROKE} fill="none" />
+                <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={theme.borderStrong} strokeWidth={RING_STROKE} fill="none" />
                 {pct > 0 ? (
                     <Circle
                         cx={RING / 2} cy={RING / 2} r={r}
@@ -373,10 +383,10 @@ function Ring({ completed, total }: { completed: number; total: number }) {
 }
 
 const styles = StyleSheet.create({
-    shell: { borderRadius: RADIUS },
-    // Clipped on an inner layer: overflow:'hidden' on the shadowed view would drop its
-    // iOS shadow. Keeps the rows' pressed highlight inside the rounded corners.
-    clip: { borderRadius: RADIUS, overflow: 'hidden', paddingTop: 4 },
+    // PaintedCard clips only its art; this keeps the rows' pressed highlight inside
+    // the rounded corners too (overflow:'hidden' on the shadowed shell would drop
+    // its iOS shadow).
+    clip: { borderRadius: RADIUS - PAINTED_OUTLINE, overflow: 'hidden', paddingTop: 4 },
     flex: { flex: 1 },
     row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: ROW_PAD_X, paddingVertical: ROW_PAD_Y, gap: 8 },
     rowBody: { flex: 1, justifyContent: 'center' },

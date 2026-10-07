@@ -19,7 +19,7 @@ import { IconLeaf, IconSparkle, IconStar, IconTarget } from '../icons';
 import type { GoalNearCompletion, HomeDebts } from '../../lib/homeSummary';
 import { useDebtFormat } from '../debts/format';
 import RotatingCard, { type RotatingItem } from './RotatingCard';
-import PaintedCard from './PaintedCard';
+import PaintedCard, { PAINTED_OUTLINE } from './PaintedCard';
 import { homeType } from './homeType';
 
 const ICON = 22;
@@ -79,7 +79,7 @@ export function EncouragementCard({ debts, goals }: { debts: HomeDebts | null; g
     if (!items.some(Boolean)) return null;
 
     return (
-        <PaintedCard source={ART} borderColor={theme.ink} borderWidth={1.5}>
+        <PaintedCard source={ART} borderColor={theme.ink} borderWidth={PAINTED_OUTLINE}>
             <RotatingCard
                 items={items}
                 dotColor={theme.borderSoft}
