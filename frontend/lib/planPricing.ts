@@ -1,12 +1,11 @@
 /**
- * planPricing — the three figures the paywall DERIVES from the store's prices.
+ * planPricing — the two figures the paywall DERIVES from the store's prices.
  *
  * Every amount the user is BILLED is `option.priceString`, straight off the store and
  * never computed. This module produces only the comparison figures around it on the
  * Annual card:
  *
  *   - the crossed-out twelve-month price   = monthly × 12
- *   - the per-month equivalent             = yearly ÷ 12
  *   - the discount                         = 1 − yearly ÷ (monthly × 12), rounded DOWN
  *
  * The maths runs in whole cents so a saving that is exactly 50% never lands on 49.999…
@@ -35,8 +34,6 @@ export type DerivedPricing = {
     discountPercent: number;
     /** Monthly price × 12, formatted. Rendered struck through. */
     twelveMonths: string;
-    /** Yearly price ÷ 12, formatted. */
-    perMonth: string;
 };
 
 /**
@@ -94,6 +91,5 @@ export function derivePlanPricing(
     return {
         discountPercent,
         twelveMonths: formatStorePrice(twelveMonthsCents, code, format),
-        perMonth: formatStorePrice(Math.round(yearlyCents / 12), code, format),
     };
 }

@@ -202,8 +202,8 @@ function freeTrialOf(pkg: PurchasesPackage): PlanOption['freeTrial'] {
  * currency-correct, and it is the only form in which a BILLED amount is ever rendered:
  * the app is sold in the US, Canada and Brazil, so a hardcoded or recomputed "$9.99"
  * would be wrong in two of three. `price` and `currencyCode` ride along solely so the
- * paywall can derive its comparison figures (twelve-month price, per-month equivalent,
- * discount) in lib/planPricing.ts.
+ * paywall can derive its comparison figures (twelve-month price, discount) in
+ * lib/planPricing.ts.
  *
  * Legacy support-tier products are never offered here, even if an offering serves
  * them — `currentOffering()` falls back to `default` when `premium-2026` is missing,

@@ -16,18 +16,17 @@
       },
       "budget": {
         "title": "Um orçamento do seu jeito",
-        "body": "Desbloqueie 2 novos tipos de orçamento - Escolha o que melhor se encaixa na sua situação"
+        "body": "Desbloqueie 2 novos tipos de orçamento e escolha o que combina com a sua situação."
       },
       "wisdom": {
-        "title": "Torne-se sábio com o dinheiro",
-        "body": "Assista a podcasts exclusivos sobre finanças com profissionais cristãos que colocaram Deus em primeiro lugar na carreira"
+        "title": "Um jeito mais sábio de lidar com o dinheiro",
+        "body": "Assista a podcasts exclusivos sobre finanças com profissionais cristãos que colocaram Deus em primeiro lugar na carreira."
       }
     },
     "monthly": "Mensal",
     "annual": "Anual",
     "discount": "-{{percent}}%",
-    "perMonthShort": "{{price}}/mês",
-    "cta": "Libertar minha carteira",
+    "cta": "Começar minha jornada",
     "ctaTrial": "Nada a pagar agora",
     "switchCta": "Mudar para {{plan}}",
     "note": "{{price}} {{per}}. Cancele quando quiser",

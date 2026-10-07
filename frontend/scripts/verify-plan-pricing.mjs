@@ -23,7 +23,7 @@ const usd = price => ({ price, currencyCode: 'USD' });
 
 console.log('current US prices');
 check('9.99 / 69.99', derivePlanPricing(usd(9.99), usd(69.99), EN),
-    { discountPercent: 41, twelveMonths: '$119.88', perMonth: '$5.83' });
+    { discountPercent: 41, twelveMonths: '$119.88' });
 
 console.log('rounding');
 // 1 - 69.99/119.88 = 41.62% — must floor to 41, never round to 42.
@@ -36,10 +36,10 @@ check('99.5% floors to 99', derivePlanPricing(usd(100), usd(6), EN)?.discountPer
 console.log('currencies and separators');
 check('BRL in pt-BR', derivePlanPricing(
     { price: 49.9, currencyCode: 'BRL' }, { price: 299.9, currencyCode: 'BRL' }, PT),
-    { discountPercent: 49, twelveMonths: 'R$ 598,80', perMonth: 'R$ 24,99' });
+    { discountPercent: 49, twelveMonths: 'R$ 598,80' });
 check('CAD in en', derivePlanPricing(
     { price: 12.99, currencyCode: 'CAD' }, { price: 89.99, currencyCode: 'CAD' }, EN),
-    { discountPercent: 42, twelveMonths: '$155.88', perMonth: '$7.50' });
+    { discountPercent: 42, twelveMonths: '$155.88' });
 check('thousands grouping', formatStorePrice(123456, 'BRL', PT), 'R$ 1.234,56');
 check('unknown currency falls back to ISO code', formatStorePrice(583, 'EUR', PT), 'EUR 5,83');
 

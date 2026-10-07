@@ -35,6 +35,7 @@ const { theme } = useTheme();
 | `surfaceElev` | `#FFFFFF` | `#1E332A` | Dropdowns, popovers |
 | `border` | `#E5DDC9` | `#1F3A2E` | Subtle card borders (depth ≤ 2) |
 | `borderSoft` | `#EFE9D8` | `#162720` | Row separators |
+| `borderStrong` | `#D3C7AA` | `#2D4D3F` | One step darker than `border` — outlines that must read as tappable against `bg` (unselected paywall plan cards) |
 
 ### Text (ink scale)
 | Token | Light | Dark | Use |

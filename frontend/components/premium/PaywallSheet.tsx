@@ -20,9 +20,9 @@
  *
  * PRICES. Every amount the user is BILLED — both card prices and the figure in the note
  * under the CTA — is `option.priceString` off the RevenueCat package, already localised
- * for the US, Canada and Brazil. Three comparison figures on the Annual card ARE
- * derived, in lib/planPricing.ts: the crossed-out twelve-month price, the per-month
- * equivalent and the discount (floored, never rounded up). They are hidden together
+ * for the US, Canada and Brazil. Two comparison figures on the Annual card ARE
+ * derived, in lib/planPricing.ts: the crossed-out twelve-month price and the discount
+ * (floored, never rounded up). They are hidden together
  * whenever they can't be trusted — a plan missing, mismatched currencies, or no saving.
  * Apple requires the billed price to dominate its card, so the derived figures are
  * always set smaller and muted.
@@ -36,7 +36,7 @@
  * promise a free month and then withdraw it. Anyone who took a trial on a legacy tier
  * is ineligible, because all ten products share one subscription group.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, type FC } from 'react';
 import {
     ActivityIndicator, Alert, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View,
 } from 'react-native';
@@ -60,9 +60,29 @@ import {
     type PlanInfo,
 } from '../../constants/premium';
 import type { PlanOption } from '../../lib/purchases';
+import Svg, { Defs, LinearGradient, Rect, Stop, type SvgProps } from 'react-native-svg';
 
 /** The three benefit rows, in order. Copy lives at premium:paywall.benefit.<key>. */
 const BENEFITS = ['debt', 'budget', 'wisdom'] as const;
+
+type Art = FC<SvgProps>;
+
+/**
+ * Each row's glyph, imported the way components/debts/plantAssets.ts imports its art.
+ * The colours are baked into the SVGs (brand forest and emerald), as with the plants.
+ */
+const BENEFIT_ART: Record<(typeof BENEFITS)[number], Art> = {
+    debt: require('../../assets/premium/benefit-debt.svg').default as Art,
+    budget: require('../../assets/premium/benefit-budget.svg').default as Art,
+    wisdom: require('../../assets/premium/benefit-lessons.svg').default as Art,
+};
+
+/**
+ * Height of the cream fade under the top bar. The scroll content is padded by the same
+ * amount, so at rest nothing sits under it; once scrolled, text fades out instead of
+ * being cut off by a hard edge.
+ */
+const TOP_FADE = 20;
 
 /** Selection cross-fade. Only colours change between states, so nothing shifts on tap. */
 const SELECT_FADE_MS = 150;
@@ -297,106 +317,123 @@ export default function PaywallSheet() {
                     </Pressable>
                 </View>
 
-                <ScrollView
-                    style={styles.scroll}
-                    contentContainerStyle={styles.scrollBody}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* Instrument Serif ships in regular only — size carries the
-                        emphasis; a bold weight would be faux-bold. */}
-                    <Text style={[styles.headline, { color: theme.ink }]} accessibilityRole="header">
-                        {t('premium:paywall.headline')}
-                    </Text>
+                <View style={styles.scroll}>
+                    <ScrollView
+                        style={styles.scroll}
+                        contentContainerStyle={styles.scrollBody}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {/* Instrument Serif ships in regular only — size carries the
+                            emphasis; a bold weight would be faux-bold. */}
+                        <Text style={[styles.headline, { color: theme.ink }]} accessibilityRole="header">
+                            {t('premium:paywall.headline')}
+                        </Text>
 
-                    {/* What Premium adds. No free-tier numbers — see the header. */}
-                    <View style={[styles.benefits, { backgroundColor: theme.surface }]}>
-                        {BENEFITS.map(key => (
-                            <View key={key} style={styles.benefitRow}>
-                                <View style={[styles.benefitTick, { backgroundColor: theme.brandSoft }]}>
-                                    <IconCheck size={14} color={theme.brand} />
-                                </View>
-                                <View style={styles.benefitCopy}>
-                                    <Text style={[styles.benefitTitle, { color: theme.ink }]}>
-                                        {t(`premium:paywall.benefit.${key}.title`)}
-                                    </Text>
-                                    <Text style={[styles.benefitBody, { color: theme.ink2 }]}>
-                                        {t(`premium:paywall.benefit.${key}.body`)}
-                                    </Text>
-                                </View>
-                            </View>
-                        ))}
-                    </View>
+                        {/* What Premium adds. No free-tier numbers — see the header. */}
+                        <View style={[styles.benefits, { backgroundColor: theme.surface }]}>
+                            {BENEFITS.map(key => {
+                                const Glyph = BENEFIT_ART[key];
+                                return (
+                                    <View key={key} style={styles.benefitRow}>
+                                        <View style={[styles.benefitTick, { backgroundColor: theme.brandSoft }]}>
+                                            <Glyph width={18} height={18} />
+                                        </View>
+                                        <View style={styles.benefitCopy}>
+                                            <Text style={[styles.benefitTitle, { color: theme.ink }]}>
+                                                {t(`premium:paywall.benefit.${key}.title`)}
+                                            </Text>
+                                            <Text style={[styles.benefitBody, { color: theme.ink2 }]}>
+                                                {t(`premium:paywall.benefit.${key}.body`)}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                );
+                            })}
+                        </View>
 
-                    {/* Current subscription, and a change the store has scheduled */}
-                    {premiumActive && current && (
-                        <View style={[styles.currentRow, { backgroundColor: theme.brandSoft }]}>
-                            <Text style={[styles.currentText, { color: theme.brand }]}>
-                                {t('premium:paywall.current', { plan: t(planLabelKey(current)) })}
-                            </Text>
-                            {pending && pendingProductId !== productId && (
-                                <Text style={[styles.pendingText, { color: theme.ink2 }]}>
-                                    {pendingDate
-                                        ? t('premium:switch.scheduledBodyWithDate', { plan: t(planLabelKey(pending)), date: pendingDate })
-                                        : t('premium:switch.scheduledBodyNoDate', { plan: t(planLabelKey(pending)) })}
+                        {/* Current subscription, and a change the store has scheduled */}
+                        {premiumActive && current && (
+                            <View style={[styles.currentRow, { backgroundColor: theme.brandSoft }]}>
+                                <Text style={[styles.currentText, { color: theme.brand }]}>
+                                    {t('premium:paywall.current', { plan: t(planLabelKey(current)) })}
                                 </Text>
-                            )}
-                        </View>
-                    )}
+                                {pending && pendingProductId !== productId && (
+                                    <Text style={[styles.pendingText, { color: theme.ink2 }]}>
+                                        {pendingDate
+                                            ? t('premium:switch.scheduledBodyWithDate', { plan: t(planLabelKey(pending)), date: pendingDate })
+                                            : t('premium:switch.scheduledBodyNoDate', { plan: t(planLabelKey(pending)) })}
+                                    </Text>
+                                )}
+                            </View>
+                        )}
 
-                    {/* Plans */}
-                    {optionsLoading ? (
-                        <View style={styles.planLoading}>
-                            <ActivityIndicator color={theme.brand} />
-                        </View>
-                    ) : !monthly && !yearly ? (
-                        <Text style={[styles.unavailable, { color: theme.ink3 }]}>
-                            {canPurchase
-                                ? t('premium:paywall.loadFailed')
-                                : t('premium:paywall.unavailable')}
-                        </Text>
-                    ) : (
-                        <View style={styles.priceRow} accessibilityRole="radiogroup">
-                            {monthly && (
-                                <PriceCard
-                                    label={t('premium:paywall.monthly')}
-                                    price={monthly.priceString}
-                                    sub={t('premium:paywall.perMonth')}
-                                    tag={tagFor(monthly)}
-                                    selected={selected?.key === monthly.key}
-                                    disabled={busy}
-                                    onSelect={() => setPicked('monthly')}
-                                />
-                            )}
-                            {yearly && (
-                                <PriceCard
-                                    label={t('premium:paywall.annual')}
-                                    badge={pricing ? t('premium:paywall.discount', { percent: pricing.discountPercent }) : null}
-                                    struck={pricing?.twelveMonths ?? null}
-                                    price={yearly.priceString}
-                                    sub={pricing
-                                        ? t('premium:paywall.perMonthShort', { price: pricing.perMonth })
-                                        : t('premium:paywall.perYear')}
-                                    tag={tagFor(yearly)}
-                                    selected={selected?.key === yearly.key}
-                                    disabled={busy}
-                                    onSelect={() => setPicked('yearly')}
-                                />
-                            )}
-                        </View>
-                    )}
+                        {/* Plans */}
+                        {optionsLoading ? (
+                            <View style={styles.planLoading}>
+                                <ActivityIndicator color={theme.brand} />
+                            </View>
+                        ) : !monthly && !yearly ? (
+                            <Text style={[styles.unavailable, { color: theme.ink3 }]}>
+                                {canPurchase
+                                    ? t('premium:paywall.loadFailed')
+                                    : t('premium:paywall.unavailable')}
+                            </Text>
+                        ) : (
+                            <View style={styles.priceRow} accessibilityRole="radiogroup">
+                                {monthly && (
+                                    <PriceCard
+                                        label={t('premium:paywall.monthly')}
+                                        price={monthly.priceString}
+                                        sub={t('premium:paywall.perMonth')}
+                                        tag={tagFor(monthly)}
+                                        selected={selected?.key === monthly.key}
+                                        disabled={busy}
+                                        onSelect={() => setPicked('monthly')}
+                                    />
+                                )}
+                                {yearly && (
+                                    <PriceCard
+                                        label={t('premium:paywall.annual')}
+                                        badge={pricing ? t('premium:paywall.discount', { percent: pricing.discountPercent }) : null}
+                                        struck={pricing?.twelveMonths ?? null}
+                                        price={yearly.priceString}
+                                        sub={t('premium:paywall.perYear')}
+                                        tag={tagFor(yearly)}
+                                        selected={selected?.key === yearly.key}
+                                        disabled={busy}
+                                        onSelect={() => setPicked('yearly')}
+                                    />
+                                )}
+                            </View>
+                        )}
 
-                    {/* App Review: the trial's terms, whenever trial copy is on screen */}
-                    {selectedTrial && (
+                        {/* App Review: the trial's terms, whenever trial copy is on screen */}
+                        {selectedTrial && (
+                            <Text style={[styles.disclosure, { color: theme.ink3 }]}>
+                                {t('premium:trial.disclosure')}
+                            </Text>
+                        )}
+
+                        {/* App Review: auto-renewal disclosure */}
                         <Text style={[styles.disclosure, { color: theme.ink3 }]}>
-                            {t('premium:trial.disclosure')}
+                            {t('premium:paywall.autoRenew')}
                         </Text>
-                    )}
+                    </ScrollView>
 
-                    {/* App Review: auto-renewal disclosure */}
-                    <Text style={[styles.disclosure, { color: theme.ink3 }]}>
-                        {t('premium:paywall.autoRenew')}
-                    </Text>
-                </ScrollView>
+                    {/* Cream fade under the top bar — `bg` at full strength to transparent,
+                        via stopOpacity so it never greys through a transparent black. */}
+                    <View pointerEvents="none" style={styles.topFade}>
+                        <Svg width="100%" height="100%">
+                            <Defs>
+                                <LinearGradient id="paywallTopFade" x1="0" y1="0" x2="0" y2="1">
+                                    <Stop offset="0" stopColor={theme.bg} stopOpacity="1" />
+                                    <Stop offset="1" stopColor={theme.bg} stopOpacity="0" />
+                                </LinearGradient>
+                            </Defs>
+                            <Rect x="0" y="0" width="100%" height="100%" fill="url(#paywallTopFade)" />
+                        </Svg>
+                    </View>
+                </View>
 
                 {/* Fixed bottom: CTA, its note, legal links */}
                 <View
@@ -484,7 +521,7 @@ type PriceCardProps = {
     label: string;
     /** The billed amount — `priceString`, always the dominant figure on the card. */
     price: string;
-    /** "per month", or the derived per-month equivalent on the Annual card. */
+    /** "per month" / "per year". */
     sub: string;
     /** "-41%" — derived, so omitted whenever the saving can't be trusted. */
     badge?: string | null;
@@ -519,7 +556,7 @@ function PriceCard({ label, price, sub, badge, struck, tag, selected, disabled, 
             disabled={disabled}
             accessibilityRole="radio"
             accessibilityState={{ selected, checked: selected, disabled }}
-            style={[styles.priceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            style={[styles.priceCard, { backgroundColor: theme.surface, borderColor: theme.borderStrong }]}
         >
             {/* Selected layer: forest border over the neutral one, plus a faint emerald
                 wash. Inset by the border width so it lands exactly on top of it. */}
@@ -531,7 +568,7 @@ function PriceCard({ label, price, sub, badge, struck, tag, selected, disabled, 
             </Animated.View>
 
             {/* Corner indicator: an empty ring, with a filled forest check faded in. */}
-            <View style={[styles.radio, { borderColor: theme.border }]} pointerEvents="none">
+            <View style={[styles.radio, { borderColor: theme.borderStrong }]} pointerEvents="none">
                 <Animated.View style={[styles.radioOn, { backgroundColor: theme.brand, opacity: on }]}>
                     <IconCheck size={12} color={theme.onBrand} />
                 </Animated.View>
@@ -581,7 +618,6 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
         paddingHorizontal: 16,
         paddingTop: 8,
-        paddingBottom: 4,
     },
     closeBtn: {
         width: 40,
@@ -598,8 +634,15 @@ const styles = StyleSheet.create({
         maxWidth: 560,          // tablets: keep the cards a readable size
         alignSelf: 'center',
         paddingHorizontal: 20,
-        paddingTop: 4,
+        paddingTop: TOP_FADE,
         paddingBottom: 24,
+    },
+    topFade: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: TOP_FADE,
     },
     headline: {
         fontFamily: Fonts.serif,
@@ -609,7 +652,6 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     benefits: {
-        marginHorizontal: 6,    // slightly narrower than the content width
         borderRadius: 18,
         paddingVertical: 18,
         paddingHorizontal: 16,
@@ -622,9 +664,9 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     benefitTick: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
     },

@@ -48,6 +48,7 @@ export interface AppTheme {
     surfaceElev: string;
     border: string;
     borderSoft: string;
+    borderStrong: string;  // one step darker than border — outlines that must read as tappable on bg
 
     // ── New text tokens ─────────────────────────────────────────
     ink: string;    // primary text
@@ -121,6 +122,7 @@ const LIGHT: AppTheme = {
     surfaceElev: '#FFFFFF',
     border: '#E5DDC9',
     borderSoft: '#EFE9D8',
+    borderStrong: '#D3C7AA',
 
     // New text
     ink: '#0F2820',
@@ -178,6 +180,7 @@ const DARK: AppTheme = {
     surfaceElev: '#1E332A',
     border: '#1F3A2E',
     borderSoft: '#162720',
+    borderStrong: '#2D4D3F',
 
     // New text
     ink: '#F4F1E8',
