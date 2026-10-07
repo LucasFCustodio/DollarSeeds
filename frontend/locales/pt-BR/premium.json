@@ -12,14 +12,14 @@
     "benefit": {
       "debt": {
         "title": "Um futuro sem dívidas",
-        "body": "Registre dívidas ilimitadas e quite uma por uma com o método bola de neve."
+        "body": "Registre quantas dívidas quiser e quite uma de cada vez com o método bola de neve."
       },
       "budget": {
         "title": "Um orçamento do seu jeito",
-        "body": "Desbloqueie 2 novos tipos de orçamento e escolha o que combina com a sua situação."
+        "body": "Desbloqueie 2 novas divisões de orçamento e escolha a que combina com a sua situação."
       },
       "wisdom": {
-        "title": "Um jeito mais sábio de lidar com o dinheiro",
+        "title": "Mais sabedoria com o dinheiro",
         "body": "Assista a podcasts exclusivos sobre finanças com profissionais cristãos que colocaram Deus em primeiro lugar na carreira."
       }
     },
@@ -61,13 +61,13 @@
       "year": "{{count}} ano",
       "year_plural": "{{count}} anos"
     },
-    "disclosure": "Seu período de teste grátis começa hoje. A não ser que você cancele pelo menos 24 horas antes do fim, ele vira uma assinatura paga pelo preço mostrado e sua conta da App Store é cobrada."
+    "disclosure": "Seu teste grátis começa hoje. Se você não cancelar pelo menos 24 horas antes do fim do teste, ele se torna uma assinatura paga pelo preço mostrado, cobrada na sua conta da App Store."
   },
   "switch": {
     "title": "Mudar para {{plan}}?",
     "upgradeBody": "O {{plan}} começa na hora. A App Store reembolsa a parte não usada do seu plano atual.",
-    "downgradeBodyWithDate": "Seu plano muda para {{plan}} em {{date}}, quando o seu ano atual terminar. Você mantém o plano atual até lá.",
-    "downgradeBodyNoDate": "Seu plano muda para {{plan}} quando o seu ano atual terminar. Você mantém o plano atual até lá.",
+    "downgradeBodyWithDate": "Seu plano muda para {{plan}} em {{date}}, quando o seu ciclo anual atual terminar. Você mantém o plano atual até lá.",
+    "downgradeBodyNoDate": "Seu plano muda para {{plan}} quando o seu ciclo anual atual terminar. Você mantém o plano atual até lá.",
     "unknownBody": "A App Store aplica a mudança à sua assinatura atual. Você mantém o acesso completo o tempo todo.",
     "scheduledTitle": "Mudança de plano agendada",
     "scheduledBodyWithDate": "Seu plano muda para {{plan}} em {{date}}.",
@@ -75,6 +75,7 @@
   },
   "purchase": {
     "failedTitle": "Compra não concluída",
+    "failedBody": "A App Store não conseguiu concluir a compra. Tente novamente.",
     "unavailableBody": "As compras ainda não estão disponíveis neste dispositivo."
   },
   "restore": {
@@ -84,7 +85,8 @@
     "nothingBody": "Nenhuma assinatura anterior foi encontrada para esta conta.",
     "unavailableTitle": "Indisponível",
     "unavailableBody": "As compras ainda não estão disponíveis neste dispositivo.",
-    "failedTitle": "Não foi possível restaurar"
+    "failedTitle": "Não foi possível restaurar",
+    "failedBody": "A App Store não conseguiu restaurar suas compras. Tente novamente."
   },
   "deleteAccountWarning": "Excluir sua conta não cancela sua assinatura. As assinaturas são cobradas pela App Store e precisam ser canceladas separadamente nas configurações da sua conta na App Store.",
   "updateGate": {

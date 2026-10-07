@@ -243,9 +243,11 @@ export default function PaywallSheet() {
         if (result.status === 'cancelled') return;
         Alert.alert(
             t('premium:purchase.failedTitle'),
+            // Not `result.message`: RevenueCat's error text is English in every
+            // language. The detail is already logged in lib/purchases.ts.
             result.status === 'unavailable'
                 ? t('premium:purchase.unavailableBody')
-                : result.message,
+                : t('premium:purchase.failedBody'),
         );
     };
 
@@ -263,7 +265,7 @@ export default function PaywallSheet() {
         } else if (result.status === 'unavailable') {
             Alert.alert(t('premium:restore.unavailableTitle'), t('premium:restore.unavailableBody'));
         } else {
-            Alert.alert(t('premium:restore.failedTitle'), result.message);
+            Alert.alert(t('premium:restore.failedTitle'), t('premium:restore.failedBody'));
         }
     };
 
@@ -502,11 +504,9 @@ export default function PaywallSheet() {
                                 <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.restore')}</Text>
                             )}
                         </Pressable>
-                        <Text style={[styles.legalDot, { color: theme.ink3 }]}>·</Text>
                         <Pressable onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)} hitSlop={8} accessibilityRole="link">
                             <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.terms')}</Text>
                         </Pressable>
-                        <Text style={[styles.legalDot, { color: theme.ink3 }]}>·</Text>
                         <Pressable onPress={() => WebBrowser.openBrowserAsync(PRIVACY_URL)} hitSlop={8} accessibilityRole="link">
                             <Text style={[styles.legalLink, { color: theme.ink2 }]}>{t('premium:paywall.privacy')}</Text>
                         </Pressable>
@@ -846,21 +846,21 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 10,
     },
+    // No "·" separators: the three links don't fit one line on a small phone in
+    // Portuguese, and a wrapped row would strand a dot at a line end. The underline
+    // and the gap separate them instead.
     legalRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 8,
+        columnGap: 18,
+        rowGap: 6,
         marginTop: 10,
     },
     legalLink: {
         fontFamily: Fonts.sans,
         fontSize: ft(12, 1.18),
         textDecorationLine: 'underline',
-    },
-    legalDot: {
-        fontFamily: Fonts.sans,
-        fontSize: ft(12, 1.18),
     },
 });

@@ -16,7 +16,7 @@
       },
       "budget": {
         "title": "A Budget That Fits You",
-        "body": "Unlock 2 new budget types and choose the one that fits your situation."
+        "body": "Unlock 2 new budget splits and choose the one that fits your situation."
       },
       "wisdom": {
         "title": "A Wiser Way With Money",
@@ -75,6 +75,7 @@
   },
   "purchase": {
     "failedTitle": "Purchase not completed",
+    "failedBody": "The App Store couldn't complete the purchase. Please try again.",
     "unavailableBody": "Purchases are not available on this device yet."
   },
   "restore": {
@@ -84,7 +85,8 @@
     "nothingBody": "No previous subscription was found for this account.",
     "unavailableTitle": "Unavailable",
     "unavailableBody": "Purchases are not available on this device yet.",
-    "failedTitle": "Could not restore"
+    "failedTitle": "Could not restore",
+    "failedBody": "The App Store couldn't restore your purchases. Please try again."
   },
   "deleteAccountWarning": "Deleting your account does not cancel your subscription. Subscriptions are billed by the App Store and must be cancelled separately in your App Store account settings.",
   "updateGate": {

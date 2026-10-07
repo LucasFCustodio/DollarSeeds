@@ -8,7 +8,7 @@
  *
  * Run: npm run verify-plan-pricing
  */
-import { derivePlanPricing, formatStorePrice } from '../lib/planPricing.ts';
+import { derivePlanPricing, formatStorePrice, storeNumberFormat } from '../lib/planPricing.ts';
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -42,6 +42,37 @@ check('CAD in en', derivePlanPricing(
     { discountPercent: 42, twelveMonths: '$155.88' });
 check('thousands grouping', formatStorePrice(123456, 'BRL', PT), 'R$ 1.234,56');
 check('unknown currency falls back to ISO code', formatStorePrice(583, 'EUR', PT), 'EUR 5,83');
+
+console.log('separators follow the store, not the app language');
+// With no priceString, the app language's format is the fallback (the cases above).
+// With one, the struck figure must match the billed price printed beside it.
+const store = (price, currencyCode, priceString) => ({ price, currencyCode, priceString });
+check('pt-BR app on a US account → "$119.88", not "$119,88"', derivePlanPricing(
+    store(9.99, 'USD', '$9.99'), store(69.99, 'USD', '$69.99'), PT),
+    { discountPercent: 41, twelveMonths: '$119.88' });
+check('en app on a Brazilian account → "R$ 598,80"', derivePlanPricing(
+    store(49.9, 'BRL', 'R$ 49,90'), store(299.9, 'BRL', 'R$ 299,90'), EN),
+    { discountPercent: 49, twelveMonths: 'R$ 598,80' });
+check('store thousands mark is copied', derivePlanPricing(
+    store(109.99, 'USD', '$109.99'), store(999.99, 'USD', '$999.99'), PT)?.twelveMonths,
+    '$1,319.88');
+check('yearly unreadable → monthly string decides', derivePlanPricing(
+    store(9.99, 'USD', '$9.99'), store(69.99, 'USD', 'n/a'), PT)?.twelveMonths,
+    '$119.88');
+check('both unreadable → app language fallback', derivePlanPricing(
+    store(9.99, 'USD', ''), store(69.99, 'USD', undefined), PT)?.twelveMonths,
+    '$119,88');
+
+console.log('storeNumberFormat');
+check('"$69.99"', storeNumberFormat('$69.99', PT), EN);
+check('"R$ 9,90"', storeNumberFormat('R$ 9,90', EN), PT);
+check('"$1,234.56"', storeNumberFormat('$1,234.56', PT), EN);
+check('"R$ 1.234,56"', storeNumberFormat('R$ 1.234,56', EN), PT);
+check('NBSP group', storeNumberFormat('1\u00A0234,56 $', EN), { group: '\u00A0', decimal: ',' });
+check('no decimals → fallback', storeNumberFormat('$70', PT), PT);
+check('three trailing digits (ambiguous) → fallback', storeNumberFormat('$1,200', PT), PT);
+check('mixed group marks → fallback', storeNumberFormat('1,234.567,89', PT), PT);
+check('not a string → fallback', storeNumberFormat(undefined, PT), PT);
 
 console.log('hidden (null)');
 check('monthly missing', derivePlanPricing(null, usd(69.99), EN), null);
