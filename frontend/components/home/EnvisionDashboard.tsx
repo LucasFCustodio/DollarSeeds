@@ -16,8 +16,9 @@
  * The server computes every number (lib/homeProgress.ts); this file only lays them
  * out. With no debts or no goals a row shows its empty state in both views.
  *
- * PAINTED. The card is a PaintedCard (envision-dashboard-bg.png) under an even
- * surface wash, outlined like the encouragement card so the two read as a pair. The
+ * PAINTED. The card is a PaintedCard (envision-dashboard-bg.png) under the same
+ * left-to-right fade scrim as the encouragement card, and outlined like it, so the
+ * two read as a pair. The
  * painting stays still; only the pager's rows slide. A few colours differ from a
  * plain card because the painting needs them to, measured worst-case against the
  * washed art: very small text and chevrons are ink2 (ink3 is 2.7:1 even on plain
@@ -125,7 +126,7 @@ export default function EnvisionDashboard({
     );
 
     return (
-        <PaintedCard source={ART} borderColor={theme.ink} borderWidth={PAINTED_OUTLINE} scrim="even">
+        <PaintedCard source={ART} borderColor={theme.ink} borderWidth={PAINTED_OUTLINE}>
             <View style={styles.clip} onLayout={onLayout}>
                 {width > 0 ? (
                     <ScrollView

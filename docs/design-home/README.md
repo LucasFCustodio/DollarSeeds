@@ -21,10 +21,10 @@ and clipped to the card's 18 px radius:
   the left to nothing by 65% of the width. Paint the **left ~60% calm and
   low-detail** — that is where the text sits, and the encouragement card's two-line
   messages can run further right than that.
-- **Dashboard:** under an even `surface` wash at 0.7 over the whole card, because its
-  content (pots, a ring, sparklines, chevrons) spans the full width. Detail anywhere
-  is fine; it comes through as a soft tint. The card is much taller than the other
-  two, hence 4:3. The current file is a placeholder: a centre crop of
+- **Dashboard:** the same fade as the other two. Its content (pots, a ring,
+  sparklines, chevrons) runs the full width, including the unwashed right third, so
+  keep the painting light and low-detail there as well. The card is much taller than
+  the other two, hence 4:3. The current file is a placeholder: a centre crop of
   `next-payment-bg.png`, scaled up. Don't reuse `encouragement-bg.png` — the two
   Envision cards touch, and the same painting twice would look repeated.
 
