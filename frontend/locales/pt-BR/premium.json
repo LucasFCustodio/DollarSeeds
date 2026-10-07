@@ -27,10 +27,13 @@
     "annual": "Anual",
     "discount": "-{{percent}}%",
     "cta": "Começar minha jornada",
+    "ctaFree": "Começar minha jornada - Grátis",
     "ctaTrial": "Nada a pagar agora",
+    "trialPillA11y": "Inclui {{duration}} de teste grátis.",
     "switchCta": "Mudar para {{plan}}",
     "note": "{{price}} {{per}}. Cancele quando quiser",
-    "noteTrial": "{{duration}} grátis, depois {{price}} {{per}}. Cancele quando quiser",
+    "noteTrialMonthly": "{{duration}} grátis, depois {{price}}/mês. Cancele quando quiser",
+    "noteTrialYearly": "{{duration}} grátis, depois {{price}}/ano. Cancele quando quiser",
     "perMonth": "por mês",
     "perYear": "por ano",
     "current": "Plano atual: {{plan}}",
@@ -60,6 +63,16 @@
       "month_plural": "{{count}} meses",
       "year": "{{count}} ano",
       "year_plural": "{{count}} anos"
+    },
+    "first": {
+      "day": "Primeiro dia grátis",
+      "day_plural": "Primeiros {{count}} dias grátis",
+      "week": "Primeira semana grátis",
+      "week_plural": "Primeiras {{count}} semanas grátis",
+      "month": "Primeiro mês grátis",
+      "month_plural": "Primeiros {{count}} meses grátis",
+      "year": "Primeiro ano grátis",
+      "year_plural": "Primeiros {{count}} anos grátis"
     },
     "disclosure": "Seu teste grátis começa hoje. Se você não cancelar pelo menos 24 horas antes do fim do teste, ele se torna uma assinatura paga pelo preço mostrado, cobrada na sua conta da App Store."
   },

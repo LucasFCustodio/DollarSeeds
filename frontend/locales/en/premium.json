@@ -27,10 +27,13 @@
     "annual": "Annual",
     "discount": "-{{percent}}%",
     "cta": "Begin My Journey",
+    "ctaFree": "Begin My Journey - Free",
     "ctaTrial": "No payment due now",
+    "trialPillA11y": "Includes {{duration}} free.",
     "switchCta": "Switch to {{plan}}",
     "note": "{{price}} {{per}}. Cancel anytime",
-    "noteTrial": "{{duration}} free, then {{price}} {{per}}. Cancel anytime",
+    "noteTrialMonthly": "{{duration}} free, then {{price}} per month. Cancel anytime",
+    "noteTrialYearly": "{{duration}} free, then {{price}} per year. Cancel anytime",
     "perMonth": "per month",
     "perYear": "per year",
     "current": "Current plan: {{plan}}",
@@ -60,6 +63,16 @@
       "month_plural": "{{count}} months",
       "year": "{{count}} year",
       "year_plural": "{{count}} years"
+    },
+    "first": {
+      "day": "First day free",
+      "day_plural": "First {{count}} days free",
+      "week": "First week free",
+      "week_plural": "First {{count}} weeks free",
+      "month": "First month free",
+      "month_plural": "First {{count}} months free",
+      "year": "First year free",
+      "year_plural": "First {{count}} years free"
     },
     "disclosure": "Your free trial starts today. Unless you cancel at least 24 hours before it ends, it becomes a paid subscription at the price shown and your App Store account is charged."
   },

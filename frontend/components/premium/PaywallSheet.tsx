@@ -158,6 +158,11 @@ export default function PaywallSheet() {
     // RevenueCat's periodUnit is one of DAY / WEEK / MONTH / YEAR; each has a key.
     const trialLabel = (trial: { unit: string; units: number }) =>
         t(`premium:trial.unit.${trial.unit.toLowerCase()}`, { count: trial.units });
+    // "First month free" / "First 2 weeks free" — its own key per unit, because the
+    // ordinal form ("first month") can't be built from "1 month", and Portuguese
+    // inflects it ("primeiro mês" / "primeira semana").
+    const trialFirst = (trial: { unit: string; units: number }) =>
+        t(`premium:trial.first.${trial.unit.toLowerCase()}`, { count: trial.units });
 
     // One card per period. loadPlanOptions sorts known plans first, so the first option
     // of each period is the Premium product whenever the offering carries it.
@@ -289,9 +294,13 @@ export default function PaywallSheet() {
     // The CTA is disabled, not hidden, when there is nothing it can buy: no plans, or
     // the selected plan is the one already held or already scheduled.
     const ctaBlocked = !selected || isCurrent(selected) || isPending(selected);
+    // `selectedTrial` is already null for subscribers and while eligibility is unknown,
+    // so the "- Free" label can only appear when the trial is really on offer.
     const ctaLabel = premiumActive && selected
         ? t('premium:paywall.switchCta', { plan: optionName(selected) })
-        : t('premium:paywall.cta');
+        : selectedTrial
+            ? t('premium:paywall.ctaFree')
+            : t('premium:paywall.cta');
 
     return (
         <Modal
@@ -302,8 +311,28 @@ export default function PaywallSheet() {
             onRequestClose={handleClose}
         >
             <View style={[styles.screen, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
-                {/* Fixed top: close */}
+                {/* Fixed top: close, and the trial pill when the selected plan has one */}
                 <View style={styles.topBar}>
+                    {/* The pill sits in the same centred column as the scroll content so it
+                        lines up with the headline on every width. Absolutely positioned
+                        and centred on the close button, so it never adds height. */}
+                    {selectedTrial && (
+                        <View style={styles.topBarOverlay} pointerEvents="none">
+                            <View style={styles.topBarColumn}>
+                                <View
+                                    style={[styles.trialPill, { backgroundColor: theme.harvest }]}
+                                    accessible
+                                    accessibilityLabel={t('premium:paywall.trialPillA11y', {
+                                        duration: trialLabel(selectedTrial),
+                                    })}
+                                >
+                                    <Text style={[styles.trialPillText, { color: theme.brand }]} numberOfLines={1}>
+                                        {trialFirst(selectedTrial)}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                    )}
                     <Pressable
                         onPress={handleClose}
                         hitSlop={8}
@@ -476,11 +505,14 @@ export default function PaywallSheet() {
 
                     {selected && (
                         <Text style={[styles.note, { color: theme.ink2 }]}>
+                            {/* One key per period rather than an interpolated `per`, so
+                                Portuguese can use the short "/ano" and fit one line. */}
                             {selectedTrial
-                                ? t('premium:paywall.noteTrial', {
+                                ? t(selected.period === 'monthly'
+                                    ? 'premium:paywall.noteTrialMonthly'
+                                    : 'premium:paywall.noteTrialYearly', {
                                     duration: trialLabel(selectedTrial),
                                     price: selected.priceString,
-                                    per: per(selected),
                                 })
                                 : t('premium:paywall.note', {
                                     price: selected.priceString,
@@ -618,6 +650,34 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
         paddingHorizontal: 16,
         paddingTop: 8,
+    },
+    topBarOverlay: {
+        position: 'absolute',
+        top: 8,                 // the close button's row: topBar paddingTop …
+        left: 0,
+        right: 0,
+        height: 40,             // … and its height, so the pill centres on it
+        alignItems: 'center',
+    },
+    topBarColumn: {
+        flex: 1,
+        width: '100%',
+        maxWidth: 560,          // same column as scrollBody
+        paddingHorizontal: 20,  // same inset as the headline
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+    },
+    trialPill: {
+        height: 24,
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        justifyContent: 'center',
+    },
+    trialPillText: {
+        fontFamily: Fonts.monoMedium,
+        fontSize: ft(11, 1.18),
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
     },
     closeBtn: {
         width: 40,
