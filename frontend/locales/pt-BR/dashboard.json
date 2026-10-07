@@ -86,6 +86,31 @@
     "focusExtra": "{{amount}} a mais para {{name}} neste mês. Continue assim!",
     "goalNear": "{{goal}} está {{pct}}% concluída"
   },
+  "progress": {
+    "debtsOf": "{{paid}} de {{total}}",
+    "debtNext": " · {{name}} é a próxima",
+    "allDebtsPaid": " · Todas as dívidas quitadas",
+    "allGoalsDone": "Todas as metas concluídas",
+    "emptyDebts": "Adicione uma dívida para começar sua jornada rumo à liberdade das dívidas",
+    "emptyGoals": "Adicione uma meta para começar sua jornada de conquistas",
+    "paidTowardDebt": "pago em dívidas",
+    "savedTowardGoals": "guardado em metas",
+    "firstPayment": "Seu primeiro pagamento começa esta linha",
+    "firstDeposit": "Seu primeiro depósito começa esta linha"
+  },
+  "graph": {
+    "debtsTitle": "{{symbol}} pagos em dívidas - {{year}}",
+    "goalsTitle": "{{symbol}} guardados em metas - {{year}}",
+    "close": "Fechar gráfico",
+    "total": "Total até agora",
+    "thisYear": "Este ano",
+    "debtsPaidOff": "Dívidas quitadas",
+    "goalsCompleted": "Metas concluídas",
+    "mergedDebts": "{{count}} dívida quitada",
+    "mergedDebts_plural": "{{count}} dívidas quitadas",
+    "mergedGoals": "{{count}} meta concluída",
+    "mergedGoals_plural": "{{count}} metas concluídas"
+  },
   "verse": {
     "proverbs-21-20": {
       "text": "Na casa do sábio há depósito de azeite e de tesouro, mas o homem insensato o desperdiça.",

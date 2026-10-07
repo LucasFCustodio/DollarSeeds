@@ -43,6 +43,7 @@ import SplitContainers from '../../components/home/SplitContainers';
 import LoggingArea, { BubbleFace } from '../../components/home/LoggingArea';
 import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
 import { EncouragementCard } from '../../components/home/Encouragement';
+import EnvisionDashboard from '../../components/home/EnvisionDashboard';
 import ScriptureModal from '../../components/home/ScriptureModal';
 import PaintedBand from '../../components/home/PaintedBand';
 import {
@@ -113,6 +114,9 @@ function Home() {
     const logIncome = () => router.push('/logIncome' as any);
     const openDebts = (debtId?: number) =>
         router.push({ pathname: '/(tabs)/debts', params: debtId != null ? { debtId: String(debtId) } : {} } as any);
+    const addDebt = () => router.push('/debtForm' as any);
+    const openCompletedGoals = () => router.push({ pathname: '/(tabs)/piggyBank', params: { tab: 'completed' } } as any);
+    const addGoal = () => router.push({ pathname: '/(tabs)/piggyBank', params: { createGoal: '1' } } as any);
 
     return (
         <View style={[styles.fill, { backgroundColor: theme.bg }]}>
@@ -203,6 +207,18 @@ function Home() {
                 {/* ── Band 3 · Envision: "Where is this going?" ─────────── */}
                 <View style={[styles.band, styles.raised, styles.last, { backgroundColor: theme.bgDeep }]}>
                     <View style={styles.stack}>
+                        {/* Hidden when /home/progress/ failed (or isn't deployed yet);
+                            the rest of the band renders without it. */}
+                        {home.progress ? (
+                            <EnvisionDashboard
+                                progress={home.progress}
+                                showDebts={DEBT_FREEDOM_ENABLED}
+                                onOpenDebts={openDebts}
+                                onAddDebt={addDebt}
+                                onOpenCompletedGoals={openCompletedGoals}
+                                onAddGoal={addGoal}
+                            />
+                        ) : null}
                         <EncouragementCard debts={debts} goals={goalsNear} />
                     </View>
                 </View>

@@ -86,6 +86,31 @@
     "focusExtra": "{{amount}} extra for {{name}} this month. Keep going!",
     "goalNear": "{{goal}} is {{pct}}% there"
   },
+  "progress": {
+    "debtsOf": "{{paid}} of {{total}}",
+    "debtNext": " · {{name}} is next",
+    "allDebtsPaid": " · All debts paid off",
+    "allGoalsDone": "Every goal completed",
+    "emptyDebts": "Add a debt to begin your debt freedom journey",
+    "emptyGoals": "Add a goal to begin your achievement journey",
+    "paidTowardDebt": "paid toward debt",
+    "savedTowardGoals": "saved toward goals",
+    "firstPayment": "Your first payment starts this line",
+    "firstDeposit": "Your first deposit starts this line"
+  },
+  "graph": {
+    "debtsTitle": "Debt {{symbol}} paid off - {{year}}",
+    "goalsTitle": "Goal {{symbol}} saved - {{year}}",
+    "close": "Close graph",
+    "total": "Total so far",
+    "thisYear": "This year",
+    "debtsPaidOff": "Debts paid off",
+    "goalsCompleted": "Goals completed",
+    "mergedDebts": "{{count}} debt paid off",
+    "mergedDebts_plural": "{{count}} debts paid off",
+    "mergedGoals": "{{count}} goal completed",
+    "mergedGoals_plural": "{{count}} goals completed"
+  },
   "verse": {
     "proverbs-21-20": {
       "text": "The wise have wealth and luxury, but fools spend whatever they get.",
