@@ -39,7 +39,6 @@
     "addIncomeA11y": "Log income"
   },
   "overdueAlert": {
-    "title": "{{name}} needs attention",
     "titleMany": "{{count}} debt needs attention",
     "titleMany_plural": "{{count}} debts need attention",
     "wasDue": "was due {{date}} · {{count}} day ago",

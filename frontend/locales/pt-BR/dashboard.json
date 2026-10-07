@@ -39,7 +39,6 @@
     "addIncomeA11y": "Registrar renda"
   },
   "overdueAlert": {
-    "title": "{{name}} precisa de atenção",
     "titleMany": "{{count}} dívida precisa de atenção",
     "titleMany_plural": "{{count}} dívidas precisam de atenção",
     "wasDue": "venceu em {{date}} · há {{count}} dia",

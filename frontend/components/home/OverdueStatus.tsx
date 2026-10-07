@@ -7,7 +7,9 @@
  * around it, and signals "attention" without the shame of alarm red (no `danger`
  * here). The copy says *needs attention*, never late or missed.
  *
- *   one debt     "{name} needs attention" / "$150 was due Sep 14 · 6 days ago"
+ *   one debt     "{name}" / "$150 was due Sep 14 · 6 days ago" — just the name, so
+ *                it has the whole line; the gold and the bell already say "warning",
+ *                and the screen-reader label still says "needs attention"
  *   two or more  "{n} debts need attention" / up to 3 rows "{name} · $min · due {date}"
  *                and "+{n} more"
  *
@@ -89,10 +91,9 @@ export default function OverdueStatus({ count, debts, onOpenDebts }: Props) {
     let label: string;
     if (single) {
         const amount = f.money(single.min_payment);
-        const [before, after] = around(t('overdueAlert.title', { name: SLOT }));
         body = (
             <>
-                <NameLine before={before} name={single.name} after={after} style={[styles.titleText, ink]} />
+                <Text style={[styles.titleText, ink]} numberOfLines={1}>{single.name}</Text>
                 {/* Wraps instead of truncating: when the date text doesn't fit beside
                     the amount it drops, whole, onto the next line. */}
                 <View style={styles.detail}>
