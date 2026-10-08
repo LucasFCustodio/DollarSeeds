@@ -57,7 +57,7 @@ check('plural plural', i18next.t('lessons:series.lessonCount', { count: 4 }), '4
 check('overdue alert plural singular', i18next.t('dashboard:overdueAlert.titleMany', { count: 1 }), '1 dívida precisa de atenção');
 check('next payment coming-up plural', i18next.t('dashboard:nextPayment.comingUp', { count: 3 }), '3 pagamentos a vencer:');
 check('overdue alert plural (en)',
-  i18next.getFixedT('en', 'dashboard')('overdueAlert.wasDue', { date: 'Sep 14', count: 6 }), 'was due Sep 14 · 6 days ago');
+  i18next.getFixedT('en', 'dashboard')('overdueAlert.titleMany', { count: 2 }), '2 debts need attention');
 check('serverTitle rollover',
   i18next.t('serverTitle.rollover', { month: 'agosto' }), 'Sobra de agosto');
 check('subcategory needs Other', i18next.t('subcategory.needs.Other'), 'Outro');

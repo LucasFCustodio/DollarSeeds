@@ -2,16 +2,18 @@
  * OverdueStatus — the overdue alert, the most important warning on the home. It
  * renders only when a debt is overdue (the parent gates it on overdue_count > 0).
  *
- * Solid harvest gold with brand text, in the same ink outline as the next-payment
+ * Solid harvest gold with ink text, in the same ink outline as the next-payment
  * card and the tithe line: gold on the green hero breaks the pattern of everything
  * around it, and signals "attention" without the shame of alarm red (no `danger`
- * here). The copy says *needs attention*, never late or missed.
+ * here). The copy never says late or missed.
  *
- *   one debt     "{name}" / "$150 was due Sep 14 · 6 days ago" — just the name, so
- *                it has the whole line; the gold and the bell already say "warning",
- *                and the screen-reader label still says "needs attention"
- *   two or more  "{n} debts need attention" / up to 3 rows "{name} · $min · due {date}"
- *                and "+{n} more"
+ * Laid out like NextPaymentCard (same padding, line sizes and button), so the two
+ * read as one family; the gold alone says "past due". All text is `ink`: the next-
+ * payment card's ink3 date measures ~1.8:1 on gold.
+ *
+ *   one debt     "{name} · was due Sep 14" / "$150" — only the name truncates
+ *   two or more  "{n} debts need attention" / up to 3 rows
+ *                "{name} · was due {date} · $min" and "+{n} more"
  *
  * The button is "Pay now" for a single debt with a safe pay_url (it opens the URL),
  * "Review" otherwise (the Debts tab on the first overdue debt, where the minimum is
@@ -29,7 +31,6 @@ import * as Haptics from 'expo-haptics';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { Fonts, shadow, useTheme } from '../../context/ThemeContext';
 import { ft } from '../../constants/responsive';
-import { IconBell } from '../icons';
 import type { OverdueDebt } from '../../lib/homeSummary';
 import { isSafeExternal } from '../../lib/announcements';
 import { useDebtFormat } from '../debts/format';
@@ -86,27 +87,23 @@ export default function OverdueStatus({ count, debts, onOpenDebts }: Props) {
     const glowStyle = useAnimatedStyle(() => ({ opacity: 0.55 * pulse.value }));
 
     // ── content ─────────────────────────────────────────────────────────────
-    const ink = { color: theme.brand };
+    const ink = { color: theme.ink };
     let body: React.ReactNode;
     let label: string;
     if (single) {
         const amount = f.money(single.min_payment);
+        // Through around() so the leading space survives as its own Text.
+        const [, wasDue] = around(SLOT + t('overdueAlert.wasDue', { date: f.dayMonthOf(single.missed_due_date) }));
         body = (
             <>
-                <Text style={[styles.titleText, ink]} numberOfLines={1}>{single.name}</Text>
-                {/* Wraps instead of truncating: when the date text doesn't fit beside
-                    the amount it drops, whole, onto the next line. */}
-                <View style={styles.detail}>
-                    <Text style={[homeType.medium, ink]}>{amount}</Text>
-                    <Text style={[homeType.verySmall, ink]}>
-                        {t('overdueAlert.wasDue', { date: f.dayMonthOf(single.missed_due_date), count: single.days_overdue })}
-                    </Text>
-                </View>
+                <NameLine before="" name={single.name} after={wasDue} style={[homeType.small, ink]} />
+                <Text style={[homeType.medium, styles.amount, ink]} numberOfLines={1}
+                    adjustsFontSizeToFit minimumFontScale={0.75}>
+                    {amount}
+                </Text>
             </>
         );
-        label = t('overdueAlert.a11y', {
-            name: single.name, amount, date: f.fullDate(single.missed_due_date), count: single.days_overdue,
-        });
+        label = t('overdueAlert.a11y', { name: single.name, amount, date: f.fullDate(single.missed_due_date) });
     } else {
         const title = t('overdueAlert.titleMany', { count: list.length || count });
         const rows = list.slice(0, MAX_ROWS);
@@ -148,10 +145,7 @@ export default function OverdueStatus({ count, debts, onOpenDebts }: Props) {
                     accessibilityLabel={label}
                     style={({ pressed }) => [styles.body, pressed && { opacity: 0.75 }]}
                 >
-                    <View style={[styles.badge, { backgroundColor: theme.brand }]}>
-                        <IconBell size={20} color={theme.harvest} />
-                    </View>
-                    <View style={styles.content}>{body}</View>
+                    {body}
                 </Pressable>
                 <Pressable
                     onPress={payUrl ? () => { Linking.openURL(payUrl).catch(() => review()); } : review}
@@ -193,16 +187,17 @@ function NameLine({ before, name, after, style }: {
 
 const styles = StyleSheet.create({
     glow: { position: 'absolute', top: -6, bottom: -6, left: -6, right: -6, borderRadius: 24 },
+    // NextPaymentCard's measurements: 16 padding all round, 12 between the text and
+    // the button. The padding sits on the body (and the button's right margin) rather
+    // than the card, so the whole body stays tappable.
     card: { flexDirection: 'row', alignItems: 'center', borderRadius: 18, borderWidth: 1.5 },
-    body: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14, paddingLeft: 14, paddingRight: 8 },
-    badge: { width: 36, height: 36, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-    content: { flex: 1, gap: 2 },
+    body: { flex: 1, paddingVertical: 16, paddingLeft: 16, paddingRight: 12 },
+    amount: { marginTop: 4 },
     titleText: { fontFamily: Fonts.sansSemiBold, fontSize: ft(13) },
-    detail: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6, marginTop: 2 },
-    rows: { marginTop: 2, gap: 1 },
+    rows: { marginTop: 4, gap: 1 },
     nameLine: { flexDirection: 'row' },
     name: { flexShrink: 1 },
     fixed: { flexShrink: 0 },
-    button: { marginRight: 14, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 },
+    button: { marginRight: 16, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
     buttonText: { fontFamily: Fonts.sansSemiBold, fontSize: ft(13) },
 });
