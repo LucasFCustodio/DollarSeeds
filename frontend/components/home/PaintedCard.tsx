@@ -5,8 +5,8 @@
  * children do. A surface-coloured scrim fades from 0.85 on the left to nothing by
  * 65% of the width, so text on the left stays readable however busy the painting.
  * The art is painted calm on its left ~60% as well; the scrim is the safety net.
- * All three painted cards (next payment, encouragement, the Envision dashboard)
- * share it.
+ * Every painted card (next payment, tithe, encouragement, the Envision dashboard)
+ * shares it.
  *
  * The images live at fixed paths (docs/design-home/README.md): replacing a file with
  * new art of the same name needs no code change.

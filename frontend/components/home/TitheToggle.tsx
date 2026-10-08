@@ -5,6 +5,9 @@
  * platform size (~51×31 on iOS) which crowds the envelope, and because its track
  * colour is the one thing here that has to sit in the app's palette rather than the
  * OS's. Enlarged on tablets only (tv()).
+ *
+ * `outline` draws a 1pt ring round the track, for when it sits on painted art: the
+ * pale off-state track alone measures ~1.1:1 against the tithe card's painting.
  */
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
@@ -16,15 +19,18 @@ const TOGGLE_H = tv(24, 30);
 const THUMB = tv(18, 23);
 const TOGGLE_INSET = 3;
 const THUMB_TRAVEL = TOGGLE_W - THUMB - TOGGLE_INSET * 2;
+const OUTLINE = 1;
 
 export default function TitheToggle({
-    theme, value, disabled, onToggle, a11yLabel,
+    theme, value, disabled, onToggle, a11yLabel, outline,
 }: {
     theme: AppTheme;
     value: boolean;
     disabled: boolean;
     onToggle: () => void;
     a11yLabel: string;
+    /** A ring colour for the track; none by default. */
+    outline?: string;
 }) {
     // One driver for both the slide and the track colour. useNativeDriver has to be
     // false: backgroundColor is not a transform and cannot cross to the UI thread.
@@ -49,7 +55,12 @@ export default function TitheToggle({
             hitSlop={12}
             style={({ pressed }) => [(pressed || disabled) && { opacity: 0.6 }]}
         >
-            <Animated.View style={[styles.track, { backgroundColor: trackColor }]}>
+            <Animated.View style={[
+                styles.track,
+                { backgroundColor: trackColor },
+                // The ring eats into the inset, so the thumb's position and travel stay put.
+                outline ? { borderWidth: OUTLINE, borderColor: outline, padding: TOGGLE_INSET - OUTLINE } : null,
+            ]}>
                 <Animated.View style={[styles.thumb, { backgroundColor: theme.surface, transform: [{ translateX }] }]} />
             </Animated.View>
         </Pressable>
