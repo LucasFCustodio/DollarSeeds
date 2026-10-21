@@ -58,6 +58,8 @@
     "goals": "Poupança",
     "leftA11y": "{{split}}: {{amount}} disponível",
     "overA11y": "{{split}}: {{amount}} acima do orçamento",
+    "left": "disponível",
+    "over": "acima",
     "addA11y": "Registrar gasto em {{split}}"
   },
   "nextPayment": {

@@ -58,6 +58,8 @@
     "goals": "Savings",
     "leftA11y": "{{split}}: {{amount}} left",
     "overA11y": "{{split}}: {{amount}} over budget",
+    "left": "left",
+    "over": "over",
     "addA11y": "Log a {{split}} expense"
   },
   "nextPayment": {
