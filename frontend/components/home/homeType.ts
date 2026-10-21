@@ -14,11 +14,7 @@ export const HOME_PAD = 20;
 export const CARD_GAP = 12;
 export const SECTION_GAP = 28;
 
-/** The home's full-bleed bands: each overlaps the one above by BAND_OVERLAP under
- *  BAND_RADIUS top corners (as the old content area overlapped the hero), with
- *  BAND_PAD of its own colour above and below its content. */
-export const BAND_OVERLAP = 24;
-export const BAND_RADIUS = 28;
+/** Cream above the first Plan card, under the top band's curved corners. */
 export const BAND_PAD = 24;
 
 /** Controls sitting on a green band: the old dashboard hero's glass buttons. */

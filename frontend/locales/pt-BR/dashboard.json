@@ -39,19 +39,18 @@
     "addIncomeA11y": "Registrar renda"
   },
   "overdueAlert": {
-    "title": "{{name}} precisa de atenção",
-    "titleMany": "{{count}} dívida precisa de atenção",
-    "titleMany_plural": "{{count}} dívidas precisam de atenção",
-    "wasDue": "venceu em {{date}} · há {{count}} dia",
-    "wasDue_plural": "venceu em {{date}} · há {{count}} dias",
-    "row": "{{name}} · {{amount}} · venceu em {{date}}",
-    "more": "+{{count}} outras",
+    "title": "{{count}} dívida precisa de atenção",
+    "title_plural": "{{count}} dívidas precisam de atenção",
+    "buttonA11y": "{{count}} dívida precisa de atenção. Abre os detalhes.",
+    "buttonA11y_plural": "{{count}} dívidas precisam de atenção. Abre os detalhes.",
+    "wasDue": "venceu em {{date}}",
     "payNow": "Pagar agora",
     "review": "Revisar",
-    "a11y": "{{name}} precisa de atenção. {{amount}} venceu em {{date}}, há {{count}} dia.",
-    "a11y_plural": "{{name}} precisa de atenção. {{amount}} venceu em {{date}}, há {{count}} dias.",
+    "a11y": "{{name}}, {{amount}}, venceu em {{date}}",
     "payA11y": "Pagar {{name}} online",
-    "reviewA11y": "Revisar em Dívidas"
+    "reviewA11y": "Revisar em Dívidas",
+    "reviewDebtA11y": "Revisar {{name}} em Dívidas",
+    "close": "Fechar"
   },
   "split": {
     "needs": "Necessidades",
@@ -59,6 +58,8 @@
     "goals": "Poupança",
     "leftA11y": "{{split}}: {{amount}} disponível",
     "overA11y": "{{split}}: {{amount}} acima do orçamento",
+    "left": "disponível",
+    "over": "acima",
     "addA11y": "Registrar gasto em {{split}}"
   },
   "nextPayment": {
@@ -81,12 +82,36 @@
     "soonBody": "Em breve você poderá conectar seu banco aqui, e as novas transações vão esperar na sua tela inicial, prontas para arrastar ao lugar certo."
   },
   "envision": {
-    "heading": "Visão",
-    "debtsPaid": "{{paid}} / {{total}} dívidas quitadas",
+    "heading": "Sua colheita até aqui",
     "debtFreeBy": "Livre de dívidas em {{date}}",
     "almostFree": "Falta 1 mês para se livrar de {{name}}",
     "focusExtra": "{{amount}} a mais para {{name}} neste mês. Continue assim!",
     "goalNear": "{{goal}} está {{pct}}% concluída"
+  },
+  "progress": {
+    "debtsOf": "{{paid}} de {{total}}",
+    "debtNext": " · {{name}} é a próxima",
+    "allDebtsPaid": " · Todas as dívidas quitadas",
+    "allGoalsDone": "Todas as metas concluídas",
+    "emptyDebts": "Adicione uma dívida para começar sua jornada rumo à liberdade das dívidas",
+    "emptyGoals": "Adicione uma meta para começar sua jornada de conquistas",
+    "paidTowardDebt": "pago em dívidas",
+    "savedTowardGoals": "guardado em metas",
+    "firstPayment": "Seu primeiro pagamento começa esta linha",
+    "firstDeposit": "Seu primeiro depósito começa esta linha"
+  },
+  "graph": {
+    "debtsTitle": "{{symbol}} pagos em dívidas - {{year}}",
+    "goalsTitle": "{{symbol}} guardados em metas - {{year}}",
+    "close": "Fechar gráfico",
+    "total": "Total até agora",
+    "thisYear": "Este ano",
+    "debtsPaidOff": "Dívidas quitadas",
+    "goalsCompleted": "Metas concluídas",
+    "mergedDebts": "{{count}} dívida quitada",
+    "mergedDebts_plural": "{{count}} dívidas quitadas",
+    "mergedGoals": "{{count}} meta concluída",
+    "mergedGoals_plural": "{{count}} metas concluídas"
   },
   "verse": {
     "proverbs-21-20": {

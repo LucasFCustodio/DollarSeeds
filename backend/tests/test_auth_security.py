@@ -71,6 +71,7 @@ PROTECTED_ROUTES = [
     ("POST",   "/debt-freedom/1/late-fee",        {},                                   {"due_date": "2026-09-14", "amount": 30}),
     ("POST",   "/debt-freedom/1/complete",        {},                                   None),
     ("GET",    "/home/summary/",                  {"month": "July"},                    None),
+    ("GET",    "/home/progress/",                 {},                                   None),
 ]
 
 ROUTE_IDS = [f"{m} {p}" for m, p, _, _ in PROTECTED_ROUTES]

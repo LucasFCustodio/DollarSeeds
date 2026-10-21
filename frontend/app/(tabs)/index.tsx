@@ -2,15 +2,16 @@
  * Home — built around the Core Journey. Everything on it answers one of the
  * questions the user brings to the app:
  *
- *   Analyze   "Am I okay?"          income left, overdue status, next debt payment, tithe
+ *   Analyze   "Am I okay?"          income left, next debt payment, tithe (the overdue
+ *                                   alert sits in the top bar)
  *   Plan      "What's next?"        close-out, splits, logging
- *   Envision  "Where is this going?" encouragement, debts paid
+ *   Envision  "Where is this going?" encouragement, the Envision dashboard
  *
- * The three steps are three full-bleed bands (green, cream, green), so the screen
- * splits into them without the user having to name them. Both green bands are the
- * same painted watercolour wash (PaintedBand): the top one as painted, its bottom
- * corners curving up over the cream band; Envision flipped, overlapping the cream
- * under rounded top corners, so the page opens and closes on the same green.
+ * The top band is the painted watercolour wash (PaintedBand), its bottom corners
+ * curving up over the cream. Plan and Envision are one cream `bg` band, so the green
+ * stays reserved for the top; the "Your Harvest so far" heading, ENVISION_GAP below
+ * Plan's last visible element, is what marks where Envision starts. Envision always
+ * renders: its dashboard has an empty state for every row.
  *
  * A good visit can take 20 seconds, as long as the user leaves encouraged and with a
  * reason to come back. This file is layout only: state and requests live in
@@ -24,33 +25,37 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { shadow, useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
+import { Fonts, shadow, useTheme } from '../../context/ThemeContext';
+import { ft } from '../../constants/responsive';
 import { DEBT_FREEDOM_ENABLED } from '../../constants/features';
 import type { SplitKey } from '../../lib/homeSummary';
 import { useHomeData } from '../../components/home/useHomeData';
 import { DropZoneProvider, useDropZones } from '../../components/home/DropZones';
 import HomeTopBar from '../../components/home/HomeTopBar';
 import IncomeHero from '../../components/home/IncomeHero';
-import OverdueStatus from '../../components/home/OverdueStatus';
 import TitheEnvelope from '../../components/home/TitheEnvelope';
 import { ClosedLine, CloseOutCard } from '../../components/home/CloseOut';
 import NextPaymentCard from '../../components/home/NextPaymentCard';
 import SplitContainers from '../../components/home/SplitContainers';
 import LoggingArea, { BubbleFace } from '../../components/home/LoggingArea';
 import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
-import { DebtsPaidLine, EncouragementCard } from '../../components/home/Encouragement';
+import { EncouragementCard } from '../../components/home/Encouragement';
+import EnvisionDashboard from '../../components/home/EnvisionDashboard';
 import ScriptureModal from '../../components/home/ScriptureModal';
 import PaintedBand from '../../components/home/PaintedBand';
-import {
-    BAND_OVERLAP, BAND_PAD, BAND_RADIUS, CARD_GAP, HOME_PAD, SECTION_GAP, homeType,
-} from '../../components/home/homeType';
+import { BAND_PAD, CARD_GAP, HOME_PAD, SECTION_GAP } from '../../components/home/homeType';
 
 /** The top band's bottom corner radius (as the old HeroBg's). */
 const HERO_RADIUS = 32;
+/** From Plan's last visible element to the Envision heading. Larger than CARD_GAP,
+ *  which is what reads as a new section. */
+const ENVISION_GAP = 40;
+/** From the Envision heading to its first card. */
+const HEADING_GAP = 12;
 
 const SPLIT_CATEGORY: Record<SplitKey, string> = { needs: 'Needs', wants: 'Wants', goals: 'Goals' }; // i18n-canonical
 
@@ -67,9 +72,9 @@ export default function HomeScreen() {
 function Home() {
     const router = useRouter();
     const { theme } = useTheme();
-    const { t } = useTranslation('dashboard');
     const focused = useIsFocused();
     const insets = useSafeAreaInsets();
+    const { t } = useTranslation('dashboard');
     const zones = useDropZones();
     const home = useHomeData();
 
@@ -85,7 +90,8 @@ function Home() {
     // Until the tithe is given the money is still in the account, so it belongs in
     // "left this month"; once given it is gone. Subtracts from what is LEFT, never
     // from total_income — the income logged is a fact and does not move.
-    const totalLeft = Math.max(0, total_income - totalSpent - (titheGiven ? titheAmount : 0));
+    const leftRaw = total_income - totalSpent - (titheGiven ? titheAmount : 0);
+    const totalLeft = Math.max(0, leftRaw);
 
     // ── Close-out (unchanged rule) ────────────────────────────────────────────
     // Offered for any un-closed month with income except the in-progress one.
@@ -102,10 +108,6 @@ function Home() {
     const nextPayment = debts?.next_payment ?? null;
     // The next payment is already on the card; the list is only the others.
     const upcoming = (debts?.due_soon ?? []).filter(d => d.id !== nextPayment?.id);
-    // Envision has something to show: the debts-paid line, or a goal in the
-    // encouragement card. Otherwise the whole band, heading included, is hidden and
-    // the cream band ends the page.
-    const envision = !!debts || goalsNear.length > 0;
 
     // ── Navigation ────────────────────────────────────────────────────────────
     const openSplit = (split: SplitKey) => router.push({
@@ -118,6 +120,9 @@ function Home() {
     const logIncome = () => router.push('/logIncome' as any);
     const openDebts = (debtId?: number) =>
         router.push({ pathname: '/(tabs)/debts', params: debtId != null ? { debtId: String(debtId) } : {} } as any);
+    const addDebt = () => router.push('/debtForm' as any);
+    const openCompletedGoals = () => router.push({ pathname: '/(tabs)/piggyBank', params: { tab: 'completed' } } as any);
+    const addGoal = () => router.push({ pathname: '/(tabs)/piggyBank', params: { createGoal: '1' } } as any);
 
     return (
         <View style={[styles.fill, { backgroundColor: theme.bg }]}>
@@ -126,7 +131,7 @@ function Home() {
             {focused ? <StatusBar style="light" /> : null}
             <ScrollView
                 // Whatever shows past the last band on an overscroll matches it.
-                style={[styles.fill, { backgroundColor: envision ? theme.paintedForest : theme.bg }]}
+                style={[styles.fill, { backgroundColor: theme.bg }]}
                 contentContainerStyle={styles.content}
                 showsVerticalScrollIndicator={false}
                 scrollEnabled={!zones?.dragging}
@@ -136,24 +141,28 @@ function Home() {
 
                 {/* ── Band 1 · Analyze: "Am I okay?" ────────────────────── */}
                 <View style={styles.hero}>
-                    {/* The field stays pinned at the bottom; a shorter band (no overdue
-                        alert) crops the calm forest off the top. */}
+                    {/* The field stays pinned at the bottom; a shorter band (no next
+                        payment or tithe) crops the calm forest off the top. */}
                     <PaintedBand
                         anchor="bottom"
                         style={[styles.top, { paddingTop: insets.top + 8 }, shadow(6, theme.brand) as object]}
                     >
-                        <HomeTopBar month={currentMonth} selected={home.monthIndex} onPickMonth={home.pickMonth} />
+                        <HomeTopBar
+                            month={currentMonth}
+                            selected={home.monthIndex}
+                            onPickMonth={home.pickMonth}
+                            overdueCount={debts?.overdue_count ?? 0}
+                            overdue={debts?.overdue}
+                            onOpenDebts={openDebts}
+                        />
                         <View style={[styles.section, { gap: CARD_GAP + 8 }]}>
                             <IncomeHero
                                 left={totalLeft}
                                 income={total_income}
-                                spent={totalSpent}
+                                over={leftRaw < 0}
                                 onAdd={logIncome}
                                 onOpenIncome={openIncomeList}
                             />
-                            {debts && debts.overdue_count > 0 ? (
-                                <OverdueStatus count={debts.overdue_count} debts={debts.overdue} onOpenDebts={openDebts} />
-                            ) : null}
                             {nextPayment ? (
                                 <NextPaymentCard
                                     payment={nextPayment}
@@ -173,8 +182,9 @@ function Home() {
                     </PaintedBand>
                 </View>
 
-                {/* ── Band 2 · Plan: "What's next?" ─────────────────────── */}
-                <View style={[styles.band, styles.underHero, { backgroundColor: theme.bg }, !envision && styles.last]}>
+                {/* ── Band 2 · Plan and Envision, one cream band ───────────── */}
+                <View style={[styles.band, styles.underHero, styles.last, { backgroundColor: theme.bg }]}>
+                    {/* ── Plan: "What's next?" ──────────────────────────── */}
                     <View style={styles.stack}>
                         {showClosePrompt ? (
                             <CloseOutCard
@@ -203,20 +213,33 @@ function Home() {
                         />
                         <ConnectBankPrompt connected={home.bankConnected} />
                     </View>
-                </View>
 
-                {/* ── Band 3 · Envision: "Where is this going?" ─────────── */}
-                {envision ? (
-                    // Flipped: the misty field is at the top, pinned; any crop comes off
-                    // the solid forest at the bottom, behind the tab bar.
-                    <PaintedBand flipped anchor="top" style={[styles.band, styles.raised, styles.last]}>
+                    {/* ── Envision: "Where is this going?" ──────────────── */}
+                    <View style={styles.envision}>
+                        <Text
+                            accessibilityRole="header"
+                            numberOfLines={1}
+                            style={[styles.heading, { color: theme.ink }]}
+                        >
+                            {t('envision.heading')}
+                        </Text>
                         <View style={styles.stack}>
-                            <Text style={[homeType.large, { color: theme.onBrand }]}>{t('envision.heading')}</Text>
                             <EncouragementCard debts={debts} goals={goalsNear} />
-                            {debts ? <DebtsPaidLine debts={debts} /> : null}
+                            {/* Hidden when /home/progress/ failed (or isn't deployed yet);
+                                the rest of the band renders without it. */}
+                            {home.progress ? (
+                                <EnvisionDashboard
+                                    progress={home.progress}
+                                    showDebts={DEBT_FREEDOM_ENABLED}
+                                    onOpenDebts={openDebts}
+                                    onAddDebt={addDebt}
+                                    onOpenCompletedGoals={openCompletedGoals}
+                                    onAddGoal={addGoal}
+                                />
+                            ) : null}
                         </View>
-                    </PaintedBand>
-                ) : null}
+                    </View>
+                </View>
             </ScrollView>
 
             {/* The status bar area stays green however far the page is scrolled. */}
@@ -244,15 +267,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: HOME_PAD, paddingBottom: 36,
         borderBottomLeftRadius: HERO_RADIUS, borderBottomRightRadius: HERO_RADIUS,
     },
-    band: { paddingHorizontal: HOME_PAD, paddingBottom: BAND_OVERLAP + BAND_PAD },
+    band: { paddingHorizontal: HOME_PAD },
     // The cream band starts under the hero, so cream fills behind its curved corners.
     underHero: { marginTop: -HERO_RADIUS, paddingTop: HERO_RADIUS + BAND_PAD },
-    raised: {
-        marginTop: -BAND_OVERLAP,
-        paddingTop: BAND_PAD,
-        borderTopLeftRadius: BAND_RADIUS,
-        borderTopRightRadius: BAND_RADIUS,
-    },
+    // Plan's stack has no trailing gap, so this IS the distance from its last
+    // visible element to the heading, whichever element that is.
+    envision: { marginTop: ENVISION_GAP },
+    // The design system's Heading role: Instrument Serif 26.
+    heading: { fontFamily: Fonts.serif, fontSize: ft(26), marginBottom: HEADING_GAP },
     // Runs behind the floating tab bar to the end of the scroll content.
     last: { flexGrow: 1, paddingBottom: 120 },
     section: { marginTop: SECTION_GAP },

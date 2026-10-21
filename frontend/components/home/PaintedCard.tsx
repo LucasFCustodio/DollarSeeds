@@ -5,6 +5,8 @@
  * children do. A surface-coloured scrim fades from 0.85 on the left to nothing by
  * 65% of the width, so text on the left stays readable however busy the painting.
  * The art is painted calm on its left ~60% as well; the scrim is the safety net.
+ * Every painted card (next payment, tithe, encouragement, the Envision dashboard)
+ * shares it.
  *
  * The images live at fixed paths (docs/design-home/README.md): replacing a file with
  * new art of the same name needs no code change.
@@ -18,6 +20,8 @@ import { shadow, useTheme } from '../../context/ThemeContext';
 const RADIUS = 18;
 const SCRIM_OPACITY = 0.85;
 const SCRIM_END = 0.65;
+/** The painted cards' ink outline, shared so the two Envision cards read as a pair. */
+export const PAINTED_OUTLINE = 1.5;
 
 /** '#RRGGBB' → 'rgba(r,g,b,a)' */
 export function withAlpha(hex: string, alpha: number) {

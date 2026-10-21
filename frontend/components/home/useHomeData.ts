@@ -8,7 +8,9 @@
  *  - close-out and reopen, with the same warning and rating-prompt sequencing.
  *
  * New: /home/summary/ alongside the dashboard (never blocking — a failure renders the
- * home without it), and the pending bank transactions (lib/bankTransactions.ts).
+ * home without it), /home/progress/ for the Envision dashboard (same rule: a failure
+ * hides the dashboard and nothing else), and the pending bank transactions
+ * (lib/bankTransactions.ts).
  */
 import { useCallback, useState } from 'react';
 import { Alert, LayoutAnimation } from 'react-native';
@@ -21,6 +23,7 @@ import { MONTHS } from '../../constants/months';
 import { resolveBudgetType, splitLabel } from '../../constants/budgetTypes';
 import { maybeRequestReview } from '../../lib/storeReview';
 import { fetchHomeSummary, type HomeSummary } from '../../lib/homeSummary';
+import { fetchHomeProgress, type HomeProgress } from '../../lib/homeProgress';
 import {
     classifyPendingTransaction, getPendingTransactions, isBankConnected,
     type ClassifyTarget, type PendingTransaction,
@@ -72,6 +75,7 @@ export function useHomeData() {
 
     const [dashboard, setDashboard] = useState<DashboardData>(EMPTY);
     const [summary, setSummary] = useState<HomeSummary | null>(null);
+    const [progress, setProgress] = useState<HomeProgress | null>(null);
     const [pending, setPending] = useState<PendingTransaction[]>([]);
     // The verse outlives the modal's visibility so the fade-out still has text.
     const [verse, setVerse] = useState<VerseId>(VERSE_IDS[0]);
@@ -90,6 +94,17 @@ export function useHomeData() {
             });
     }, [currentMonth]);
 
+    // Not month-scoped, so it is kept across month changes and refetches; only a
+    // failure clears it, which hides the dashboard (an old backend has no endpoint).
+    const loadProgress = useCallback(() => {
+        fetchHomeProgress()
+            .then(setProgress)
+            .catch(err => {
+                console.error('Home progress fetch error:', err?.message ?? err);
+                setProgress(null);
+            });
+    }, []);
+
     /**
      * @returns whether the allGreen scripture modal was opened by this fetch. The
      * close-out needs to know: the rating prompt must come after the celebration,
@@ -98,6 +113,7 @@ export function useHomeData() {
     const fetchDashboard = useCallback(async (): Promise<boolean> => {
         if (!user?.id) return false;
         loadSummary();
+        loadProgress();
         try {
             const res = await axios.get(`${BASE}/dashboard/${currentMonth}?user_id=${user.id}`);
             const data: DashboardData = res.data;
@@ -118,7 +134,7 @@ export function useHomeData() {
             if (error instanceof Error) console.error('Dashboard fetch error:', error.message);
         }
         return false;
-    }, [user?.id, currentMonth, loadSummary]);
+    }, [user?.id, currentMonth, loadSummary, loadProgress]);
 
     const loadPending = useCallback(() => {
         getPendingTransactions().then(setPending).catch(() => setPending([]));
@@ -230,7 +246,7 @@ export function useHomeData() {
 
     return {
         monthIndex, currentMonth, pickMonth,
-        dashboard, summary,
+        dashboard, summary, progress,
         bankConnected: isBankConnected(), pending, classify,
         verse, verseVisible, closeVerse: () => setVerseVisible(false),
         savingTitheGiven, toggleTitheGiven,

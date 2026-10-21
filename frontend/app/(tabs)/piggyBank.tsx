@@ -34,7 +34,7 @@ import {
     View, Text, ScrollView, Pressable,
     TextInput, StyleSheet, Alert, Modal,
 } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import axios from 'axios';
 
 import { useTranslation } from 'react-i18next';
@@ -303,19 +303,38 @@ export default function PiggyBankScreen() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [premiumActive]);
 
-    // Pre-fill + open the goal form when arriving from a suggestion
-    // (e.g. Firm Foundation "Set these up" in Settings). Fires once per arrival.
+    // Pre-fill + open the goal form when arriving from a suggestion (e.g. Firm
+    // Foundation "Set these up" in Settings, or the home's "Add a goal"). Fires once
+    // per arrival: the params are cleared once consumed, so the next arrival — even
+    // with this tab still mounted — opens the form again.
     const params = useLocalSearchParams();
-    const prefilledRef = useRef(false);
+    const router = useRouter();
     useEffect(() => {
-        if (params.createGoal && !prefilledRef.current) {
-            prefilledRef.current = true;
-            if (params.goalType === 'debt' || params.goalType === 'saving') setGoalType(params.goalType);
-            if (typeof params.title === 'string' && params.title) setGoalTitle(params.title);
-            if (typeof params.amount === 'string' && params.amount) setGoalAmount(params.amount);
-            setShowGoalForm(true);
-        }
+        if (!params.createGoal) return;
+        if (params.goalType === 'debt' || params.goalType === 'saving') setGoalType(params.goalType);
+        if (typeof params.title === 'string' && params.title) setGoalTitle(params.title);
+        if (typeof params.amount === 'string' && params.amount) setGoalAmount(params.amount);
+        setShowGoalForm(true);
+        router.setParams({ createGoal: undefined, goalType: undefined, title: undefined, amount: undefined });
     }, [params.createGoal]);
+
+    // The home's Envision dashboard opens this tab on Completed (`tab=completed`).
+    // Consumed once and cleared, like `debtId` on the Debts tab. Only a tab chosen
+    // this way is put back to Active when the user leaves, so every other way in
+    // still opens on Active and a tab the user picked by hand is left alone.
+    const openedOnCompleted = useRef(false);
+    useEffect(() => {
+        if (params.tab !== 'completed') return;
+        openedOnCompleted.current = true;
+        setActiveTab('completed');
+        router.setParams({ tab: undefined });
+    }, [params.tab, router]);
+    // Runs on blur only (no deps), so clearing the param above doesn't trigger it.
+    useFocusEffect(useCallback(() => () => {
+        if (!openedOnCompleted.current) return;
+        openedOnCompleted.current = false;
+        setActiveTab('active');
+    }, []));
 
     // ── Derived ───────────────────────────────────────────────────────────────
     // All goals shown as chips in the form (General Savings first, then specific goals).

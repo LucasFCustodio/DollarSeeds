@@ -22,6 +22,8 @@ import { homeType } from './homeType';
 
 export const BUBBLE = 76;
 const PER_PAGE = 3;
+/** Room inside the paging row for the bubbles' shadows (a horizontal ScrollView clips). */
+const PAGE_PAD = 8;
 export const STALE_DAYS = 5;
 
 interface Props {
@@ -62,7 +64,9 @@ function BubbleRow({ pending, onClassify }: { pending: PendingTransaction[]; onC
     }, [pending]);
 
     return (
-        <View onLayout={e => setWidth(e.nativeEvent.layout.width)}>
+        // The bottom shadow room is pulled back out of the layout, so whatever follows
+        // the row is measured from the bubbles themselves, not from 8 pt of padding.
+        <View onLayout={e => setWidth(e.nativeEvent.layout.width)} style={styles.row}>
             {width > 0 ? (
                 <ScrollView
                     horizontal
@@ -120,7 +124,8 @@ export function BubbleFace({ tx }: { tx: PendingTransaction }) {
 }
 
 const styles = StyleSheet.create({
-    page: { flexDirection: 'row', justifyContent: 'space-evenly', paddingVertical: 8 },
+    row: { marginBottom: -PAGE_PAD },
+    page: { flexDirection: 'row', justifyContent: 'space-evenly', paddingVertical: PAGE_PAD },
     bubble: {
         width: BUBBLE, height: BUBBLE, borderRadius: BUBBLE / 2,
         alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8,

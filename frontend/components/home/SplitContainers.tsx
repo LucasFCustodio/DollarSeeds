@@ -1,8 +1,10 @@
 /**
  * SplitContainers — Needs and Wants side by side, Savings full width under them.
  *
- * Each shows what is left of its budget, three examples, and a bar. Past its budget a
- * container turns red: red outline, red icon tile, red bar, and the amount left goes
+ * Each shows what is left of its budget with a small "left" under it, three
+ * examples, and a bar of what is left: full at the start of the month, draining as
+ * money is spent. Past its budget a container turns red: red outline, red icon tile,
+ * an empty bar on a dangerSoft track, "over" in place of "left", and the amount goes
  * negative by however much it is over. That is the only over-budget warning. Savings is the
  * most important money category, so its label ("Savings + debt paydown") is a bold
  * title in the top row beside its icon instead of a hint line. Tapping one opens
@@ -65,10 +67,33 @@ function SplitCard({ split, budget, spent, onOpen, onAdd }: {
 
     const left = budget - spent;
     const over = left < 0;
-    const pct = budget > 0 ? (spent / budget) * 100 : (spent > 0 ? 100 : 0);
+    // What is left, as a share of the budget. A $0 budget shows an empty bar.
+    const pct = budget > 0 && !over ? Math.min(100, (left / budget) * 100) : 0;
     const name = t(`split.${split}`);
     const addable = split !== 'goals' && onAdd;
     const titled = split === 'goals';
+
+    const amount = (
+        <Text
+            style={[homeType.medium, titled ? styles.titledText : styles.amount, { color: over ? theme.danger : look.color }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+        >
+            {formatMoney(left)}
+        </Text>
+    );
+    // The card's accessibility label already says "left" / "over budget".
+    const status = (
+        <Text
+            style={[homeType.small, styles.status, { color: over ? theme.danger : theme.ink3 }]}
+            numberOfLines={1}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+        >
+            {over ? t('split.over') : t('split.left')}
+        </Text>
+    );
 
     return (
         <View ref={drop.ref} collapsable={false} style={split === 'goals' ? undefined : styles.half}>
@@ -99,16 +124,16 @@ function SplitCard({ split, budget, spent, onOpen, onAdd }: {
                         />
                     </View>
                     {titled ? (
-                        <Text style={[styles.title, { color: theme.ink }]} numberOfLines={2}>{look.examples}</Text>
-                    ) : null}
-                    <Text
-                        style={[homeType.medium, titled ? styles.titledAmount : styles.amount, { color: over ? theme.danger : look.color }]}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.6}
-                    >
-                        {formatMoney(left)}
-                    </Text>
+                        <>
+                            <Text style={[styles.title, { color: theme.ink }]} numberOfLines={2}>{look.examples}</Text>
+                            {/* The label sits under the amount inside the title row, so
+                                the row stays centred on the pair. */}
+                            <View style={styles.titledAmount}>
+                                {amount}
+                                {status}
+                            </View>
+                        </>
+                    ) : amount}
                     {addable ? (
                         <Pressable
                             onPress={() => onAdd(split)}
@@ -122,14 +147,19 @@ function SplitCard({ split, budget, spent, onOpen, onAdd }: {
                     ) : null}
                 </View>
                 {titled ? null : (
-                    <Text style={[homeType.verySmall, styles.examples, { color: theme.ink3 }]} numberOfLines={1}>
-                        {look.examples}
-                    </Text>
+                    <>
+                        {/* Its own line under the top row, inset by the + so it lines
+                            up under the amount: the amount and the + never move. */}
+                        <View style={addable ? styles.statusInset : undefined}>{status}</View>
+                        <Text style={[homeType.verySmall, styles.examples, { color: theme.ink3 }]} numberOfLines={1}>
+                            {look.examples}
+                        </Text>
+                    </>
                 )}
                 <AnimatedProgressBar
-                    value={Math.min(100, pct)}
-                    color={over ? theme.danger : look.color}
-                    bg={theme.borderSoft}
+                    value={pct}
+                    color={look.color}
+                    bg={over ? theme.dangerSoft : theme.borderSoft}
                     height={6}
                     style={titled ? styles.titledBar : undefined}
                 />
@@ -148,9 +178,16 @@ const styles = StyleSheet.create({
     // The small size in the heaviest Geist the app uses for titles. It may wrap to a
     // second line (pt-BR runs long) but never truncates; the amount never shrinks.
     title: { fontFamily: Fonts.sansSemiBold, fontSize: ft(13), flexShrink: 1, marginLeft: 4 },
-    titledAmount: { flexGrow: 1, flexShrink: 0, textAlign: 'right' },
-    titledBar: { marginTop: 12 },
+    titledAmount: { flexGrow: 1, flexShrink: 0, alignItems: 'flex-end' },
+    titledText: { textAlign: 'right' },
+    // Tucked 5 pt up under the amount.
+    status: { textAlign: 'right', marginTop: -5 },
+    // The + (24) and the top row's gap (6).
+    statusInset: { paddingRight: 24 + 6 },
+    titledBar: { marginTop: 9 },
     plus: { width: 24, height: 24, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-    examples: { marginTop: 10, marginBottom: 8 },
+    // 3, not the 10 it was before the status line: that line already separates it
+    // from the amount, and the card only grows by the label's height.
+    examples: { marginTop: 3, marginBottom: 8 },
     noOutline: { borderColor: 'transparent' },
 });

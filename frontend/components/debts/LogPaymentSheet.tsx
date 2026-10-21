@@ -11,7 +11,7 @@ import Button from '../ui/Button';
 import InputField from '../ui/InputField';
 import { localDateISO, logPayment, type Debt, type PaymentResult } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
-import Sheet, { sheetStyles } from './Sheet';
+import Sheet, { sheetStyles } from '../ui/Sheet';
 
 interface Props {
     debt: Debt | null;
