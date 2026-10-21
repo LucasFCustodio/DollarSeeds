@@ -2,8 +2,10 @@
  * IncomeHero — "Am I okay?" in one number: what is left of this month's income.
  *
  * The number opens the income list; the + beside it opens income logging. Under it,
- * a bar of how much of the month's income is already spent — full and harvest once
- * spending passes income. It is also where an income bubble is dropped.
+ * a bar of what is LEFT of the month's income, so it agrees with the number: full at
+ * the start of the month, draining as money is spent. The fill turns harvest at 20%
+ * left or less; past zero there is no fill and the whole track turns harvest. It is
+ * also where an income bubble is dropped.
  *
  * Sits on the green Analyze band: everything in it is onBrand.
  */
@@ -18,21 +20,22 @@ import { GLASS, homeType } from './homeType';
 import { useDropTarget } from './DropZones';
 
 interface Props {
+    /** The hero number: never below 0. */
     left: number;
     income: number;
-    spent: number;
+    /** Spending (and a given tithe) has passed income: `left` is clamped at 0. */
+    over: boolean;
     onAdd: () => void;
     onOpenIncome: () => void;
 }
 
-export default function IncomeHero({ left, income, spent, onAdd, onOpenIncome }: Props) {
+export default function IncomeHero({ left, income, over, onAdd, onOpenIncome }: Props) {
     const { theme } = useTheme();
     const { formatMoney } = useLocale();
     const { t } = useTranslation('dashboard');
     const drop = useDropTarget('income');
 
-    const over = spent > income;
-    const pct = income > 0 ? Math.min(100, (spent / income) * 100) : (spent > 0 ? 100 : 0);
+    const pct = over || income <= 0 ? 0 : Math.min(100, Math.max(0, (left / income) * 100));
 
     return (
         <View
@@ -72,9 +75,9 @@ export default function IncomeHero({ left, income, spent, onAdd, onOpenIncome }:
                 </Pressable>
             </View>
             <AnimatedProgressBar
-                value={over ? 100 : pct}
-                color={over ? theme.harvest : theme.onBrand}
-                bg={HERO_TRACK}
+                value={pct}
+                color={pct <= LOW_PCT ? theme.harvest : theme.onBrand}
+                bg={over ? theme.harvest : HERO_TRACK}
                 height={8}
                 style={styles.bar}
             />
@@ -83,6 +86,8 @@ export default function IncomeHero({ left, income, spent, onAdd, onOpenIncome }:
 }
 
 const HERO_TRACK = 'rgba(255,255,255,0.2)';
+/** At or below this much left, the fill turns harvest. */
+const LOW_PCT = 20;
 
 const styles = StyleSheet.create({
     // The border is always there (transparent at rest) so a drag highlight never

@@ -90,7 +90,8 @@ function Home() {
     // Until the tithe is given the money is still in the account, so it belongs in
     // "left this month"; once given it is gone. Subtracts from what is LEFT, never
     // from total_income — the income logged is a fact and does not move.
-    const totalLeft = Math.max(0, total_income - totalSpent - (titheGiven ? titheAmount : 0));
+    const leftRaw = total_income - totalSpent - (titheGiven ? titheAmount : 0);
+    const totalLeft = Math.max(0, leftRaw);
 
     // ── Close-out (unchanged rule) ────────────────────────────────────────────
     // Offered for any un-closed month with income except the in-progress one.
@@ -158,7 +159,7 @@ function Home() {
                             <IncomeHero
                                 left={totalLeft}
                                 income={total_income}
-                                spent={totalSpent}
+                                over={leftRaw < 0}
                                 onAdd={logIncome}
                                 onOpenIncome={openIncomeList}
                             />
