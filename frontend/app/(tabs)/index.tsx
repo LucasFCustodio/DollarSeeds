@@ -2,7 +2,8 @@
  * Home — built around the Core Journey. Everything on it answers one of the
  * questions the user brings to the app:
  *
- *   Analyze   "Am I okay?"          income left, overdue status, next debt payment, tithe
+ *   Analyze   "Am I okay?"          income left, next debt payment, tithe (the overdue
+ *                                   alert sits in the top bar)
  *   Plan      "What's next?"        close-out, splits, logging
  *   Envision  "Where is this going?" encouragement, the Envision dashboard
  *
@@ -36,7 +37,6 @@ import { useHomeData } from '../../components/home/useHomeData';
 import { DropZoneProvider, useDropZones } from '../../components/home/DropZones';
 import HomeTopBar from '../../components/home/HomeTopBar';
 import IncomeHero from '../../components/home/IncomeHero';
-import OverdueStatus from '../../components/home/OverdueStatus';
 import TitheEnvelope from '../../components/home/TitheEnvelope';
 import { ClosedLine, CloseOutCard } from '../../components/home/CloseOut';
 import NextPaymentCard from '../../components/home/NextPaymentCard';
@@ -140,13 +140,20 @@ function Home() {
 
                 {/* ── Band 1 · Analyze: "Am I okay?" ────────────────────── */}
                 <View style={styles.hero}>
-                    {/* The field stays pinned at the bottom; a shorter band (no overdue
-                        alert) crops the calm forest off the top. */}
+                    {/* The field stays pinned at the bottom; a shorter band (no next
+                        payment or tithe) crops the calm forest off the top. */}
                     <PaintedBand
                         anchor="bottom"
                         style={[styles.top, { paddingTop: insets.top + 8 }, shadow(6, theme.brand) as object]}
                     >
-                        <HomeTopBar month={currentMonth} selected={home.monthIndex} onPickMonth={home.pickMonth} />
+                        <HomeTopBar
+                            month={currentMonth}
+                            selected={home.monthIndex}
+                            onPickMonth={home.pickMonth}
+                            overdueCount={debts?.overdue_count ?? 0}
+                            overdue={debts?.overdue}
+                            onOpenDebts={openDebts}
+                        />
                         <View style={[styles.section, { gap: CARD_GAP + 8 }]}>
                             <IncomeHero
                                 left={totalLeft}
@@ -155,9 +162,6 @@ function Home() {
                                 onAdd={logIncome}
                                 onOpenIncome={openIncomeList}
                             />
-                            {debts && debts.overdue_count > 0 ? (
-                                <OverdueStatus count={debts.overdue_count} debts={debts.overdue} onOpenDebts={openDebts} />
-                            ) : null}
                             {nextPayment ? (
                                 <NextPaymentCard
                                     payment={nextPayment}

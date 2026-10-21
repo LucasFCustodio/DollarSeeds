@@ -39,16 +39,18 @@
     "addIncomeA11y": "Log income"
   },
   "overdueAlert": {
-    "titleMany": "{{count}} debt needs attention",
-    "titleMany_plural": "{{count}} debts need attention",
-    "wasDue": " · was due {{date}}",
-    "row": "{{name}} · was due {{date}} · {{amount}}",
-    "more": "+{{count}} more",
+    "title": "{{count}} debt needs attention",
+    "title_plural": "{{count}} debts need attention",
+    "buttonA11y": "{{count}} debt needs attention. Opens details.",
+    "buttonA11y_plural": "{{count}} debts need attention. Opens details.",
+    "wasDue": "was due {{date}}",
     "payNow": "Pay now",
     "review": "Review",
     "a11y": "{{name}}, {{amount}}, was due {{date}}",
     "payA11y": "Pay {{name}} online",
-    "reviewA11y": "Review in Debts"
+    "reviewA11y": "Review in Debts",
+    "reviewDebtA11y": "Review {{name}} in Debts",
+    "close": "Close"
   },
   "split": {
     "needs": "Needs",

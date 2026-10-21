@@ -39,16 +39,18 @@
     "addIncomeA11y": "Registrar renda"
   },
   "overdueAlert": {
-    "titleMany": "{{count}} dívida precisa de atenção",
-    "titleMany_plural": "{{count}} dívidas precisam de atenção",
-    "wasDue": " · venceu em {{date}}",
-    "row": "{{name}} · venceu em {{date}} · {{amount}}",
-    "more": "+{{count}} outras",
+    "title": "{{count}} dívida precisa de atenção",
+    "title_plural": "{{count}} dívidas precisam de atenção",
+    "buttonA11y": "{{count}} dívida precisa de atenção. Abre os detalhes.",
+    "buttonA11y_plural": "{{count}} dívidas precisam de atenção. Abre os detalhes.",
+    "wasDue": "venceu em {{date}}",
     "payNow": "Pagar agora",
     "review": "Revisar",
     "a11y": "{{name}}, {{amount}}, venceu em {{date}}",
     "payA11y": "Pagar {{name}} online",
-    "reviewA11y": "Revisar em Dívidas"
+    "reviewA11y": "Revisar em Dívidas",
+    "reviewDebtA11y": "Revisar {{name}} em Dívidas",
+    "close": "Fechar"
   },
   "split": {
     "needs": "Necessidades",
