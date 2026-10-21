@@ -180,13 +180,14 @@ const styles = StyleSheet.create({
     title: { fontFamily: Fonts.sansSemiBold, fontSize: ft(13), flexShrink: 1, marginLeft: 4 },
     titledAmount: { flexGrow: 1, flexShrink: 0, alignItems: 'flex-end' },
     titledText: { textAlign: 'right' },
-    status: { textAlign: 'right' },
+    // Tucked 2 pt up under the amount.
+    status: { textAlign: 'right', marginTop: -2 },
     // The + (24) and the top row's gap (6).
     statusInset: { paddingRight: 24 + 6 },
-    titledBar: { marginTop: 12 },
+    titledBar: { marginTop: 10 },
     plus: { width: 24, height: 24, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-    // 6, not the 10 it was before the status line: that line already separates it
+    // 4, not the 10 it was before the status line: that line already separates it
     // from the amount, and the card only grows by the label's height.
-    examples: { marginTop: 6, marginBottom: 8 },
+    examples: { marginTop: 4, marginBottom: 8 },
     noOutline: { borderColor: 'transparent' },
 });
