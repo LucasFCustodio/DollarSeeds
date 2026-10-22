@@ -137,8 +137,9 @@ Premium limits the amount of a feature; it does not hide the feature.
 - The tithing envelope, in full. The app's differentiator and its word-of-mouth hook in
   church communities. Never gated.
 - General Savings, with all functions.
-- **One goal** (savings *or* debt), with every function: setting money aside, transfers
-  from General Savings, marking complete.
+- **One goal**, with every function: setting money aside, transfers from General
+  Savings, marking complete. (Debt goals are retired for `limits` builds — debts live on
+  the Debts tab — so for this build the one goal is a savings goal.)
 - Goal destination and reporting. Basic information about a user's own money is never gated.
 - The news tab.
 - The **Balanced** budget type (50/30/20).
@@ -147,14 +148,16 @@ Premium limits the amount of a feature; it does not hide the feature.
 
 | Item | Free | Premium |
 |---|---|---|
-| Savings & debt goals | 1 | unlimited |
+| Savings goals | 1 | unlimited |
 | Budget types | `balanced` only | + `wealth_builder`, `firm_foundation` |
 | Video series | free series only | all |
 | Bank connections | 0 | **1** (v1 — mechanism TBD) |
 
 **Goal-cap rules:** goals flagged `is_general` (General Savings) and `is_reconciliation`
-(auto-created at month close) **do NOT count toward the cap**. Only user-created savings
-and debt goals count. A user must never be locked out of their one free goal by a goal the
+(auto-created at month close) **do NOT count toward the cap**. **Neither do user-created
+debt goals** (`goal_type = 'debt'`): they are retired for `limits` builds, take no new
+money, and a free user who still has old ones must be able to create their one savings
+goal. Only user-created savings goals count. A user must never be locked out of their one free goal by a goal the
 app created for them. **Completed goals don't count either** — a free user who completes
 their goal can create a new one.
 
@@ -180,9 +183,10 @@ When a subscriber lapses:
 
 ### Which goal stays active (DECIDED)
 
-**The oldest eligible goal by `created_at`.** Eligible means user-created and not
-completed — `is_general`, `is_reconciliation` and completed goals are excluded, as they
-are from the cap. Every other eligible goal is **locked**.
+**The oldest eligible goal by `created_at`.** Eligible means user-created, not completed
+and not a debt goal — `is_general`, `is_reconciliation`, completed goals and retired debt
+goals are excluded, as they are from the cap. Every other eligible goal is **locked**.
+A debt goal is therefore never locked and never the active goal, however old it is.
 
 **Locked goals are enforced by the server, not just grayed in the UI.** For a `limits`
 client that isn't entitled, any write that targets a locked goal is refused with
@@ -245,8 +249,8 @@ the app's copy and needs an App Store update.
 
 | Field | Meaning |
 |---|---|
-| `max_goals` | Cap on user-created savings/debt goals. `null` = unlimited |
-| `goals_used` | Current count, excluding `is_general` and `is_reconciliation` |
+| `max_goals` | Cap on user-created savings goals. `null` = unlimited |
+| `goals_used` | Current count, excluding `is_general`, `is_reconciliation`, completed goals and user debt goals |
 | `budget_types` | Allowed keys from `BUDGET_TYPES` |
 | `video_series` | `"free_only"` or `"all"` |
 | `max_bank_connections` | `0` free, `1` premium. `null` = unlimited |

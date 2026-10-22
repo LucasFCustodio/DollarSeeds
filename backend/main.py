@@ -1114,6 +1114,8 @@ def create_savings_transaction(entry: SavingsEntry,
     _assert_owns_goals(user_id, entry.goal_id)
     # Deposits AND withdrawals: a locked goal is frozen, not read-only-ish.
     _assert_goals_unlocked(_entitlements(user_id, features), entry.goal_id)
+    if entry.type == "deposit":
+        _assert_not_debt_goal(user_id, features, entry.goal_id)
     payload = entry.model_dump()
     payload["user_id"] = user_id  # never trust the body's user_id
     response = supabase.table("savings_transactions").insert(payload).execute()
@@ -1169,6 +1171,7 @@ def transfer_from_general(transfer: SavingsTransfer,
     # is client-supplied too - a locked goal there is just as much a write to it.
     _assert_goals_unlocked(_entitlements(user_id, features),
                            transfer.to_goal_id, transfer.general_goal_id)
+    _assert_not_debt_goal(user_id, features, transfer.to_goal_id)
     group = str(uuid.uuid4())
     # Withdrawal from General Savings. Its title is the human-readable label shown for
     # the collapsed transfer entry in Recent Activity.
@@ -1320,6 +1323,43 @@ def _assert_goals_unlocked(ent, *goal_ids: Optional[int]):
         raise PremiumRequired("goal_locked")
 
 
+# ── Retired debt goals ────────────────────────────────────────────────────────
+# Debts live on the Debts tab (Debt Freedom) now. For a `limits` build — the only
+# kind of client that has the Debts tab — a user-created debt goal is retired:
+#   * one holding no money is left out of every list and summary that build reads;
+#   * one still holding money (only an old binary can deposit into one) stays listed,
+#     so money is never hidden, and stays deletable (its money goes to General
+#     Savings as for any goal), but takes no new deposits or transfers;
+#   * neither kind counts toward the free tier's goal cap or can be locked.
+# The Reconciliation goal is goal_type 'debt' too and is never affected. Builds
+# without `limits` see every debt goal exactly as before.
+
+RETIRED_DEBT_GOAL_DETAIL = ("Debt goals no longer take new money. "
+                            "Remove this goal to move what it holds to General Savings.")
+
+
+def _is_user_debt_goal(goal: dict) -> bool:
+    return (goal.get("goal_type") == "debt"
+            and not goal.get("is_reconciliation") and not goal.get("is_general"))
+
+
+def _is_hidden_debt_goal(goal: dict) -> bool:
+    """A user debt goal holding no money. `goal` has been through _with_allocated."""
+    return _is_user_debt_goal(goal) and float(goal.get("allocated_amount") or 0) <= 0.005
+
+
+def _assert_not_debt_goal(user_id: str, features: set, goal_id: Optional[int]):
+    """Refuse new money into a retired debt goal, for `limits` builds only — an older
+    build has no Debts tab, so its debt goals keep working exactly as they always did.
+    Only that build pays for the extra read."""
+    if LIMITS_FEATURE not in features or goal_id is None:
+        return
+    rows = (supabase.table("savings_goals").select("goal_type, is_general, is_reconciliation")
+            .eq("id", goal_id).eq("user_id", user_id).execute().data)
+    if rows and _is_user_debt_goal(rows[0]):
+        raise HTTPException(status_code=409, detail=RETIRED_DEBT_GOAL_DETAIL)
+
+
 def _ensure_general_savings(user_id: str) -> int:
     """Ensure a General Savings goal exists for this user. Returns its id."""
     gen = supabase.table("savings_goals").select("id").eq("user_id", user_id).eq("is_general", True).execute()
@@ -1368,6 +1408,8 @@ def get_savings_goals(goal_type: Optional[str] = None,
     goals = _decorate_reconciliation(_with_allocated(goals_res.data, user_id), user_id)
 
     if LIMITS_FEATURE in features:
+        # Retired debt goals holding no money are not listed (see _is_hidden_debt_goal).
+        goals = [g for g in goals if not _is_hidden_debt_goal(g)]
         # ADDED key, marked clients only, so the response an older build reads is
         # unchanged. The app gets the verdict rather than re-deriving the rule, and
         # the SORT ORDER is deliberately untouched - reordering the list is a
@@ -1400,12 +1442,17 @@ def _decorate_reconciliation(goals: list, user_id: str) -> list:
     return goals
 
 @app.get("/savings/goal/completed/")
-def get_completed_goals(goal_type: Optional[str] = None, user_id: str = Depends(get_current_user_id)):
+def get_completed_goals(goal_type: Optional[str] = None,
+                        features: set = Depends(_client_features),
+                        user_id: str = Depends(get_current_user_id)):
     query = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", True)
     if goal_type in ("saving", "debt"):
         query = query.eq("goal_type", goal_type)
     goals_res = query.order("created_at", desc=True).execute()
-    return {"data": _with_allocated(goals_res.data, user_id)}
+    goals = _with_allocated(goals_res.data, user_id)
+    if LIMITS_FEATURE in features:
+        goals = [g for g in goals if not _is_hidden_debt_goal(g)]
+    return {"data": goals}
 
 @app.patch("/savings/goal/{id}/complete")
 def complete_savings_goal(id: int,
@@ -2382,14 +2429,19 @@ class _Entitlements:
         asks. Filtered in Python, matching the house style and treating a NULL flag
         as "not true" without relying on PostgREST NULL semantics."""
         if self._eligible is None:
+            # Retired debt goals (goal_type 'debt', not Reconciliation) are not
+            # eligible either: they take no new money, so they can neither use up the
+            # free goal nor be the active one, nor be locked. Only `limits` callers
+            # ever reach this query.
             rows = supabase.table("savings_goals") \
-                .select("id, created_at, is_general, is_reconciliation, completed") \
+                .select("id, created_at, is_general, is_reconciliation, completed, goal_type") \
                 .eq("user_id", self.user_id).execute().data
             self._eligible = sorted(
                 (r for r in rows
                  if not r.get("is_general")
                  and not r.get("is_reconciliation")
-                 and not r.get("completed")),
+                 and not r.get("completed")
+                 and not _is_user_debt_goal(r)),
                 key=_goal_age_key,
             )
         return self._eligible
@@ -3721,6 +3773,7 @@ def get_home_summary(month: str,
 
 @app.get("/home/progress/")
 def get_home_progress(today: Optional[datetime.date] = None,
+                      features: set = Depends(_client_features),
                       user_id: str = Depends(get_current_user_id)):
     local_today = _df_today(today)
 
@@ -3734,6 +3787,19 @@ def get_home_progress(today: Optional[datetime.date] = None,
     savings_txns = (supabase.table("savings_transactions")
                     .select("id, goal_id, amount, type, created_at")
                     .eq("user_id", user_id).execute().data or [])
+    if LIMITS_FEATURE in features:
+        # Retired debt goals holding no money are not goals to this build: not in the
+        # ring's counts, not the nearest goal, and not "saved toward goals" (paying a
+        # debt is not saving). Completed ones hold $0 too, so they go with them.
+        held: dict = {}
+        for t in savings_txns:
+            gid = t.get("goal_id")
+            held[gid] = held.get(gid, 0.0) + (df._num(t.get("amount")) if t.get("type") == "deposit"
+                                              else -df._num(t.get("amount")))
+        hidden = {g["id"] for g in goals
+                  if _is_hidden_debt_goal({**g, "allocated_amount": max(0.0, held.get(g["id"], 0.0))})}
+        goals = [g for g in goals if g["id"] not in hidden]
+        savings_txns = [t for t in savings_txns if t.get("goal_id") not in hidden]
 
     return {
         "debts": df.home_progress_debts(garden, debt_txns, local_today),

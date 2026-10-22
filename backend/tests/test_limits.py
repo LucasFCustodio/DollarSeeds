@@ -424,12 +424,17 @@ def test_goals_created_in_the_same_instant_order_by_id(client, supabase_db, prem
 
 def test_the_locked_flag_is_the_same_whichever_tab_asks(client, free):
     """The `goal_type` filter can hide the oldest goal, so the flag must not be
-    derived from the filtered rows — it would name a different active goal per tab."""
+    derived from the filtered rows — it would name a different active goal per tab.
+
+    A legacy debt goal is used for the other tab: holding money, it is still listed,
+    and as a retired debt goal it is never locked (test_debt_goals_retired.py)."""
     debt = goal(free["db"], "Student loan", goal_type="debt")["id"]
+    free["db"].seed("savings_transactions", {"user_id": USER_A, "goal_id": debt, "title": "Student loan",
+                                             "amount": 40.0, "type": "deposit", "day": 1, "month": "January"})
 
     debts = client.get("/savings/goal/", params={"goal_type": "debt"},
                        headers=LIMITS).json()["data"]
-    assert [(g["id"], g["locked"]) for g in debts] == [(debt, True)]
+    assert [(g["id"], g["locked"]) for g in debts] == [(debt, False)]
 
     savings = client.get("/savings/goal/", params={"goal_type": "saving"},
                          headers=LIMITS).json()["data"]

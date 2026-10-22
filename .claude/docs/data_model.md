@@ -57,10 +57,30 @@ A goal deposit is normally booked to the current `month`, but the Goals funding-
 | `completed_amount` | numeric | Nullable. What the goal held the moment it was completed — see below |
 | `completed_at` | timestamptz | Nullable. When it was completed |
 | `is_general` | bool | Default false; exactly one General Savings pool per user |
-| `goal_type` | text | `"saving"` (default) or `"debt"`. Debt goals behave identically to savings goals — same allocation math (`allocated_amount / target_amount`), same transactions, same transfer support. Only the Goals-tab grouping/labels differ. |
+| `goal_type` | text | `"saving"` (default) or `"debt"`. The Reconciliation goal is `"debt"`. User-created debt goals are **retired** for `limits` builds — see below. Old builds still create and fund them, unchanged. |
 | `created_at` | timestamp | |
 
 A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdrawals)` over `savings_transactions` with that `goal_id` (`_with_allocated` in `main.py`). A deposit into a legacy debt goal is an ordinary `source='income'` deposit, so it counts toward the Goals budget like any other — but Debt Freedom payments are **not** savings rows at all; see "Budget Calculation".
+
+**Retired debt goals.** Debts live only on the Debts tab (`debts` / `debt_transactions`)
+now. A *user* debt goal is `goal_type = 'debt'` and not `is_reconciliation`
+(`_is_user_debt_goal`). For a client sending `X-Client-Features: limits`, and only for
+one:
+
+- **Holding $0** (`allocated_amount` ≤ half a cent, `_is_hidden_debt_goal`) → left out
+  of `GET /savings/goal/`, `GET /savings/goal/completed/`, and the goals half of
+  `GET /home/progress/` (counts, nearest goal, "saved toward goals", milestones).
+  `goals_near_completion` already skipped every debt goal.
+- **Still holding money** (only an old binary can deposit into one) → still listed, so
+  money is never hidden, and still deletable (prior-month money to General Savings, as
+  for any goal). `POST /savings/transaction/` (deposits) and `POST /savings/transfer/`
+  (as `to_goal_id`) refuse it with 409 `RETIRED_DEBT_GOAL_DETAIL`.
+- **Either kind** is excluded from the free tier's eligible goals: it never counts in
+  `goals_used`, is never `locked`, and never takes the active slot.
+
+Nothing is rewritten: no row is updated or deleted, `POST /savings/goal/` still accepts
+`goal_type = 'debt'`, and every response a build without `limits` reads is unchanged.
+The Reconciliation goal is untouched everywhere.
 
 **Completing a goal** (`POST /savings/goal/{id}/finish`) withdraws the goal's entire funded amount in one server-side transaction, which drives that computed value to $0 — hence the `completed_amount` snapshot, which is what the Completed tab actually renders (falling back to the computed value for goals completed before the column existed). The legacy `PATCH /savings/goal/{id}/complete` only flips the flag and writes no withdrawal; it exists solely for app builds already shipped, which write their own withdrawal first.
 
@@ -69,8 +89,10 @@ A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdraw
 **The free-tier goal cap is derived, not stored.** A free user (a client sending
 `X-Client-Features: limits`, with `premium_enabled` on and no entitlement) keeps one
 **eligible** goal. Eligible means `is_general` is not true, `is_reconciliation` is not
-true and `completed` is not true — nobody may be locked out of their one free goal by a
-goal the app created for them, and finishing a goal frees the slot. The **active** goal
+true, `completed` is not true and it is not a retired user debt goal (`goal_type =
+'debt'`) — nobody may be locked out of their one free goal by a goal the app created for
+them or by a debt goal that can no longer take money, and finishing a goal frees the
+slot. The **active** goal
 is the oldest eligible one by `created_at`, `id` as the tiebreak; every other eligible
 goal is **locked** and the server refuses writes to it with `goal_locked`. Deleting a
 locked goal is always allowed.
@@ -82,7 +104,7 @@ order it was built against. `GET /savings/goal/completed/` is newest-first for e
 
 No schema supports any of that: it is a query in `_Entitlements._eligible_goals`, which
 is why the rule needed no migration, no promotion logic and no backfill. `goal_type`,
-`is_general` and `is_reconciliation` are the only columns it reads. See
+`is_general`, `is_reconciliation` and `completed` are the only columns it reads. See
 [SUBSCRIPTION_REWORK.md](../../SUBSCRIPTION_REWORK.md) §5.
 
 ### `subscriptions`
