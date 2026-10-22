@@ -156,9 +156,11 @@ atomically. This table only answers "what did RevenueCat tell us, and when".
 
 The Debts tab: each debt is a plant grown by paying it down with the snowball method.
 Migrations [0010](../../backend/migrations/0010_debt_freedom.sql) and
-[0011](../../backend/migrations/0011_debt_freedom_v2.sql) (v2: due-date cycles). **Entirely separate
-from debt goals** (`savings_goals.goal_type = 'debt'`) — nothing here touches
-`savings_goals` or `savings_transactions`. Routes live under `/debt-freedom/` in
+[0011](../../backend/migrations/0011_debt_freedom_v2.sql) (v2: due-date cycles). **The only place debts
+live in the new app** — debt goals (`savings_goals.goal_type = 'debt'`) are retired (see
+`savings_goals`). Nothing here writes `savings_goals` or `savings_transactions`; payments
+reach the Goals budget by being read there (see "The Goals split's spend" under Budget
+Calculation). Routes live under `/debt-freedom/` in
 `main.py`; **every rule is a pure function in
 [backend/debt_freedom.py](../../backend/debt_freedom.py)**, unit-tested in
 `tests/test_debt_freedom.py`. The client renders server-computed fields only.
@@ -192,7 +194,38 @@ from debt goals** (`savings_goals.goal_type = 'debt'`) — nothing here touches
 `minimum_reversal` — the last three added by 0011, CHECK widened `NOT VALID`), `amount`,
 `balance_after`, `occurred_on` (date). `balance_edit.amount` and
 `statement_adjustment.amount` are signed (new − old); `minimum_reversal.amount` is the
-positive amount put back on the balance (the toggle's undo).
+positive amount put back on the balance by the toggle's **old** undo.
+
+**`minimum_reversal` is legacy.** Nothing writes it any more — the toggle's undo now
+deletes the minimum (below) — but the kind stays valid in the CHECK and existing rows
+are never deleted. Every total keeps netting them (`net_minimum`, `net_paid`,
+`debt_payment_events`, `budget_paydown`). Only the history hides them:
+`df.cancelled_minimum_ids` pairs each reversal with the most recent uncancelled
+minimum of the same debt before it, and `GET /debt-freedom/{id}` and
+`GET /debt-freedom/payments` leave both rows out.
+
+**Removing a payment** (`_df_remove_payment`, shared by the undo and the extra delete):
+the row is deleted, its amount goes back on `current_balance`, and every later row of
+that debt (by `occurred_on`, then `id`) has `balance_after` raised by the same amount.
+`cycle_start_balance` is untouched (a payment never moved it), the species stays
+locked, and `highest_step` keeps the plant from shrinking. The delete is the race
+guard: a second overlapping request deletes nothing and is refused before it touches
+the balance.
+
+**Payment routes and closed months.** A payment is part of its month's Goals spend, so
+logging a minimum or an extra, undoing a minimum, and deleting an extra are refused
+with `_assert_month_open`'s 409 (`"{Month} is closed. Reopen it before making
+changes."`) when the budget month of the row's `occurred_on` is closed. A row dated
+outside the year its month name resolves to today belongs to no budget month and is
+never refused for this reason.
+
+| Route | Rule |
+|-------|------|
+| `POST /debt-freedom/{id}/payments/undo-minimum` | Deletes the current cycle's latest uncancelled `payment_minimum` (`df.minimum_row_to_undo`). However often the user toggles, a cycle ends with at most one minimum row. Still refused once the cycle's due date has passed |
+| `DELETE /debt-freedom/{id}/payments/{transaction_id}` | Deletes a `payment_extra` of this debt in its **current billing cycle**, on an **active** debt, in an **open** month; 409 with a reason otherwise. Earlier cycles were closed against the payment (interest, the full-payment check), so they stay. Returns the payment routes' payload (`debt`, `focus_id`, `plan_est_payoff_month`, `monthly_extra`, `previous_step`, `transactions: []`). Optional `today` |
+| `DELETE /debt-freedom/{id}` | Refused (409, "This debt has payments in a closed month…") when its net payments in any **closed** budget month are non-zero — deleting it would change that month. Otherwise unchanged; its open-month payments leave the Goals spend with it. Optional `today` |
+| `GET /debt-freedom/{id}` | History is newest first with legacy pairs collapsed; each row carries `deletable` (`df.extra_is_deletable`: an extra in the current cycle of an active debt). The closed-month rule is applied when the delete arrives, so its message can say why |
+| `GET /debt-freedom/payments?month=&today=` | The month's net Debt Freedom payments for the Goals split's "View all": `{id, debt_id, debt_name, kind, amount, occurred_on}`, minimums and extras only, legacy pairs collapsed, newest first. Same month/year rule as the budget, so it adds up to the debt part of the split. Declared before `/debt-freedom/{id}` |
 
 `debt_freedom_settings` (0011): `user_id` (PK), `monthly_extra` (numeric, nullable —
 blank/NULL = $0), `updated_at`. One row per user, upserted by

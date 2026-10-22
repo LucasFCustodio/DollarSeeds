@@ -3319,6 +3319,30 @@ def _df_fresh(user_id: str, debt_id: int, today: datetime.date):
     return debt, debts, [t for t in txns if t.get("debt_id") == debt_id]
 
 
+def _df_remove_payment(user_id: str, debt: dict, own_txns: list, row: dict) -> None:
+    """Delete one payment row as if it had never been logged: its amount goes back on
+    current_balance, and every later row's balance_after moves up by the same amount.
+
+    The delete is the guard: two overlapping requests both read the row, but only one
+    deletes it, and the loser changes nothing. There is no transaction across the
+    writes, so they run delete → balance → later rows: a failure after the delete
+    leaves the balance short, never charged twice, and balance_after is display only.
+    The plant keeps its highest_step and the species stays locked."""
+    removed = (supabase.table("debt_transactions").delete()
+               .eq("id", row["id"]).eq("debt_id", debt["id"]).eq("user_id", user_id).execute().data)
+    if not removed:
+        raise HTTPException(status_code=409, detail="That payment was already removed.")
+    amount = df.money(row.get("amount"))
+    supabase.table("debts").update({
+        "current_balance": df.money(df._num(debt.get("current_balance")) + amount),
+        "updated_at": _df_now(),
+    }).eq("id", debt["id"]).eq("user_id", user_id).execute()
+    for later in df.rows_after(own_txns, row):
+        supabase.table("debt_transactions").update({
+            "balance_after": df.money(df._num(later.get("balance_after")) + amount),
+        }).eq("id", later["id"]).eq("user_id", user_id).execute()
+
+
 @app.get("/debt-freedom/")
 def get_debt_garden(today: Optional[datetime.date] = None, user_id: str = Depends(get_current_user_id)):
     garden, _ = _df_garden(user_id, _df_today(today))
@@ -3361,14 +3385,51 @@ def put_debt_freedom_settings(settings: DebtFreedomSettings, user_id: str = Depe
     return {"monthly_extra": value}
 
 
+# Declared BEFORE /debt-freedom/{id}, like settings, so "payments" is never a debt id.
+@app.get("/debt-freedom/payments")
+def list_debt_payments(month: str, today: Optional[datetime.date] = None,
+                       user_id: str = Depends(get_current_user_id)):
+    """The Debt Freedom payments booked to budget month `month`, newest first — the
+    rows the Goals split's "View all" lists next to its deposits. Same month/year rule
+    and same rows as _debt_paydown, with legacy log/undo pairs collapsed (they net to
+    zero there), so the list adds up to the debt part of the split's spend.
+
+    A new endpoint rather than a field on a response an old client reads."""
+    span = _month_span(month, today)
+    if span is None:
+        return {"data": []}
+    rows = (supabase.table("debt_transactions").select("id, debt_id, kind, amount, occurred_on")
+            .eq("user_id", user_id).in_("kind", DEBT_BUDGET_KINDS).execute().data or [])
+    # Pairs are matched over the whole history, as on the debt's own screen.
+    hidden = df.cancelled_minimum_ids(rows)
+    names = {d["id"]: d.get("name") for d in
+             (supabase.table("debts").select("id, name").eq("user_id", user_id).execute().data or [])}
+    shown = [t for t in rows
+             if t.get("kind") in df.PAYMENT_KINDS and t.get("id") not in hidden
+             and span[0] <= (df._date(t.get("occurred_on")) or datetime.date.min) <= span[1]]
+    shown.sort(key=df._row_key, reverse=True)
+    return {"data": [{
+        "id": t["id"],
+        "debt_id": t["debt_id"],
+        "debt_name": names.get(t["debt_id"]),
+        "kind": t["kind"],
+        "amount": df.money(t.get("amount")),
+        "occurred_on": str(t.get("occurred_on"))[:10],
+    } for t in shown]}
+
+
 @app.get("/debt-freedom/{id}")
 def get_debt(id: int, today: Optional[datetime.date] = None, user_id: str = Depends(get_current_user_id)):
     _df_owned(user_id, id)
-    garden, txns = _df_garden(user_id, _df_today(today))
+    local_today = _df_today(today)
+    garden, txns = _df_garden(user_id, local_today)
     debt = next(d for d in garden["debts"] if d["id"] == id)
     rolls_into = next((d for d in garden["debts"] if d["id"] == debt.get("rolls_into_id")), None)
-    history = sorted((t for t in txns if t.get("debt_id") == id),
-                     key=lambda t: (str(t.get("occurred_on")), t.get("id") or 0), reverse=True)
+    # Newest first, legacy log/undo pairs collapsed. `deletable` marks the extra
+    # payments the screen offers a delete for (this cycle, active debt); the closed-
+    # month rule is applied when the delete arrives, so its message can say why.
+    history = [{**t, "deletable": df.extra_is_deletable(debt, t, local_today)}
+               for t in df.visible_history([t for t in txns if t.get("debt_id") == id])]
     return {
         "debt": debt,
         "transactions": history,
@@ -3418,9 +3479,27 @@ def update_debt(id: int, update: DebtUpdate, user_id: str = Depends(get_current_
     return _df_one(user_id, id, today)
 
 
+DEBT_DELETE_CLOSED_DETAIL = ("This debt has payments in a closed month, so deleting it would "
+                             "change that month. You can mark it paid off instead.")
+
+
 @app.delete("/debt-freedom/{id}")
-def delete_debt(id: int, user_id: str = Depends(get_current_user_id)):
+def delete_debt(id: int, today: Optional[datetime.date] = None,
+                user_id: str = Depends(get_current_user_id)):
     _df_owned(user_id, id)
+    # Its payments are part of their months' Goals spend, so deleting the debt edits
+    # every month it was paid in. A closed month is read-only: refuse when any of
+    # them is closed (a legacy log/undo pair nets to 0 and changes nothing).
+    payments = (supabase.table("debt_transactions").select("debt_id, kind, amount, occurred_on")
+                .eq("debt_id", id).eq("user_id", user_id).in_("kind", DEBT_BUDGET_KINDS)
+                .execute().data or [])
+    net_by_month: dict = {}
+    for day, amount in df.debt_payment_events(payments):
+        month = _debt_budget_month(day, today)
+        if month:
+            net_by_month[month] = net_by_month.get(month, 0.0) + amount
+    if any(abs(net) > df.CENT and _is_month_closed(user_id, month) for month, net in net_by_month.items()):
+        raise HTTPException(status_code=409, detail=DEBT_DELETE_CLOSED_DETAIL)
     # The FK cascades, but delete the history explicitly too: it keeps this route
     # correct even against a schema where the cascade was never declared.
     supabase.table("debt_transactions").delete().eq("debt_id", id).eq("user_id", user_id).execute()
@@ -3451,6 +3530,7 @@ def log_debt_payment(id: int, payment: DebtPayment, user_id: str = Depends(get_c
         raise HTTPException(status_code=409, detail="The minimum is already logged for this cycle.")
 
     occurred_on = payment.occurred_on or today
+    _assert_debt_month_open(user_id, occurred_on, today)
     previous_step = df.shown_step(debt, own_txns)
 
     balance = df.money(debt.get("current_balance"))
@@ -3485,25 +3565,44 @@ def log_debt_payment(id: int, payment: DebtPayment, user_id: str = Depends(get_c
 
 @app.post("/debt-freedom/{id}/payments/undo-minimum")
 def undo_debt_minimum(id: int, body: Optional[DebtToday] = None, user_id: str = Depends(get_current_user_id)):
-    """The toggle's on → off: reverses this cycle's minimum with a minimum_reversal
-    row. Refused once the cycle's due date has passed (a new cycle has no minimum to
-    undo). Never unlocks the species; the plant keeps its highest step."""
+    """The toggle's on → off: DELETES this cycle's minimum, so however often the user
+    toggles, the cycle ends with at most one minimum row. (It used to write a
+    minimum_reversal; those legacy rows are still netted everywhere and collapsed
+    from the history.) Refused once the cycle's due date has passed, and in a closed
+    month. Never unlocks the species; the plant keeps its highest step."""
     _df_owned(user_id, id)
     today = _df_today(body.today if body else None)
     debt, _, own_txns = _df_fresh(user_id, id, today)
-    amount = df.minimum_to_undo(debt, own_txns, today)
-    if amount is None:
+    row = df.minimum_row_to_undo(debt, own_txns, today)
+    if row is None:
         raise HTTPException(status_code=409, detail="There is no minimum to undo in the current cycle.")
-    balance = df.money(df._num(debt.get("current_balance")) + amount)
-    row = {
-        "user_id": user_id, "debt_id": id, "kind": df.KIND_MINIMUM_REVERSAL, "amount": amount,
-        "balance_after": balance, "occurred_on": today.isoformat(),
-    }
-    inserted = supabase.table("debt_transactions").insert(row).execute().data
-    supabase.table("debts").update({
-        "current_balance": balance, "updated_at": _df_now(),
-    }).eq("id", id).eq("user_id", user_id).execute()
-    return {**_df_one(user_id, id, today), "transactions": [inserted[0] if inserted else row]}
+    _assert_debt_month_open(user_id, row.get("occurred_on"), today)
+    _df_remove_payment(user_id, debt, own_txns, row)
+    return {**_df_one(user_id, id, today), "transactions": []}
+
+
+@app.delete("/debt-freedom/{id}/payments/{transaction_id}")
+def delete_debt_payment(id: int, transaction_id: int, today: Optional[datetime.date] = None,
+                        user_id: str = Depends(get_current_user_id)):
+    """Delete an extra payment logged by mistake. Only a `payment_extra` of this debt,
+    in its current billing cycle, while the debt is active and the payment's month is
+    open: an earlier cycle was already closed against it (interest, the full-payment
+    check). The money goes back on the balance and, through the budget rule, back to
+    the month's Goals split. Suggestions, focus and payoff dates recompute."""
+    _df_owned(user_id, id)
+    local_today = _df_today(today)
+    debt, _, own_txns = _df_fresh(user_id, id, local_today)
+    row = next((t for t in own_txns if t.get("id") == transaction_id), None)
+    if row is None or row.get("kind") != df.KIND_EXTRA:
+        raise HTTPException(status_code=409, detail="Only an extra payment on this debt can be deleted.")
+    if df.is_paid_off(debt):
+        raise HTTPException(status_code=409, detail="This debt is already paid off.")
+    if not df.extra_is_deletable(debt, row, local_today):
+        raise HTTPException(status_code=409, detail="Only an extra payment from the current billing cycle can be deleted.")
+    _assert_debt_month_open(user_id, row.get("occurred_on"), local_today)
+    previous_step = df.shown_step(debt, own_txns)
+    _df_remove_payment(user_id, debt, own_txns, row)
+    return {**_df_one(user_id, id, local_today), "previous_step": previous_step, "transactions": []}
 
 
 @app.post("/debt-freedom/{id}/checkin")

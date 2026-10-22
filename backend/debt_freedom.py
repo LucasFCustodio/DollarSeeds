@@ -4,9 +4,11 @@ Nothing here touches Supabase or FastAPI: main.py loads the rows, calls these, a
 writes back whatever they say changed. That keeps every rule unit-testable with plain
 dicts (tests/test_debt_freedom.py) and keeps the policy decisions in one place.
 
-This feature is deliberately separate from the older debt GOALS on the Goals tab
+This feature replaces the retired debt GOALS on the Goals tab
 (savings_goals.goal_type = 'debt'). It reads and writes only `debts`,
-`debt_transactions` and `debt_freedom_settings` (migrations 0010, 0011).
+`debt_transactions` and `debt_freedom_settings` (migrations 0010, 0011); its payments
+reach the Goals budget by being READ there (budget_paydown), never by writing a
+savings row.
 
 Rows are the dicts PostgREST returns. Money columns are `numeric`, which can arrive
 as a number or a string, so everything goes through _num().
@@ -897,7 +899,7 @@ def pot_stage(debt: dict) -> str:
 
 def debt_payment_events(transactions: list) -> list:
     """(date, signed amount) for every dollar the user paid toward a debt: minimum
-    and extra payments in, minimum reversals (the toggle's undo) out, dated by
+    and extra payments in, legacy minimum reversals (the toggle's old undo) out, dated by
     occurred_on. Interest, late fees, balance edits and statement adjustments are
     what the debt cost, not what was paid, so they are ignored. A payment counts in
     full even when part of it only covered interest."""

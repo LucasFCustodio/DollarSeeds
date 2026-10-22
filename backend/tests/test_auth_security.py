@@ -61,12 +61,14 @@ PROTECTED_ROUTES = [
     ("GET",    "/debt-freedom/",                  {},                                   None),
     ("POST",   "/debt-freedom/",                  {},                                   {"name": "Visa", "original_balance": 1000, "current_balance": 800, "min_payment": 50, "apr": 24.99, "due_day": 14}),
     ("GET",    "/debt-freedom/settings",          {},                                   None),
+    ("GET",    "/debt-freedom/payments",          {"month": "July"},                    None),
     ("PUT",    "/debt-freedom/settings",          {},                                   {"monthly_extra": 50}),
     ("GET",    "/debt-freedom/1",                 {},                                   None),
     ("PATCH",  "/debt-freedom/1",                 {},                                   {"name": "Visa"}),
     ("DELETE", "/debt-freedom/1",                 {},                                   None),
     ("POST",   "/debt-freedom/1/payments",        {},                                   {"minimum": True}),
     ("POST",   "/debt-freedom/1/payments/undo-minimum", {},                             {"today": "2026-09-14"}),
+    ("DELETE", "/debt-freedom/1/payments/2",      {},                                   None),
     ("POST",   "/debt-freedom/1/checkin",         {},                                   {"statement_balance": 800, "min_payment": 50}),
     ("POST",   "/debt-freedom/1/late-fee",        {},                                   {"due_date": "2026-09-14", "amount": 30}),
     ("POST",   "/debt-freedom/1/complete",        {},                                   None),
@@ -564,6 +566,12 @@ def test_cannot_read_edit_pay_complete_or_delete_another_users_debt(client, two_
     assert client.post(f"/debt-freedom/{did}/payments", headers=auth(USER_A),
                        json={"minimum": True}).status_code == 404
     assert client.post(f"/debt-freedom/{did}/payments/undo-minimum", headers=auth(USER_A)).status_code == 404
+    victim_tx = two_users.rows("debt_transactions")[0]["id"]
+    assert client.delete(f"/debt-freedom/{did}/payments/{victim_tx}", headers=auth(USER_A)).status_code == 404
+    # The month's payment list is the caller's own: B's payment is not in A's.
+    listed = client.get("/debt-freedom/payments", headers=auth(USER_A),
+                        params={"month": "January", "user_id": USER_B})
+    assert listed.status_code == 200 and listed.json()["data"] == []
     assert client.post(f"/debt-freedom/{did}/checkin", headers=auth(USER_A),
                        json={"statement_balance": 5000, "min_payment": 1}).status_code == 404
     assert client.post(f"/debt-freedom/{did}/late-fee", headers=auth(USER_A),

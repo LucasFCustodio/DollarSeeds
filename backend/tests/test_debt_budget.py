@@ -192,3 +192,314 @@ def test_budget_paydown_rule():
         {"id": 6, "debt_id": 1, "kind": df.KIND_INTEREST, "amount": 9, "occurred_on": "2026-10-05"},
     ]
     assert df.budget_paydown(txns, start, end) == 25.5
+
+
+# ══ helpers for the route tests ═══════════════════════════════════════════════
+
+def close_month(db, month=MONTH):
+    db.seed("month_status", {"user_id": USER_A, "month": month,
+                             "closed_at": "2026-01-01T00:00:00+00:00", "year": stamp_year(month)})
+
+
+def pay(client, debt, *, minimum=False, extra=None):
+    body = {"minimum": minimum, "today": TODAY.isoformat(), "occurred_on": TODAY.isoformat()}
+    if extra:
+        body["extra_amount"] = extra
+    return client.post(f"/debt-freedom/{debt['id']}/payments", headers=auth(USER_A), json=body)
+
+
+def undo(client, debt):
+    return client.post(f"/debt-freedom/{debt['id']}/payments/undo-minimum", headers=auth(USER_A),
+                       json={"today": TODAY.isoformat()})
+
+
+def delete_payment(client, debt, tx_id):
+    return client.delete(f"/debt-freedom/{debt['id']}/payments/{tx_id}", headers=auth(USER_A),
+                         params={"today": TODAY.isoformat()})
+
+
+def detail(client, debt):
+    res = client.get(f"/debt-freedom/{debt['id']}", headers=auth(USER_A), params={"today": TODAY.isoformat()})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def kinds(db):
+    return [t["kind"] for t in db.rows("debt_transactions")]
+
+
+CLOSED = f"{MONTH} is closed. Reopen it before making changes."
+
+
+# ══ 2. Closed months apply to debt payments ═══════════════════════════════════
+
+def test_logging_a_minimum_or_an_extra_in_a_closed_month_is_refused(client, supabase_db):
+    d = seed_debt(supabase_db)
+    close_month(supabase_db)
+    for kwargs in ({"minimum": True}, {"extra": 25}):
+        res = pay(client, d, **kwargs)
+        assert res.status_code == 409 and res.json()["detail"] == CLOSED
+    assert supabase_db.rows("debt_transactions") == []
+    assert supabase_db.rows("debts")[0]["current_balance"] == 1000.0
+
+
+def test_undoing_a_minimum_in_a_closed_month_is_refused(client, supabase_db):
+    d = seed_debt(supabase_db)
+    assert pay(client, d, minimum=True).status_code == 200
+    close_month(supabase_db)
+    res = undo(client, d)
+    assert res.status_code == 409 and res.json()["detail"] == CLOSED
+    assert kinds(supabase_db) == ["payment_minimum"]
+
+
+def test_deleting_an_extra_in_a_closed_month_is_refused(client, supabase_db):
+    d = seed_debt(supabase_db)
+    tx = pay(client, d, extra=40).json()["transactions"][0]
+    close_month(supabase_db)
+    res = delete_payment(client, d, tx["id"])
+    assert res.status_code == 409 and res.json()["detail"] == CLOSED
+    assert kinds(supabase_db) == ["payment_extra"]
+
+
+def test_last_years_closed_month_does_not_lock_this_one(client, supabase_db):
+    d = seed_debt(supabase_db)
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": MONTH,
+                                      "closed_at": "2020-01-01T00:00:00+00:00",
+                                      "year": stamp_year(MONTH) - 1})
+    assert pay(client, d, minimum=True).status_code == 200
+
+
+# ══ 5. Delete an extra payment ════════════════════════════════════════════════
+
+def test_deleting_an_extra_puts_everything_back(client, supabase_db):
+    seed_income(supabase_db)
+    d = seed_debt(supabase_db)
+    extra = pay(client, d, extra=100).json()["transactions"][0]
+    minimum = pay(client, d, minimum=True).json()["transactions"][0]
+    assert dashboard(client)["expenses"]["goals"] == 150.0
+    assert minimum["balance_after"] == 850.0
+
+    res = delete_payment(client, d, extra["id"])
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["debt"]["current_balance"] == 950.0
+    assert set(body) >= {"debt", "focus_id", "plan_est_payoff_month", "previous_step", "transactions"}
+    # The later minimum's balance_after moves up by the deleted amount.
+    assert [(t["kind"], t["balance_after"]) for t in supabase_db.rows("debt_transactions")] == [
+        ("payment_minimum", 950.0)]
+    assert [t["kind"] for t in detail(client, d)["transactions"]] == ["payment_minimum"]
+    assert dashboard(client)["expenses"]["goals"] == 50.0
+
+
+def test_the_whole_extra_comes_back_to_the_goals_split(client, supabase_db):
+    seed_income(supabase_db)
+    d = seed_debt(supabase_db)
+    extra = pay(client, d, extra=60).json()["transactions"][0]
+    assert dashboard(client)["expenses"]["goals"] == 60.0
+    assert delete_payment(client, d, extra["id"]).status_code == 200
+    assert dashboard(client)["expenses"]["goals"] == 0
+    assert supabase_db.rows("debts")[0]["current_balance"] == 1000.0
+    assert detail(client, d)["transactions"] == []
+
+
+def test_only_this_cycles_extras_are_deletable(client, supabase_db):
+    d = seed_debt(supabase_db)
+    old = seed_tx(supabase_db, d, df.KIND_EXTRA, 30.0, _last_due(28).isoformat(), balance_after=970.0)
+    new = pay(client, d, extra=20).json()["transactions"][0]
+    minimum = pay(client, d, minimum=True).json()["transactions"][0]
+
+    flags = {t["id"]: t["deletable"] for t in detail(client, d)["transactions"]}
+    assert flags == {old["id"]: False, new["id"]: True, minimum["id"]: False}
+
+    for tx_id in (old["id"], minimum["id"]):
+        assert delete_payment(client, d, tx_id).status_code == 409
+    assert len(supabase_db.rows("debt_transactions")) == 3
+
+
+def test_interest_and_fees_cannot_be_deleted(client, supabase_db):
+    d = seed_debt(supabase_db)
+    fee = seed_tx(supabase_db, d, df.KIND_LATE_FEE, 30.0, TODAY.isoformat())
+    assert delete_payment(client, d, fee["id"]).status_code == 409
+    assert detail(client, d)["transactions"][0]["deletable"] is False
+
+
+def test_a_paid_off_debts_extras_are_not_deletable(client, supabase_db):
+    d = seed_debt(supabase_db, current_balance=0.0, status="paid_off",
+                  paid_off_at=f"{TODAY.isoformat()}T12:00:00+00:00")
+    extra = seed_tx(supabase_db, d, df.KIND_EXTRA, 40.0, TODAY.isoformat())
+    assert detail(client, d)["transactions"][0]["deletable"] is False
+    assert delete_payment(client, d, extra["id"]).status_code == 409
+    assert len(supabase_db.rows("debt_transactions")) == 1
+
+
+def test_another_debts_payment_cannot_be_deleted_through_this_one(client, supabase_db):
+    a = seed_debt(supabase_db, current_balance=100.0)
+    b = seed_debt(supabase_db, name="Car", current_balance=900.0)
+    tx = pay(client, a, extra=10).json()["transactions"][0]
+    assert delete_payment(client, b, tx["id"]).status_code == 409
+    assert len(supabase_db.rows("debt_transactions")) == 1
+
+
+def test_deleting_an_extra_never_shrinks_the_plant(client, supabase_db):
+    d = seed_debt(supabase_db, original_balance=1000.0, current_balance=200.0)
+    paid = pay(client, d, extra=190).json()
+    assert paid["debt"]["growth_step"] == 10
+    res = delete_payment(client, d, paid["transactions"][0]["id"]).json()
+    assert res["debt"]["current_balance"] == 200.0
+    assert res["debt"]["growth_step"] == 10 and res["debt"]["highest_step"] == 10
+
+
+def test_suggestions_and_focus_recompute_from_the_new_balance(client, supabase_db):
+    small = seed_debt(supabase_db, name="Small", current_balance=100.0)
+    big = seed_debt(supabase_db, name="Big", current_balance=150.0)
+    tx = pay(client, small, extra=100).json()
+    assert tx["debt"]["ready_to_complete"] is True
+    res = delete_payment(client, small, tx["transactions"][0]["id"]).json()
+    assert res["debt"]["ready_to_complete"] is False
+    assert res["focus_id"] == small["id"]
+    assert res["debt"]["rolls_into_id"] == big["id"]
+
+
+# ══ 6. The minimum toggle leaves no log/undo pairs ════════════════════════════
+
+def test_toggling_four_times_leaves_at_most_one_minimum(client, supabase_db):
+    seed_income(supabase_db)
+    d = seed_debt(supabase_db)
+    assert pay(client, d, minimum=True).status_code == 200
+    assert dashboard(client)["expenses"]["goals"] == 50.0
+    assert undo(client, d).status_code == 200
+    assert supabase_db.rows("debt_transactions") == []
+    assert dashboard(client)["expenses"]["goals"] == 0
+    assert detail(client, d)["transactions"] == []
+
+    for step in range(3):
+        res = pay(client, d, minimum=True) if step % 2 == 0 else undo(client, d)
+        assert res.status_code == 200, res.text
+    assert kinds(supabase_db) == ["payment_minimum"]
+    assert supabase_db.rows("debts")[0]["current_balance"] == 950.0
+    assert [t["kind"] for t in detail(client, d)["transactions"]] == ["payment_minimum"]
+    assert dashboard(client)["expenses"]["goals"] == 50.0
+
+
+def test_undo_shifts_later_rows_and_restores_the_balance(client, supabase_db):
+    d = seed_debt(supabase_db)
+    pay(client, d, minimum=True)
+    extra = pay(client, d, extra=100).json()["transactions"][0]
+    assert extra["balance_after"] == 850.0
+    body = undo(client, d).json()
+    assert body["debt"]["current_balance"] == 900.0 and body["debt"]["min_logged_this_cycle"] is False
+    assert [(t["kind"], t["balance_after"]) for t in supabase_db.rows("debt_transactions")] == [
+        ("payment_extra", 900.0)]
+
+
+def test_legacy_pairs_are_collapsed_but_still_netted(client, supabase_db):
+    seed_income(supabase_db)
+    d = seed_debt(supabase_db, current_balance=950.0)
+    on = TODAY.isoformat()
+    first = seed_tx(supabase_db, d, df.KIND_MINIMUM, 50.0, on, balance_after=950.0)
+    reversal = seed_tx(supabase_db, d, df.KIND_MINIMUM_REVERSAL, 50.0, on, balance_after=1000.0)
+    second = seed_tx(supabase_db, d, df.KIND_MINIMUM, 50.0, on, balance_after=950.0)
+
+    assert [t["id"] for t in detail(client, d)["transactions"]] == [second["id"]]
+    assert dashboard(client)["expenses"]["goals"] == 50.0
+    # Reading them deletes nothing.
+    assert len(supabase_db.rows("debt_transactions")) == 3
+
+    # Undo removes the minimum still standing, not the one already cancelled.
+    assert undo(client, d).status_code == 200
+    assert [t["id"] for t in supabase_db.rows("debt_transactions")] == [first["id"], reversal["id"]]
+    assert detail(client, d)["transactions"] == []
+    assert dashboard(client)["expenses"]["goals"] == 0
+    assert supabase_db.rows("debts")[0]["current_balance"] == 1000.0
+
+
+def test_nothing_writes_a_reversal_any_more(client, supabase_db):
+    d = seed_debt(supabase_db)
+    for _ in range(3):
+        pay(client, d, minimum=True)
+        undo(client, d)
+    assert df.KIND_MINIMUM_REVERSAL not in kinds(supabase_db)
+
+
+def test_cancelled_minimum_pairs_rule():
+    rows = [
+        {"id": 1, "debt_id": 1, "kind": df.KIND_MINIMUM, "occurred_on": "2026-09-01"},
+        {"id": 2, "debt_id": 1, "kind": df.KIND_MINIMUM_REVERSAL, "occurred_on": "2026-09-01"},
+        {"id": 3, "debt_id": 1, "kind": df.KIND_MINIMUM, "occurred_on": "2026-09-02"},
+        {"id": 4, "debt_id": 2, "kind": df.KIND_MINIMUM, "occurred_on": "2026-09-01"},
+        # Debt 2's reversal cancels debt 2's minimum only.
+        {"id": 5, "debt_id": 2, "kind": df.KIND_MINIMUM_REVERSAL, "occurred_on": "2026-09-03"},
+        {"id": 6, "debt_id": 1, "kind": df.KIND_EXTRA, "occurred_on": "2026-09-01"},
+    ]
+    assert df.cancelled_minimum_ids(rows) == {1, 2, 4, 5}
+    assert [t["id"] for t in df.visible_history(rows)] == [3, 6]
+
+
+# ══ 7. Deleting a debt ════════════════════════════════════════════════════════
+
+def test_deleting_a_debt_with_open_month_payments_recovers_the_goals_split(client, supabase_db):
+    seed_income(supabase_db)
+    d = seed_debt(supabase_db)
+    pay(client, d, minimum=True)
+    pay(client, d, extra=30)
+    assert dashboard(client)["expenses"]["goals"] == 80.0
+    res = client.delete(f"/debt-freedom/{d['id']}", headers=auth(USER_A), params={"today": TODAY.isoformat()})
+    assert res.status_code == 200 and res.json() == {"deleted": True}
+    assert dashboard(client)["expenses"]["goals"] == 0
+
+
+def test_deleting_a_debt_with_closed_month_payments_is_refused(client, supabase_db):
+    d = seed_debt(supabase_db)
+    pay(client, d, minimum=True)
+    close_month(supabase_db)
+    res = client.delete(f"/debt-freedom/{d['id']}", headers=auth(USER_A))
+    assert res.status_code == 409
+    assert res.json()["detail"] == main.DEBT_DELETE_CLOSED_DETAIL
+    assert len(supabase_db.rows("debts")) == 1 and len(supabase_db.rows("debt_transactions")) == 1
+
+
+def test_a_net_zero_legacy_pair_in_a_closed_month_does_not_block_delete(client, supabase_db):
+    d = seed_debt(supabase_db)
+    seed_tx(supabase_db, d, df.KIND_MINIMUM, 50.0, TODAY.isoformat())
+    seed_tx(supabase_db, d, df.KIND_MINIMUM_REVERSAL, 50.0, TODAY.isoformat())
+    seed_tx(supabase_db, d, df.KIND_INTEREST, 9.0, TODAY.isoformat())
+    close_month(supabase_db)
+    assert client.delete(f"/debt-freedom/{d['id']}", headers=auth(USER_A)).status_code == 200
+
+
+def test_a_debt_without_payments_deletes_even_in_a_closed_month(client, supabase_db):
+    d = seed_debt(supabase_db)
+    close_month(supabase_db)
+    assert client.delete(f"/debt-freedom/{d['id']}", headers=auth(USER_A)).status_code == 200
+
+
+# ══ 8. Debt payments for the Goals split's "View all" ═════════════════════════
+
+def test_the_months_payments_are_listed_newest_first_with_the_debt_name(client, supabase_db):
+    card = seed_debt(supabase_db, name="Visa")
+    car = seed_debt(supabase_db, name="Car loan")
+    a = seed_tx(supabase_db, card, df.KIND_MINIMUM, 50.0, this_month(1))
+    b = seed_tx(supabase_db, car, df.KIND_EXTRA, 75.0, this_month(1))
+    # A legacy pair, interest, and the same month last year: none of them listed.
+    seed_tx(supabase_db, car, df.KIND_MINIMUM, 20.0, this_month(1))
+    seed_tx(supabase_db, car, df.KIND_MINIMUM_REVERSAL, 20.0, this_month(1))
+    seed_tx(supabase_db, card, df.KIND_INTEREST, 9.0, this_month(1))
+    seed_tx(supabase_db, card, df.KIND_EXTRA, 500.0, datetime.date(TODAY.year - 1, TODAY.month, 1).isoformat())
+
+    res = client.get("/debt-freedom/payments", headers=auth(USER_A),
+                     params={"month": MONTH, "today": TODAY.isoformat()})
+    assert res.status_code == 200, res.text
+    assert res.json()["data"] == [
+        {"id": b["id"], "debt_id": car["id"], "debt_name": "Car loan", "kind": "payment_extra",
+         "amount": 75.0, "occurred_on": this_month(1)},
+        {"id": a["id"], "debt_id": card["id"], "debt_name": "Visa", "kind": "payment_minimum",
+         "amount": 50.0, "occurred_on": this_month(1)},
+    ]
+    # It adds up to the debt part of the split.
+    seed_income(supabase_db)
+    assert dashboard(client)["expenses"]["goals"] == 125.0
+
+
+def test_an_unknown_month_lists_nothing(client):
+    res = client.get("/debt-freedom/payments", headers=auth(USER_A), params={"month": "Agosto"})
+    assert res.status_code == 200 and res.json() == {"data": []}
