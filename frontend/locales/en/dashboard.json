@@ -23,7 +23,7 @@
   "category": {
     "needsSub": "Rent, groceries, bills",
     "wantsSub": "Lifestyle, treats, fun",
-    "goalsSub": "Savings + debt paydown"
+    "goalsSub": "Goals + debt paydown"
   },
   "topBar": {
     "profileA11y": "Profile",
@@ -55,7 +55,7 @@
   "split": {
     "needs": "Needs",
     "wants": "Wants",
-    "goals": "Savings",
+    "goals": "Goals",
     "leftA11y": "{{split}}: {{amount}} left",
     "overA11y": "{{split}}: {{amount}} over budget",
     "left": "left",

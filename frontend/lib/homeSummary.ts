@@ -13,7 +13,7 @@ import { localDateISO, type Debt, type Species } from './debtFreedom';
 const PROD_BASE = 'https://dollarseeds-1.onrender.com';
 const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || PROD_BASE;
 
-/** Split keys as /dashboard/{month} names them. `goals` is the Savings container. */
+/** Split keys as /dashboard/{month} names them. `goals` is the Goals container (savings goals + debt payments). */
 export type SplitKey = 'needs' | 'wants' | 'goals';
 
 export interface OverBudget {

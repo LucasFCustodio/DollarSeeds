@@ -23,7 +23,7 @@
   "category": {
     "needsSub": "Aluguel, mercado, contas",
     "wantsSub": "Estilo de vida, mimos, diversão",
-    "goalsSub": "Poupança + quitação de dívidas"
+    "goalsSub": "Metas + quitação de dívidas"
   },
   "topBar": {
     "profileA11y": "Perfil",
@@ -55,7 +55,7 @@
   "split": {
     "needs": "Necessidades",
     "wants": "Desejos",
-    "goals": "Poupança",
+    "goals": "Metas",
     "leftA11y": "{{split}}: {{amount}} disponível",
     "overA11y": "{{split}}: {{amount}} acima do orçamento",
     "left": "disponível",
