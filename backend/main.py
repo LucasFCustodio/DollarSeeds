@@ -616,7 +616,8 @@ def read_root():
     return {"message": "DollarSeeds Backend is running!"}
 
 @app.get("/dashboard/trends/")
-def get_spending_trends(features: set = Depends(_client_features),
+def get_spending_trends(today: Optional[datetime.date] = None,
+                        features: set = Depends(_client_features),
                         user_id: str = Depends(get_current_user_id)):
     all_months = ["January", "February", "March", "April", "May", "June", "July",
                   "August", "September", "October", "November", "December"]
@@ -645,6 +646,10 @@ def get_spending_trends(features: set = Depends(_client_features),
     wants_by_month = group_by_month(all_wants.data)
     goals_by_month = group_by_month(all_goals_exp.data)
     savings_by_month = group_by_month(all_savings.data)
+    # Debt Freedom payments, one read for every month; each month then takes the rows
+    # dated in the year its name resolves to, as on the dashboard (_debt_paydown).
+    all_debt_payments = (supabase.table("debt_transactions").select("debt_id, kind, amount, occurred_on")
+                         .eq("user_id", user_id).in_("kind", DEBT_BUDGET_KINDS).execute().data or [])
 
     def spending_quartiles(expenses):
         if not expenses:
@@ -690,6 +695,10 @@ def get_spending_trends(features: set = Depends(_client_features),
             sum(i["amount"] for i in goals_by_month.get(month, [])) +
             sum(i["amount"] for i in savings_by_month.get(month, []))
         )
+        debt_paydown = df.budget_paydown(all_debt_payments, *_month_span(month, today)) if all_debt_payments else 0.0
+        if debt_paydown:
+            # Same int-vs-float care as _month_budget_numbers.
+            total_goals += debt_paydown
 
         if total_income == 0 and total_needs == 0 and total_wants == 0 and total_goals == 0:
             continue
@@ -726,7 +735,71 @@ def get_spending_trends(features: set = Depends(_client_features),
     return {"data": results}
 
 
-def _month_budget_numbers(user_id: str, current_month: str, features: set) -> dict:
+# ── Debt Freedom payments in the Goals split ─────────────────────────────────
+# The third split's spend = legacy 'Goals' expenses + income-sourced savings deposits
+# + that month's NET Debt Freedom payments. Payments are read from debt_transactions
+# here, never mirrored into savings_transactions: a mirrored deposit would raise
+# General Savings and "saved toward goals" with money that left the user.
+#
+# Months carry no year, debt payments do. A payment counts toward budget month M only
+# when its occurred_on is in calendar month M of the year M resolves to TODAY
+# (_month_year_at), so last October never counts toward this October. "Today" is the
+# phone's date when the client sends one (the optional `today` the /debt-freedom/
+# routes already take), clamped by _df_today.
+#
+# Old binaries cannot have rows in debt_transactions (Debt Freedom has never shipped
+# in a store build), so for them every number below is exactly what it was.
+DEBT_BUDGET_KINDS = [df.KIND_MINIMUM, df.KIND_EXTRA, df.KIND_MINIMUM_REVERSAL]
+
+
+def _local_now(today: Optional[datetime.date]) -> datetime.datetime:
+    """`today` (the phone's date, clamped) as the `when` _month_year_at takes."""
+    d = _df_today(today)
+    return datetime.datetime(d.year, d.month, d.day)
+
+
+def _month_span(month: str, today: Optional[datetime.date]):
+    """(first day, last day) of budget month `month` as it resolves today; None for a
+    name that is not a month."""
+    if month not in MONTHS:
+        return None
+    year = _month_year_at(month, _local_now(today))
+    number = MONTHS.index(month) + 1
+    return (datetime.date(year, number, 1),
+            datetime.date(year, number, df.days_in_month(year, number)))
+
+
+def _debt_paydown(user_id: str, month: str, today: Optional[datetime.date] = None) -> float:
+    """Net Debt Freedom payments booked to budget month `month`."""
+    span = _month_span(month, today)
+    if span is None:
+        return 0.0
+    rows = (supabase.table("debt_transactions").select("debt_id, kind, amount, occurred_on")
+            .eq("user_id", user_id).in_("kind", DEBT_BUDGET_KINDS)
+            .gte("occurred_on", span[0].isoformat()).lte("occurred_on", span[1].isoformat())
+            .execute().data or [])
+    return df.budget_paydown(rows, *span)
+
+
+def _debt_budget_month(on, today: Optional[datetime.date]) -> Optional[str]:
+    """The budget month a debt row dated `on` counts toward, or None when it falls in
+    no budget month the app can show today (older than the month name's current year)."""
+    day = df._date(on)
+    if day is None:
+        return None
+    month = MONTHS[day.month - 1]
+    return month if _month_year_at(month, _local_now(today)) == day.year else None
+
+
+def _assert_debt_month_open(user_id: str, on, today: Optional[datetime.date]):
+    """Section 2: a debt payment is part of its month's Goals spend, so writing,
+    undoing or deleting one in a closed month is refused like any other edit to it —
+    same rule and same message as _assert_month_open."""
+    _assert_month_open(user_id, _debt_budget_month(on, today))
+
+
+def _month_budget_numbers(user_id: str, current_month: str, features: set,
+                          today: Optional[datetime.date] = None) -> dict:
     """A month's income, tithe, split, budgets and spend — the numbers the dashboard
     serves. Shared with GET /home/summary/ so the home can never disagree with them."""
     income_response = supabase.table("income").select("amount, day, tithe_enabled, tithe_rate, budget_type").eq("month", current_month).eq("user_id", user_id).execute()
@@ -760,24 +833,32 @@ def _month_budget_numbers(user_id: str, current_month: str, features: set) -> di
     total_needs = sum(item["amount"] for item in expense_needs_response.data)
     total_wants = sum(item["amount"] for item in expense_wants_response.data)
     # Goals bucket = historical 'Goals' expenses (legacy "Investments") + income-sourced
-    # savings deposits. Debt-goal payments are just savings_transactions deposits with
-    # source='income', so they flow into this total automatically — no extra query needed.
+    # savings deposits + this month's net Debt Freedom payments (_debt_paydown).
     # (Transfers between goals use source='transfer' and are intentionally excluded.)
     total_goals = sum(item["amount"] for item in expense_goals_response.data) + sum(item["amount"] for item in savings_deposits_response.data)
+    debt_paydown = _debt_paydown(user_id, current_month, today)
+    if debt_paydown:
+        # Only when there is any: adding 0.0 would turn an int total into a float and
+        # change the JSON an old binary receives ("0" → "0.0").
+        total_goals += debt_paydown
 
     return {
         "total_income": total_income, "settings": settings, "st": st, "ent": ent,
         "tithe": tithe, "bt_key": bt_key, "bt": bt,
         "budgets": {"needs": needs_budget, "wants": wants_budget, "goals": goals_budget},
         "expenses": {"needs": total_needs, "wants": total_wants, "goals": total_goals},
+        "debt_paydown": debt_paydown,
     }
 
 
 @app.get("/dashboard/{current_month}")
 def get_dashboard_data(current_month: str,
+                       today: Optional[datetime.date] = None,
                        features: set = Depends(_client_features),
                        user_id: str = Depends(get_current_user_id)):
-    nums = _month_budget_numbers(user_id, current_month, features)
+    # `today` is optional and new: the phone's date, which decides the YEAR a month
+    # name means for its Debt Freedom payments. Old binaries never send it.
+    nums = _month_budget_numbers(user_id, current_month, features, today)
     total_income, settings, st, ent = nums["total_income"], nums["settings"], nums["st"], nums["ent"]
     tithe, bt_key, bt = nums["tithe"], nums["bt_key"], nums["bt"]
     needs_budget, wants_budget, goals_budget = (nums["budgets"][k] for k in ("needs", "wants", "goals"))
@@ -796,7 +877,7 @@ def get_dashboard_data(current_month: str,
     # number above, so this is purely informational and can never move the score).
     general_id = _ensure_general_savings(user_id)
     roll_entry = _gs_rollover_entry(user_id, current_month, general_id)
-    roll_target, _, _ = _compute_target_rollover(user_id, current_month, settings, st, ent)
+    roll_target, _, _ = _compute_target_rollover(user_id, current_month, settings, st, ent, today)
     # A row left over from LAST year's same-named month reports as open (see
     # _status_is_current_year), so `closed_at` is suppressed with it — the two must
     # agree or the client shows a "closed on <date>" banner for a month it can edit.
@@ -1548,7 +1629,8 @@ def _goal_balance(user_id: str, goal_id: Optional[int]) -> float:
     return _r(sum(t["amount"] if t["type"] == "deposit" else -t["amount"] for t in res.data))
 
 def _compute_target_rollover(user_id: str, month: str, settings: Optional[dict] = None,
-                             status: Optional[dict] = None, ent=None):
+                             status: Optional[dict] = None, ent=None,
+                             today: Optional[datetime.date] = None):
     """Pure function of the month's data: the leftover the dashboard implies.
 
     budgetable is computed with the SAME _month_tithe the dashboard uses (live
@@ -1582,7 +1664,9 @@ def _compute_target_rollover(user_id: str, month: str, settings: Optional[dict] 
     goals_exp = _sum_expenses(user_id, month, "Goals")
     gdep = supabase.table("savings_transactions").select("amount") \
         .eq("user_id", user_id).eq("month", month).eq("type", "deposit").eq("source", "income").execute()
-    goals_spent = goals_exp + sum(r["amount"] for r in gdep.data)
+    # + the month's net Debt Freedom payments, exactly as _month_budget_numbers adds
+    # them, so the close-out target is the leftover the home shows.
+    goals_spent = goals_exp + sum(r["amount"] for r in gdep.data) + _debt_paydown(user_id, month, today)
 
     target = max(0.0, _r(budgetable - needs_spent - wants_spent - goals_spent))
     breakdown = {
@@ -1667,7 +1751,8 @@ def _recon_summary(user_id: str, recon_id: Optional[int] = None):
     return _r(owed), _r(repaid), _r(max(0.0, owed - repaid)), recon_id
 
 def reconcile_month(user_id: str, month: str, settings: Optional[dict] = None,
-                    status: Optional[dict] = None, ent=None) -> float:
+                    status: Optional[dict] = None, ent=None,
+                    today: Optional[datetime.date] = None) -> float:
     """Single source of truth for a month's rollover. Idempotent and convergent:
     re-running with no data change is a no-op. Drives
         net = (GS rollover entry) − (this month's booked reconciliation debt)
@@ -1686,7 +1771,7 @@ def reconcile_month(user_id: str, month: str, settings: Optional[dict] = None,
     # `ent` only reaches the per-category breakdown, which this function discards:
     # the target is NET leftover and no split can move it. It is threaded anyway so
     # there is one convention for every caller rather than two.
-    target, _, _ = _compute_target_rollover(user_id, month, settings, status, ent)
+    target, _, _ = _compute_target_rollover(user_id, month, settings, status, ent, today)
 
     general_id = _ensure_general_savings(user_id)
     entry = _gs_rollover_entry(user_id, month, general_id)
@@ -1740,6 +1825,7 @@ def reconcile_month(user_id: str, month: str, settings: Optional[dict] = None,
 
 @app.get("/rollover/preview/")
 def rollover_preview(month: str,
+                     today: Optional[datetime.date] = None,
                      features: set = Depends(_client_features),
                      user_id: str = Depends(get_current_user_id)):
     """Target rollover + per-category breakdown (split used for display only) and
@@ -1748,7 +1834,7 @@ def rollover_preview(month: str,
     # month is frozen, and this keeps it to one query rather than two.
     st = _month_status(user_id, month)
     target, breakdown, budgetable = _compute_target_rollover(
-        user_id, month, None, st, _entitlements(user_id, features))
+        user_id, month, None, st, _entitlements(user_id, features), today)
     locked = _status_locked(st)
     return {
         "month": month,
@@ -1762,6 +1848,9 @@ def rollover_preview(month: str,
 class RolloverAction(BaseModel):
     user_id: Optional[str] = None
     month: str
+    # The phone's date (optional, new): decides which year's Debt Freedom payments
+    # the month's target counts. Old binaries omit it and get the server's date.
+    today: Optional[datetime.date] = None
 
 @app.post("/rollover/close/")
 def rollover_close(action: RolloverAction,
@@ -1781,7 +1870,7 @@ def rollover_close(action: RolloverAction,
     # Resolved once and used for both the money and the stamp, for the same reason
     # `settings` is: the two must not be able to disagree.
     ent = _entitlements(user_id, features)
-    moved = reconcile_month(user_id, action.month, settings, st, ent)
+    moved = reconcile_month(user_id, action.month, settings, st, ent, action.today)
     payload = {
         "user_id": user_id, "month": action.month,
         "closed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -3508,7 +3597,7 @@ def get_home_summary(month: str,
             stamps.append(rows[0]["created_at"])
     last = max(stamps, key=_parse_ts) if stamps else None
 
-    nums = _month_budget_numbers(user_id, month, features)
+    nums = _month_budget_numbers(user_id, month, features, today)
 
     goals = (supabase.table("savings_goals").select("*").eq("user_id", user_id)
              .eq("completed", False).execute().data or [])

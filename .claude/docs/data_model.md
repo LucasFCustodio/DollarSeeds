@@ -60,7 +60,7 @@ A goal deposit is normally booked to the current `month`, but the Goals funding-
 | `goal_type` | text | `"saving"` (default) or `"debt"`. Debt goals behave identically to savings goals — same allocation math (`allocated_amount / target_amount`), same transactions, same transfer support. Only the Goals-tab grouping/labels differ. |
 | `created_at` | timestamp | |
 
-A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdrawals)` over `savings_transactions` with that `goal_id` (`_with_allocated` in `main.py`). Debt payments are just deposits with `source='income'`, so they count toward the Goals 20% budget exactly like savings deposits.
+A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdrawals)` over `savings_transactions` with that `goal_id` (`_with_allocated` in `main.py`). A deposit into a legacy debt goal is an ordinary `source='income'` deposit, so it counts toward the Goals budget like any other — but Debt Freedom payments are **not** savings rows at all; see "Budget Calculation".
 
 **Completing a goal** (`POST /savings/goal/{id}/finish`) withdraws the goal's entire funded amount in one server-side transaction, which drives that computed value to $0 — hence the `completed_amount` snapshot, which is what the Completed tab actually renders (falling back to the computed value for goals completed before the column existed). The legacy `PATCH /savings/goal/{id}/complete` only flips the flag and writes no withdrawal; it exists solely for app builds already shipped, which write their own withdrawal first.
 
@@ -279,6 +279,40 @@ wants_budget  = budgetable * split.wants
 goals_budget  = budgetable * split.savings
 ```
 
+### The Goals split's spend
+
+```
+goals_spent = legacy 'Goals' expenses
+            + savings_transactions deposits with source = 'income'
+            + net Debt Freedom payments booked to the month
+```
+
+**Net Debt Freedom payments** = `payment_minimum` + `payment_extra` − `minimum_reversal`
+(legacy) rows in `debt_transactions`, dated by `occurred_on`. `interest`, `late_fee`,
+`balance_edit` and `statement_adjustment` never count — they are what the debt cost,
+not money the user paid. The rule is `df.budget_paydown`; `_debt_paydown` in `main.py`
+loads the rows.
+
+**They are read, never mirrored.** A debt payment writes no `savings_transactions` row:
+that would raise General Savings and the home's "saved toward goals" with money that
+left the user.
+
+**Which month a payment belongs to.** Months carry no year, payments do. A payment
+counts toward budget month M only when `occurred_on` is in calendar month M of the
+year `_month_year_at(M, today)` resolves to — so last October never counts toward this
+October. "Today" is the phone's date when the client sends the optional `today`
+(clamped by `_df_today`, as on the `/debt-freedom/` routes), else the server's.
+`/dashboard/{month}`, `/dashboard/trends/`, `/rollover/preview/` and
+`POST /rollover/close/` (body field) all accept it; `/home/summary/` already did.
+
+**One place, every consumer.** `_month_budget_numbers` adds it, so the dashboard, the
+home summary's over-budget list, the compliance score and the client's "all green"
+check agree; `_compute_target_rollover` adds the same `_debt_paydown`, so the close-out
+target is the leftover the home shows; trends applies `df.budget_paydown` per month.
+Old binaries cannot have Debt Freedom rows (the tab has never shipped in a store
+build), so their numbers are unchanged — and the total is only touched when there is a
+payment, so an int total stays an int in their JSON.
+
 `BUDGET_TYPES` in `main.py` is the single source of truth for the three splits —
 `balanced` 50/30/20, `wealth_builder` 30/20/50, `firm_foundation` 70/10/20. Only the
 KEY is ever stored (never the percentages), so they cannot drift.
@@ -322,7 +356,7 @@ storing a choice the dashboard would then ignore.
 
 ## Category Name Mismatch
 
-The dashboard's 50/30/20 split shows **"Needs / Wants / Goals"**, and the DB stores expense categories with those same plural names (`Needs`/`Wants`/`Goals`) — they match. The Goals bucket total = historical `Goals` expenses + income-sourced savings deposits (`savings_transactions` where `type='deposit'` AND `source='income'`); transfers between goals (`source='transfer'`) are excluded so they don't double-count. (Note: earlier docs described the categories as `Need/Want/Savings/Debt` — that was never the stored reality; see the audited values above.)
+The dashboard's 50/30/20 split shows **"Needs / Wants / Goals"**, and the DB stores expense categories with those same plural names (`Needs`/`Wants`/`Goals`) — they match. The Goals bucket total = historical `Goals` expenses + income-sourced savings deposits (`savings_transactions` where `type='deposit'` AND `source='income'`) + net Debt Freedom payments (see "The Goals split's spend" above); transfers between goals (`source='transfer'`) are excluded so they don't double-count. (Note: earlier docs described the categories as `Need/Want/Savings/Debt` — that was never the stored reality; see the audited values above.)
 
 ## Row Level Security
 
