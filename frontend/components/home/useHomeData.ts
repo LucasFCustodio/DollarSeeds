@@ -24,6 +24,7 @@ import { resolveBudgetType, splitLabel } from '../../constants/budgetTypes';
 import { maybeRequestReview } from '../../lib/storeReview';
 import { fetchHomeSummary, type HomeSummary } from '../../lib/homeSummary';
 import { fetchHomeProgress, type HomeProgress } from '../../lib/homeProgress';
+import { localDateISO } from '../../lib/debtFreedom';
 import {
     classifyPendingTransaction, getPendingTransactions, isBankConnected,
     type ClassifyTarget, type PendingTransaction,
@@ -115,7 +116,11 @@ export function useHomeData() {
         loadSummary();
         loadProgress();
         try {
-            const res = await axios.get(`${BASE}/dashboard/${currentMonth}?user_id=${user.id}`);
+            // `today`: the phone's date decides which year's Debt Freedom payments the
+            // month name counts toward its Goals split (the server clock is UTC).
+            const res = await axios.get(`${BASE}/dashboard/${currentMonth}`, {
+                params: { user_id: user.id, today: localDateISO() },
+            });
             const data: DashboardData = res.data;
             setDashboard(data);
 
@@ -155,7 +160,7 @@ export function useHomeData() {
         if (!user?.id || closingMonth) return;
         setClosingMonth(true);
         try {
-            await axios.post(`${BASE}/rollover/close/`, { user_id: user.id, month: currentMonth });
+            await axios.post(`${BASE}/rollover/close/`, { user_id: user.id, month: currentMonth, today: localDateISO() });
             const openedScripture = await fetchDashboard();
             // A positive moment: ask for the App Store rating — but only AFTER the
             // celebration, never over it. maybeRequestReview owns the throttling and
