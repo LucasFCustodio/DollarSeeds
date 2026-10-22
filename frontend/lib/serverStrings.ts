@@ -105,7 +105,19 @@ export function serverError(detail: string, t: T, monthLabel: (m: string) => str
             return t('serverError.targetTooSmall', { defaultValue: detail });
         case 'Goal is already completed.':
             return t('serverError.alreadyCompleted', { defaultValue: detail });
+        case 'Debt goals no longer take new money. Remove this goal to move what it holds to General Savings.':
+            return t('serverError.debtGoalRetired', { defaultValue: detail });
+        case 'This debt has payments in a closed month, so deleting it would change that month. You can mark it paid off instead.':
+            return t('serverError.debtHasClosedMonthPayments', { defaultValue: detail });
+        case 'Only an extra payment from the current billing cycle can be deleted.':
+            return t('serverError.extraNotThisCycle', { defaultValue: detail });
         default:
             return detail;
     }
+}
+
+/** Is this `detail` the closed-month refusal (_assert_month_open)? The debt routes use
+ *  it for a payment whose month is closed, and the toggle shows it as the reason. */
+export function isMonthClosedDetail(detail: unknown): detail is string {
+    return typeof detail === 'string' && /^.+ is closed\. Reopen it before making changes\.$/.test(detail);
 }

@@ -10,6 +10,8 @@ import { isAxiosError } from 'axios';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 import { useAnalytics } from '../../lib/analytics';
+import { useLocale } from '../../context/LocaleContext';
+import { isMonthClosedDetail } from '../../lib/serverStrings';
 import { localDateISO, logPayment, undoMinimum, type Debt, type OneDebt } from '../../lib/debtFreedom';
 
 export function useMinToggle(
@@ -18,6 +20,7 @@ export function useMinToggle(
     onStale: () => void,
 ) {
     const { t } = useTranslation('debts');
+    const { serverError } = useLocale();
     const analytics = useAnalytics();
     const [pending, setPending] = useState<{ id: number; value: boolean } | null>(null);
     const inFlight = useRef(false);
@@ -43,13 +46,20 @@ export function useMinToggle(
         } catch (e) {
             const refused = isAxiosError(e) && e.response?.status === 409;
             if (!refused) console.error('min toggle failed', e);
-            Alert.alert(refused ? (turningOn ? t('toggle.errAlready') : t('toggle.errClosed')) : t('toggle.errFailed'));
+            // A closed budget month is the server's reason to give, in its own words
+            // (mapped for the language); the other 409s keep the toggle's own copy.
+            const detail = isAxiosError(e) ? e.response?.data?.detail : undefined;
+            Alert.alert(
+                refused && isMonthClosedDetail(detail) ? serverError(detail)
+                    : refused ? (turningOn ? t('toggle.errAlready') : t('toggle.errClosed'))
+                    : t('toggle.errFailed'),
+            );
             onStale();
         } finally {
             inFlight.current = false;
             setPending(null);
         }
-    }, [analytics, onChanged, onStale, t]);
+    }, [analytics, onChanged, onStale, serverError, t]);
 
     /** The switch's target while its request is in flight, or null. */
     const pendingValueFor = useCallback(
