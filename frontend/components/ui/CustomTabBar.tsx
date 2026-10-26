@@ -42,8 +42,9 @@ const TAB_ICONS: Record<string, TabIconComponent> = {
     debts: IconDebtsTab,
 };
 
-// Routes that exist in the file tree but are not shown yet. The Debts tab is built
-// but stays out of production until DEBT_FREEDOM_ENABLED is approved.
+// Routes that exist in the file tree but are not shown. The Debts tab shows for every
+// user while DEBT_FREEDOM_ENABLED is on (the tab itself decides between the garden and
+// the tutorial); turning the kill switch off hides it again.
 const HIDDEN_ROUTES = new Set<string>(DEBT_FREEDOM_ENABLED ? [] : ['debts']);
 
 // Labels come from `common:tabs.<routeName>`, keyed by the Expo Router route name.
