@@ -1,8 +1,13 @@
 /**
- * useMinToggle — the min-payment toggle's request, shared by the garden and the detail
- * screen. Off → on logs this cycle's minimum; on → off undoes it. The caller applies the
- * returned debt at once (so the switch never shows a stale state that invites a second
- * log) and plays the drops (garden) or queues them (detail) in `onChanged`.
+ * useMinToggle — the min-payment toggle's request, shared by the garden, the detail
+ * screen and "View all min payments". Off → on logs a minimum; on → off undoes it.
+ * The caller applies the returned debt at once (so the switch never shows a stale
+ * state that invites a second log) and plays the drops (garden) or queues them
+ * (detail) in `onChanged`.
+ *
+ * `toggle(debt)` is the current cycle's minimum. `toggle(debt, dueDate)` is a LATE
+ * minimum for that missed cycle: on while the cycle is no longer in `missed_cycles`.
+ * One in-flight guard covers both, so no two minimum requests ever overlap.
  */
 import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
@@ -12,7 +17,12 @@ import * as Haptics from 'expo-haptics';
 import { useAnalytics } from '../../lib/analytics';
 import { useLocale } from '../../context/LocaleContext';
 import { isMonthClosedDetail } from '../../lib/serverStrings';
-import { localDateISO, logPayment, undoMinimum, type Debt, type OneDebt } from '../../lib/debtFreedom';
+import { useDebtFreedomLockedHandler } from '../../lib/debtFreedomAccess';
+import {
+    localDateISO, logPayment, missedCyclesOf, undoMinimum, type Debt, type OneDebt,
+} from '../../lib/debtFreedom';
+
+type Pending = { id: number; cycle: string | null; value: boolean };
 
 export function useMinToggle(
     onChanged: (result: OneDebt, on: boolean) => void,
@@ -22,28 +32,40 @@ export function useMinToggle(
     const { t } = useTranslation('debts');
     const { serverError } = useLocale();
     const analytics = useAnalytics();
-    const [pending, setPending] = useState<{ id: number; value: boolean } | null>(null);
+    const onLocked = useDebtFreedomLockedHandler();
+    const [pending, setPending] = useState<Pending | null>(null);
     const inFlight = useRef(false);
 
-    const toggle = useCallback(async (debt: Debt) => {
+    const toggle = useCallback(async (debt: Debt, cycleDueDate?: string) => {
         if (inFlight.current) return;
         inFlight.current = true;
-        const turningOn = !debt.min_logged_this_cycle;
-        setPending({ id: debt.id, value: turningOn });
+        const cycle = cycleDueDate ?? null;
+        const turningOn = cycle
+            ? missedCyclesOf(debt).some(c => c.due_date === cycle)
+            : !debt.min_logged_this_cycle;
+        setPending({ id: debt.id, cycle, value: turningOn });
         try {
             if (turningOn) {
-                const result = await logPayment(debt.id, { minimum: true, occurredOn: localDateISO() });
+                const result = await logPayment(debt.id, {
+                    minimum: true, occurredOn: localDateISO(), cycleDueDate: cycle ?? undefined,
+                });
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 analytics.debtPaymentLogged({ debt_id: debt.id, kind: 'minimum', growth_step: result.debt.growth_step });
                 analytics.debtMinToggled({ debt_id: debt.id, state: 'on' });
                 onChanged(result, true);
             } else {
-                const result = await undoMinimum(debt.id);
+                const result = await undoMinimum(debt.id, cycle ?? undefined);
                 Haptics.selectionAsync().catch(() => {});
                 analytics.debtMinToggled({ debt_id: debt.id, state: 'off' });
                 onChanged(result, false);
             }
         } catch (e) {
+            // Not premium (any more): the entitlement refresh re-renders the screen
+            // read-only. No alert of our own.
+            if (onLocked(e)) {
+                onStale();
+                return;
+            }
             const refused = isAxiosError(e) && e.response?.status === 409;
             if (!refused) console.error('min toggle failed', e);
             // A closed budget month is the server's reason to give, in its own words
@@ -59,11 +81,13 @@ export function useMinToggle(
             inFlight.current = false;
             setPending(null);
         }
-    }, [analytics, onChanged, onStale, serverError, t]);
+    }, [analytics, onChanged, onLocked, onStale, serverError, t]);
 
-    /** The switch's target while its request is in flight, or null. */
+    /** The switch's target while its request is in flight, or null. `cycle` picks a
+     *  late minimum's switch; without it, the current cycle's. */
     const pendingValueFor = useCallback(
-        (id: number) => (pending && pending.id === id ? pending.value : null),
+        (id: number, cycle?: string | null) =>
+            (pending && pending.id === id && pending.cycle === (cycle ?? null) ? pending.value : null),
         [pending],
     );
 

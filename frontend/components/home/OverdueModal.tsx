@@ -9,6 +9,7 @@
  *   one harvestSoft row per debt, in the server's order (longest overdue first):
  *     {name}             $min   [Review]
  *     was due {date}            Pay now      ← only with a safe pay_url
+ *     ("{n} missed since {date}" when several months are owed: the date is the oldest)
  *
  * Only the name truncates. When "was due {date}" can't fit beside the amount and the
  * buttons (it would wrap), every row moves its amount under the date instead of
@@ -129,7 +130,9 @@ function DebtRow({ debt, stacked, onWraps, onReview }: {
                     style={[homeType.small, { color: theme.ink2 }]}
                     onTextLayout={e => { if (!stacked && e.nativeEvent.lines.length > 1) onWraps(); }}
                 >
-                    {t('overdueAlert.wasDue', { date: f.dayMonthOf(debt.missed_due_date) })}
+                    {(debt.missed_count ?? 1) > 1
+                        ? t('overdueAlert.wasDueMany', { date: f.dayMonthOf(debt.missed_due_date), count: debt.missed_count })
+                        : t('overdueAlert.wasDue', { date: f.dayMonthOf(debt.missed_due_date) })}
                 </Text>
                 {stacked ? amountText : null}
             </View>

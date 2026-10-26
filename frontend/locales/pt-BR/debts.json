@@ -209,5 +209,16 @@
       "text": "Posso todas as coisas naquele que me fortalece.",
       "ref": "Filipenses 4:13"
     }
+  },
+  "missed": {
+    "button": "Ver todos os mínimos",
+    "buttonA11y": "Ver todos os mínimos de {{name}}. {{count}} mês em aberto.",
+    "buttonA11y_plural": "Ver todos os mínimos de {{name}}. {{count}} meses em aberto.",
+    "title": "Pagamentos mínimos",
+    "close": "Fechar",
+    "monthMinimum": "Mínimo de {{month}}",
+    "wasDue": "venceu em {{date}}",
+    "due": "vence em {{date}}",
+    "rowA11y": "{{month}}, {{date}}, {{amount}}"
   }
 }

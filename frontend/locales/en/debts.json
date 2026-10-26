@@ -209,5 +209,16 @@
       "text": "I can do all this through him who gives me strength.",
       "ref": "Philippians 4:13"
     }
+  },
+  "missed": {
+    "button": "View all min payments",
+    "buttonA11y": "View all min payments for {{name}}. {{count}} month is owed.",
+    "buttonA11y_plural": "View all min payments for {{name}}. {{count}} months are owed.",
+    "title": "Minimum payments",
+    "close": "Close",
+    "monthMinimum": "{{month}} minimum",
+    "wasDue": "was due {{date}}",
+    "due": "due {{date}}",
+    "rowA11y": "{{month}}, {{date}}, {{amount}}"
   }
 }

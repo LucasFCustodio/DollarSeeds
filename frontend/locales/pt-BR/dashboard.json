@@ -50,7 +50,8 @@
     "payA11y": "Pagar {{name}} online",
     "reviewA11y": "Revisar em Dívidas",
     "reviewDebtA11y": "Revisar {{name}} em Dívidas",
-    "close": "Fechar"
+    "close": "Fechar",
+    "wasDueMany": "{{count}} em aberto desde {{date}}"
   },
   "split": {
     "needs": "Necessidades",

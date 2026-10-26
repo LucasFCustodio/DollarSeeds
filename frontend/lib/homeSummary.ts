@@ -57,10 +57,12 @@ export interface OverdueDebt {
     id: number;
     name: string;
     min_payment: number;
-    /** YYYY-MM-DD: the last passed due date whose minimum was not logged. */
+    /** YYYY-MM-DD: the OLDEST passed due date still owed its minimum. */
     missed_due_date: string;
     days_overdue: number;
     pay_url: string | null;
+    /** How many passed cycles are owed a minimum. Absent from an older backend: 1. */
+    missed_count?: number;
 }
 
 export interface HomeDebts {
