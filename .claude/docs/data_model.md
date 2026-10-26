@@ -68,13 +68,17 @@ now. A *user* debt goal is `goal_type = 'debt'` and not `is_reconciliation`
 one:
 
 - **Holding $0** (`allocated_amount` ≤ half a cent, `_is_hidden_debt_goal`) → left out
-  of `GET /savings/goal/`, `GET /savings/goal/completed/`, and the goals half of
-  `GET /home/progress/` (counts, nearest goal, "saved toward goals", milestones).
-  `goals_near_completion` already skipped every debt goal.
-- **Still holding money** (only an old binary can deposit into one) → still listed, so
-  money is never hidden, and still deletable (prior-month money to General Savings, as
-  for any goal). `POST /savings/transaction/` (deposits) and `POST /savings/transfer/`
-  (as `to_goal_id`) refuse it with 409 `RETIRED_DEBT_GOAL_DETAIL`.
+  of `GET /savings/goal/` and `GET /savings/goal/completed/`.
+- **Still holding money** (only an old binary can deposit into one) → still listed on
+  the Goals tab, so money is never hidden, and still deletable (prior-month money to
+  General Savings, as for any goal). `POST /savings/transaction/` (deposits) and
+  `POST /savings/transfer/` (as `to_goal_id`) refuse it with 409
+  `RETIRED_DEBT_GOAL_DETAIL`.
+- **Either kind** is left out of the home: the goals half of `GET /home/progress/`
+  (completed and total counts, the nearest goal, "saved toward goals" and its series,
+  milestones) drops every user debt goal and its transactions, funded or not — the
+  Goals tab is the only place one shows. `goals_near_completion` (`/home/summary/`)
+  skips every debt goal for every client.
 - **Either kind** is excluded from the free tier's eligible goals: it never counts in
   `goals_used`, is never `locked`, and never takes the active slot.
 

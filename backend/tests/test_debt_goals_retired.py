@@ -165,13 +165,54 @@ def test_a_funded_debt_goal_can_be_deleted_and_its_money_goes_to_general_savings
 
 # ══ the home ══════════════════════════════════════════════════════════════════
 
-def test_the_home_goals_ring_leaves_out_zero_dollar_debt_goals(client, account):
+def test_the_home_goals_ring_leaves_out_every_debt_goal(client, account):
     goals = client.get("/home/progress/", headers=LIMITS).json()["goals"]
-    # Listed goals: the funded debt goal and "Trip" (General Savings and
+    # Only "Trip": every user debt goal is gone, funded or not (General Savings and
     # Reconciliation are never listed).
-    assert goals["total_count"] == 2
+    assert goals["total_count"] == 1
     old = client.get("/home/progress/", headers=auth(USER_A)).json()["goals"]
     assert old["total_count"] == 4
+
+
+def test_a_funded_legacy_debt_goal_never_reaches_the_home(client, supabase_db):
+    """The production case: a funded "Student Loan" debt goal at 15% showed as
+    "Student Loan is 15% there" and counted in the ring. For a limits client it is in
+    none of the ring's counts, the nearest goal, the saved series, the milestones or
+    goals_near_completion. It stays on the Goals tab, where its money is."""
+    db = supabase_db
+    goal(db, "General Savings", is_general=True, target_amount=None)
+    loan = goal(db, "Student Loan", goal_type="debt", created_at="2026-02-01T00:00:00+00:00")
+    deposit(db, loan["id"], 150.0, created_at="2026-03-05T00:00:00+00:00")       # 15% of 1000
+    near = goal(db, "Car note", goal_type="debt", created_at="2026-02-02T00:00:00+00:00")
+    deposit(db, near["id"], 950.0, created_at="2026-03-06T00:00:00+00:00")       # 95%: "near completion"
+    paid = goal(db, "Old card", goal_type="debt", completed=True, completed_amount=400.0,
+                completed_at="2026-04-01T00:00:00+00:00", created_at="2026-01-01T00:00:00+00:00")
+    deposit(db, paid["id"], 400.0, created_at="2026-03-01T00:00:00+00:00")
+    db.seed("savings_transactions", {"user_id": USER_A, "goal_id": paid["id"], "title": "x", "amount": 400.0,
+                                     "type": "withdrawal", "day": 1, "month": "April",
+                                     "created_at": "2026-04-01T00:00:00+00:00"})
+    trip = goal(db, "Trip", target_amount=200.0, created_at="2026-02-03T00:00:00+00:00")
+    deposit(db, trip["id"], 100.0, created_at="2026-03-07T00:00:00+00:00")       # 50%
+
+    goals = client.get("/home/progress/", headers=LIMITS).json()["goals"]
+    assert (goals["total_count"], goals["completed_count"]) == (1, 0)
+    assert goals["nearest"] == {"id": trip["id"], "title": "Trip", "pct": 0.5}
+    assert goals["total_saved"] == 100.0
+    assert goals["series"][-1]["cumulative"] == 100.0
+    assert goals["milestones"] == []
+
+    summary = client.get("/home/summary/", headers=LIMITS, params={"month": "March"}).json()
+    assert summary["goals_near_completion"] == []
+
+    # The Goals tab still lists both funded debt goals (their money is never hidden).
+    listed = [g["id"] for g in client.get("/savings/goal/", headers=LIMITS).json()["data"]]
+    assert loan["id"] in listed and near["id"] in listed
+
+    # A build without limits keeps today's ring, debt goals and all.
+    old = client.get("/home/progress/", headers=auth(USER_A)).json()["goals"]
+    assert (old["total_count"], old["completed_count"]) == (4, 1)
+    assert old["nearest"]["title"] == "Car note"
+    assert old["milestones"] == [{"month": "2026-04", "name": "Old card"}]
 
 
 def test_the_nearest_goal_is_never_a_hidden_debt_goal(client, account):

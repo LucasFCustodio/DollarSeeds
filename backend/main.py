@@ -3886,16 +3886,13 @@ def get_home_progress(today: Optional[datetime.date] = None,
                     .select("id, goal_id, amount, type, created_at")
                     .eq("user_id", user_id).execute().data or [])
     if LIMITS_FEATURE in features:
-        # Retired debt goals holding no money are not goals to this build: not in the
-        # ring's counts, not the nearest goal, and not "saved toward goals" (paying a
-        # debt is not saving). Completed ones hold $0 too, so they go with them.
-        held: dict = {}
-        for t in savings_txns:
-            gid = t.get("goal_id")
-            held[gid] = held.get(gid, 0.0) + (df._num(t.get("amount")) if t.get("type") == "deposit"
-                                              else -df._num(t.get("amount")))
-        hidden = {g["id"] for g in goals
-                  if _is_hidden_debt_goal({**g, "allocated_amount": max(0.0, held.get(g["id"], 0.0))})}
+        # Retired user debt goals are not goals to this build, whether or not they
+        # still hold money: debts live on the Debts tab. So none of them is in the
+        # ring's counts, the nearest goal, the "saved toward goals" series or the
+        # milestones (paying a debt is not saving). A funded one stays listed on the
+        # Goals tab only, so that money is never hidden. The Reconciliation goal is
+        # not a user debt goal and is handled by home_progress_goals as before.
+        hidden = {g["id"] for g in goals if _is_user_debt_goal(g)}
         goals = [g for g in goals if g["id"] not in hidden]
         savings_txns = [t for t in savings_txns if t.get("goal_id") not in hidden]
 
