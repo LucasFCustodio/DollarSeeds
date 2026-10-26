@@ -151,7 +151,11 @@ function MonthRow({ row, on, pending, fixed, onChange }: {
     return (
         <View style={[styles.row, { backgroundColor: owed ? theme.harvestSoft : on ? theme.brandSoft : theme.bg }]}>
             <View style={styles.flex}>
-                <Text numberOfLines={2} style={[styles.month, { color: theme.ink, fontFamily: Fonts.sansSemiBold }]}>{title}</Text>
+                {/* One line, shrinking to fit beside the amount and the switch: the
+                    longest titles ("September minimum", "Mínimo de Novembro") need
+                    about 0.7 next to a five-digit amount with cents. */}
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}
+                    style={[styles.month, { color: theme.ink, fontFamily: Fonts.sansSemiBold }]}>{title}</Text>
                 <Text style={[styles.when, { color: theme.ink2, fontFamily: Fonts.sans }]}>{when}</Text>
             </View>
             <Text style={[styles.amount, { color: theme.ink, fontFamily: Fonts.sansSemiBold }]}>{amount}</Text>
