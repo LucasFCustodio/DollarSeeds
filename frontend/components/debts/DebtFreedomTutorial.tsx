@@ -8,13 +8,14 @@
  * when Reduce Motion is on. The floating tab bar stays visible: each page keeps its
  * content clear of it.
  *
- * The art is the garden's own (PlantView, WaterStream), one species, with a sample
- * debt name ("Credit Card") on the pot's label plate, so the tutorial shows exactly
- * what the tab will look like. Each plant is drawn as
+ * The art is the garden's own (PlantView, WaterStream, PotLabel), one species, so the
+ * tutorial shows exactly what the tab will look like. The seed and half-grown pots
+ * carry the garden's full label for ONE sample debt — "Credit Card", a $35 minimum
+ * due the 15th of next month — at 0% and 50% paid. Each plant is drawn as
  * large as its page allows, anchored to the bottom of its area so the empty sky above
  * a young plant is what gets cropped.
  */
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -24,8 +25,9 @@ import Button from '../ui/Button';
 import { IconChevronDown } from '../icons';
 import { useReduceMotion } from '../home/RotatingCard';
 import { PAINTED_OUTLINE } from '../home/PaintedCard';
-import type { PlantState } from '../../lib/debtFreedom';
+import { localDateISO, type PlantState } from '../../lib/debtFreedom';
 import PlantView from './PlantView';
+import PotLabel, { type PotLabelDebt } from './PotLabel';
 import WaterStream from './WaterStream';
 import { GROUND_Y } from './PlantSection';
 import { ART_TOP, ART_TOP_PAID_OFF, CANVAS_H, CANVAS_W, POT_LABEL_BOX, POT_WIDTH } from './art';
@@ -39,20 +41,42 @@ const STREAM_MIN = 72;
 /** A wide stream: the garden's grows with each debt paid off; this is ~6 of them. */
 const STREAM_PAID_COUNT = 6;
 
-type Step = { key: 'seed' | 'grow' | 'free'; step: number; state: PlantState };
+/** `pctPaid` is the sample debt's label on that page (paid off shows its stake). */
+type Step = { key: 'seed' | 'grow' | 'free'; step: number; state: PlantState; pctPaid: number };
 const STEPS: Step[] = [
-    { key: 'seed', step: 0, state: 'seed' },
-    { key: 'grow', step: 5, state: 'growing' },
-    { key: 'free', step: 10, state: 'paid_off' },
+    { key: 'seed', step: 0, state: 'seed', pctPaid: 0 },
+    { key: 'grow', step: 5, state: 'growing', pctPaid: 0.5 },
+    { key: 'free', step: 10, state: 'paid_off', pctPaid: 1 },
 ];
 const PAGE_COUNT = 1 + STEPS.length;
+/** The sample debt's minimum payment, in the user's display currency. */
+const SAMPLE_MIN_PAYMENT = 35;
+/** Its due day, in the month after today. */
+const SAMPLE_DUE_DAY = 15;
+
+/** The sample debt the pots are labelled with: the same one on every page. Its due
+ *  date is fixed when the tutorial opens, so the pages never disagree. */
+type Sample = Omit<PotLabelDebt, 'pct_paid'>;
 
 export default function DebtFreedomTutorial() {
+    const { t } = useTranslation('debts');
     const { theme } = useTheme();
     const insets = useSafeAreaInsets();
     const reduceMotion = useReduceMotion();
     const scroll = useRef<ScrollView>(null);
     const [pageH, setPageH] = useState(0);
+    const [dueDate] = useState(() => {
+        const now = new Date();
+        // Month 12 rolls over to January of next year.
+        return localDateISO(new Date(now.getFullYear(), now.getMonth() + 1, SAMPLE_DUE_DAY));
+    });
+    const sample = useMemo<Sample>(() => ({
+        name: t('tutorial.sampleName'),
+        missing: [],
+        next_due_date: dueDate,
+        min_payment: SAMPLE_MIN_PAYMENT,
+        status: 'active',
+    }), [t, dueDate]);
 
     const onLayout = useCallback((e: LayoutChangeEvent) => {
         const h = Math.round(e.nativeEvent.layout.height);
@@ -84,6 +108,7 @@ export default function DebtFreedomTutorial() {
                         <StepPage
                             key={s.key}
                             step={s}
+                            sample={sample}
                             height={pageH}
                             pad={pad}
                             onNext={i + 2 < PAGE_COUNT ? () => goTo(i + 2) : undefined}
@@ -120,8 +145,8 @@ function IntroPage({ height, pad, onNext }: { height: number; pad: Pad; onNext: 
     );
 }
 
-function StepPage({ step, height, pad, onNext }: {
-    step: Step; height: number; pad: Pad; onNext?: () => void;
+function StepPage({ step, sample, height, pad, onNext }: {
+    step: Step; sample: Sample; height: number; pad: Pad; onNext?: () => void;
 }) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
@@ -141,7 +166,7 @@ function StepPage({ step, height, pad, onNext }: {
                 </Text>
             </View>
             <View style={styles.area} onLayout={onArea}>
-                {area ? <StepArt step={step} width={area.w} height={area.h} /> : null}
+                {area ? <StepArt step={step} sample={sample} width={area.w} height={area.h} /> : null}
             </View>
             <Button color={theme.brand} label={t('tutorial.subscribe')} variant="primary" size="lg" fullWidth
                 onPress={openPaywall} />
@@ -152,7 +177,7 @@ function StepPage({ step, height, pad, onNext }: {
 
 /** The plant (and, once paid off, its stream), fitted to the area between the text
  *  box and the button. */
-function StepArt({ step, width, height }: { step: Step; width: number; height: number }) {
+function StepArt({ step, sample, width, height }: { step: Step; sample: Sample; width: number; height: number }) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
     const paidOff = step.state === 'paid_off';
@@ -168,16 +193,9 @@ function StepArt({ step, width, height }: { step: Step; width: number; height: n
     const top = paidOff ? 0 : height - shownH;
     const left = (width - w) / 2;
 
-    // The pot's label plate is part of the pot drawing, so it is never empty in the
-    // garden: give it a sample debt's name, set like PotLabel's name line.
-    const labelH = POT_LABEL_BOX.height * s;
+    // The garden's own label, sized from the plate exactly as PlantSection does.
     const potLabel = paidOff ? undefined : (
-        <View style={[styles.potLabel, { paddingHorizontal: labelH * 0.16 }]} importantForAccessibility="no-hide-descendants">
-            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
-                style={{ color: theme.ink, fontFamily: Fonts.sansBold, fontSize: Math.max(11, labelH * 0.25), letterSpacing: -0.2 }}>
-                {t('tutorial.sampleName')}
-            </Text>
-        </View>
+        <PotLabel debt={{ ...sample, pct_paid: step.pctPaid }} boxHeight={POT_LABEL_BOX.height * s} />
     );
 
     const stake = paidOff ? (
@@ -243,7 +261,6 @@ const styles = StyleSheet.create({
     area: { flex: 1, minHeight: 120 },
     clip: { overflow: 'hidden' },
     stake: { flex: 1, width: '90%', alignItems: 'center', justifyContent: 'center' },
-    potLabel: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     arrowRow: { alignItems: 'center' },
     arrow: {
         width: ARROW, height: ARROW, borderRadius: ARROW / 2, borderWidth: 1.5,
