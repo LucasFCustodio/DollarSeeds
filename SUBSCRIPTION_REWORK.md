@@ -16,7 +16,7 @@
 | 2b | Frontend: gating UI (locked goals, grayed states, budget lock) | **Unblocked — Phase 1 has landed** |
 | 3 | Release | **No flag to flip. The limits go live per install — see Phase 3** |
 | 4 | Contract: retire old products | Much later |
-| DF | Debt Freedom (Debts tab) as premium: `debt_freedom` allowance, `debt_freedom_locked` on every write, tutorial / read-only garden / home teaser, flag on for store builds | **Built on `debt-freedom-premium-branch`, not merged.** Needs migration 0012 applied before the backend deploys |
+| DF | Debt Freedom (Debts tab) as premium: `debt_freedom` allowance, `debt_freedom_locked` on every write (whatever the headers), tutorial / read-only garden / home teaser, flag on for store builds | **Built on `debt-freedom-premium-branch`, not merged.** Migrations 0010–0012 are applied in production |
 
 All blocking decisions are settled. Remaining questions in §13 are non-blocking.
 
@@ -323,7 +323,7 @@ alongside it:
 | `goal_limit_reached` | `POST /savings/goal/` at the cap |
 | `budget_type_locked` | `PATCH /settings/` choosing a gated budget type |
 | `goal_locked` | Any write targeting a locked goal, except deleting it (§5) |
-| `debt_freedom_locked` | Any `/debt-freedom/` write by a caller whose `debt_freedom` is not `full`. Write posture (fails closed), like `goal_locked` |
+| `debt_freedom_locked` | Any `/debt-freedom/` write by a user who is not entitled. Write posture (fails closed), like `goal_locked`. **Regardless of `X-Client-Features`** — no binary has ever called these routes, so there is no old client to exempt |
 
 The detail string differs per code; a video needs the full paywall, a goal cap needs an
 inline upsell next to the button.

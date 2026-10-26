@@ -195,17 +195,25 @@ that release on, the API and database rules in CLAUDE.md apply to them like any 
 **Premium.** Debt Freedom is premium: every write route (create, PATCH, DELETE,
 payments, undo-minimum, delete-payment, checkin, late-fee, complete, PUT settings)
 calls `_assert_debt_freedom_writable` first and answers 403 `debt_freedom_locked` unless
-the caller's `debt_freedom` allowance would be `full` — before the debt is loaded or a
-cycle closed, so a refused request changes nothing. It uses the goal gates' WRITE
-posture (`_Entitlements.debt_freedom_locked` = `enforced`, fails closed when RevenueCat
-is unreachable; a subscriber recorded in `subscriptions` never reaches RevenueCat).
-Reads (`GET /debt-freedom/`, `/{id}`, `/settings`, `/payments`) stay open, and the lazy
-cycle processing they run keeps a lapsed user's balances true. A caller without
-`limits` is never gated, as everywhere.
+the user is entitled — before the debt is loaded or a cycle closed, so a refused request
+changes nothing. It uses the goal gates' WRITE posture (`_Entitlements.debt_freedom_locked`
+= `enforced`, fails closed when RevenueCat is unreachable; a subscriber recorded in
+`subscriptions` never reaches RevenueCat). Reads (`GET /debt-freedom/`, `/{id}`,
+`/settings`, `/payments`) stay open, and the lazy cycle processing they run keeps a
+lapsed user's balances true.
+
+**The write gate ignores `X-Client-Features`** — the one gate that does. Everywhere else
+a request without `limits` is exempt because it comes from a binary that cannot be
+patched; no binary has ever called these routes (the Debts tab was behind
+`DEBT_FREEDOM_ENABLED = __DEV__` in every store build before the release that made it
+premium), so the exemption would only be a way around the paywall. The gate resolves
+the entitlement as for a `limits` caller, so `premium_enabled` off (the kill switch) and
+`LIMITS_TEST_USER_IDS` still apply. The `debt_freedom` allowance itself is still sent to
+`limits` clients only, like every allowance.
 
 | `debt_freedom` | When | App |
 |---|---|---|
-| `full` | entitled, or the limits are off for this caller (no `limits`, or `premium_enabled` false), or the RevenueCat lookup failed (read posture) | the garden |
+| `full` | entitled, or `premium_enabled` false, or the RevenueCat lookup failed (read posture; writes still fail closed) | the garden |
 | `read_only` | not entitled, at least one row in `debts` (any status) | the garden and detail, every action hidden, a Subscribe banner |
 | `none` | not entitled, no debts | the tutorial |
 
@@ -481,8 +489,8 @@ State as verified **2026-07-26** — already correct, nothing to apply:
 | Tables | RLS | Policies |
 |--------|-----|----------|
 | `expenses`, `income`, `savings_transactions`, `savings_goals`, `month_status`, `lesson_ratings` | enabled | One `ALL` policy each, role `authenticated`, `USING (auth.uid() = user_id)` |
-| `debts`, `debt_transactions` | enabled | Same: one `ALL` policy each, role `authenticated`, `USING (auth.uid() = user_id)` (plus the same `WITH CHECK`). Added by migration `0010` — **not yet applied** until its `Applied to project` line is filled in. |
-| `debt_freedom_settings` | enabled | Same single `ALL` policy. Added by migration `0011` — **not yet applied** until its `Applied to project` line is filled in. |
+| `debts`, `debt_transactions` | enabled | Same: one `ALL` policy each, role `authenticated`, `USING (auth.uid() = user_id)` (plus the same `WITH CHECK`). Added by migration `0010`, applied before 2026-09-29. |
+| `debt_freedom_settings` | enabled | Same single `ALL` policy. Added by migration `0011`, applied before 2026-09-29. |
 | `user_settings` | enabled | Three policies — `SELECT` / `INSERT` / `UPDATE`, same `auth.uid() = user_id` — but on role `public`, not `authenticated`. No `DELETE` policy. |
 | `lesson_series`, `lessons` | enabled | **None** — deny-all to anon and authenticated, by design. Shared content is served only through the backend (`GET /lessons/...`) on service_role. |
 | `subscriptions`, `subscription_events`, `app_config` | enabled | **None** — same posture. Entitlement is served only through `GET /me/entitlements/`; letting the anon key read `subscriptions` directly would expose who pays. Added by migration `0005`. |

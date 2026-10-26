@@ -1,10 +1,13 @@
 """Debt Freedom is premium: the `debt_freedom` allowance and the write gate.
 
-Same three conditions as every other limit (main._entitlements): the `limits`
-marker, app_config.premium_enabled, and the user's entitlement. For an enforced
-caller every WRITE under /debt-freedom/ is refused with 403 `debt_freedom_locked`
-and changes nothing; every READ stays open, so a lapsed subscriber still sees their
-debts, and the lazy cycle processing reads run keeps their balances true.
+The ALLOWANCE follows every other limit (main._entitlements): the `limits` marker,
+app_config.premium_enabled, and the user's entitlement. The WRITE GATE does not look
+at the marker: no store build has ever called /debt-freedom/, so a request without
+`limits` is no old binary to protect, only a way around the paywall. For an unpaid
+user every WRITE is refused with 403 `debt_freedom_locked` and changes nothing,
+whatever the headers; every READ stays open, so a lapsed subscriber still sees their
+debts, and the lazy cycle processing reads run keeps their balances true. The kill
+switch (premium_enabled off) still lets everyone write.
 """
 
 from __future__ import annotations
@@ -19,6 +22,15 @@ from conftest import USER_A, USER_B, auth, v2
 LIMITS = v2(USER_A, "limits")
 APP = v2(USER_A, "premium, social, limits")
 FUTURE = "2099-01-01T00:00:00+00:00"
+
+# Every generation of headers a request can carry. The write gate treats them alike.
+ANY_HEADERS = [
+    pytest.param(LIMITS, id="limits"),
+    pytest.param(APP, id="app"),
+    pytest.param(auth(USER_A), id="unmarked"),
+    pytest.param(v2(USER_A, "premium"), id="premium"),
+    pytest.param(v2(USER_A, "premium, social"), id="premium+social"),
+]
 TODAY = datetime.date(2026, 9, 28)
 
 
@@ -152,16 +164,20 @@ def _snapshot(db) -> dict:
     return {t: [dict(r) for r in db.rows(t)] for t in ("debts", "debt_transactions", "debt_freedom_settings")}
 
 
+@pytest.mark.parametrize("headers", [
+    pytest.param(LIMITS, id="limits"),
+    pytest.param(auth(USER_A), id="unmarked"),
+])
 @pytest.mark.parametrize("index", range(10), ids=WRITE_IDS)
 @pytest.mark.parametrize("has_debts", [True, False], ids=["read_only", "none"])
-def test_every_write_is_refused_for_a_free_caller(client, premium_on, index, has_debts):
+def test_every_write_is_refused_for_a_free_caller(client, premium_on, index, has_debts, headers):
     # A debt of USER_B's stands in for "no debts" so every path has an id to name.
     d = seed_debt(premium_on, user_id=USER_A if has_debts else USER_B, late_fee_pending_for="2026-09-14")
     assert allowance(client) == ("read_only" if has_debts else "none")
     before = _snapshot(premium_on)
 
     method, path, body = _writes(d["id"])[index]
-    res = _send(client, method, path, body, LIMITS)
+    res = _send(client, method, path, body, headers)
 
     assert res.status_code == 403, res.text
     assert res.json() == {"code": "debt_freedom_locked",
@@ -187,13 +203,52 @@ def test_a_recorded_subscriber_writes_through_a_revenuecat_outage(client, premiu
                        json={"minimum": True}).status_code == 200
 
 
-@pytest.mark.parametrize("headers", [auth(USER_A), v2(USER_A, "premium, social")],
-                         ids=["unmarked", "premium+social"])
-def test_a_caller_without_limits_is_not_gated(client, premium_on, headers):
-    """The same rule as every gate: no marker, nothing applies."""
+@pytest.mark.parametrize("headers", ANY_HEADERS)
+def test_the_marker_is_no_way_around_the_gate(client, premium_on, headers):
+    """Unlike every other limit: dropping `limits` from the header does not exempt a
+    write, because no binary without it has ever called these routes."""
+    d = seed_debt(premium_on)
+    before = _snapshot(premium_on)
+    res = client.post(f"/debt-freedom/{d['id']}/payments", headers=headers, json={"minimum": True})
+    assert res.status_code == 403 and res.json()["code"] == "debt_freedom_locked"
+    res = client.post("/debt-freedom/", headers=headers, json=_writes(0)[0][2])
+    assert res.status_code == 403 and res.json()["code"] == "debt_freedom_locked"
+    assert _snapshot(premium_on) == before
+
+
+@pytest.mark.parametrize("headers", ANY_HEADERS)
+def test_a_subscriber_writes_with_any_headers(client, premium_on, headers):
+    subscribe(premium_on)
     d = seed_debt(premium_on)
     assert client.post(f"/debt-freedom/{d['id']}/payments", headers=headers,
                        json={"minimum": True}).status_code == 200
+
+
+@pytest.mark.parametrize("headers", ANY_HEADERS)
+def test_the_kill_switch_off_lets_everyone_write(client, supabase_db, headers):
+    """premium_enabled off is still the rollback lever, for this gate too."""
+    d = seed_debt(supabase_db)
+    assert client.post(f"/debt-freedom/{d['id']}/payments", headers=headers,
+                       json={"minimum": True}).status_code == 200
+
+
+def test_a_listed_test_account_is_gated_while_the_flag_is_off(client, supabase_db, monkeypatch):
+    """LIMITS_TEST_USER_IDS works for this gate as for the others, header or not."""
+    monkeypatch.setattr(main, "LIMITS_TEST_USER_IDS", frozenset({USER_A}))
+    d = seed_debt(supabase_db)
+    for headers in (LIMITS, auth(USER_A)):
+        assert client.post(f"/debt-freedom/{d['id']}/payments", headers=headers,
+                           json={"minimum": True}).status_code == 403
+
+
+def test_other_limits_still_exempt_an_unmarked_caller(client, premium_on):
+    """Only the Debt Freedom writes changed: an unmarked free caller still gets
+    today's behaviour everywhere else (here, a second goal past the free cap)."""
+    for title in ("One", "Two"):
+        assert client.post("/savings/goal/", headers=auth(USER_A),
+                           json={"title": title, "target_amount": 100.0}).status_code == 200
+    assert client.post("/savings/goal/", headers=LIMITS,
+                       json={"title": "Three", "target_amount": 100.0}).status_code == 403
 
 
 def test_a_subscriber_can_write(client, premium_on):
@@ -226,13 +281,14 @@ def test_the_existing_premium_codes_are_unchanged():
 
 # ══ Reads stay open ════════════════════════════════════════════════════════════
 
-def test_every_read_stays_open_for_a_lapsed_user(client, premium_on):
+@pytest.mark.parametrize("headers", ANY_HEADERS)
+def test_every_read_stays_open_for_a_lapsed_user(client, premium_on, headers):
     d = seed_debt(premium_on)
-    garden = client.get("/debt-freedom/", headers=LIMITS)
+    garden = client.get("/debt-freedom/", headers=headers)
     assert garden.status_code == 200 and garden.json()["debts"][0]["id"] == d["id"]
-    assert client.get(f"/debt-freedom/{d['id']}", headers=LIMITS).status_code == 200
-    assert client.get("/debt-freedom/settings", headers=LIMITS).status_code == 200
-    assert client.get("/debt-freedom/payments", headers=LIMITS,
+    assert client.get(f"/debt-freedom/{d['id']}", headers=headers).status_code == 200
+    assert client.get("/debt-freedom/settings", headers=headers).status_code == 200
+    assert client.get("/debt-freedom/payments", headers=headers,
                       params={"month": "September"}).status_code == 200
 
 
