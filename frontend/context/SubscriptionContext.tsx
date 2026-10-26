@@ -62,6 +62,10 @@ export type AppConfig = {
     updateUrl: string;
 };
 
+/** Debt Freedom: every action, view-only (lapsed, has debts), or the tutorial. */
+export type DebtFreedomAllowance = 'full' | 'read_only' | 'none';
+const DEBT_FREEDOM_VALUES: readonly string[] = ['full', 'read_only', 'none'];
+
 /**
  * What the server says this user may have. `null` counts mean unlimited, exactly as
  * the API sends them. Never derive or default a number here — see ALLOWANCES above.
@@ -72,6 +76,8 @@ export type Allowances = {
     budgetTypes: string[];
     videoSeries: 'free_only' | 'all';
     maxBankConnections: number | null;
+    /** Null from a backend that predates it — read as `full`, like every unknown. */
+    debtFreedom: DebtFreedomAllowance | null;
 };
 
 type Entitlement = {
@@ -104,12 +110,20 @@ function parseAllowances(data: any): Allowances | null {
         budgetTypes: data.budget_types.filter((k: unknown) => typeof k === 'string'),
         videoSeries: data.video_series === 'free_only' ? 'free_only' : 'all',
         maxBankConnections: count(data.max_bank_connections),
+        debtFreedom: DEBT_FREEDOM_VALUES.includes(data.debt_freedom) ? data.debt_freedom : null,
     };
 }
 
 type SubscriptionContextType = Entitlement & {
     /** False until the first entitlement answer (cache or network) has landed. */
     entitlementLoaded: boolean;
+    /**
+     * False until this user's first `/me/entitlements/` request has finished, success
+     * or failure. The cached `premiumActive` can land first, but the allowances only
+     * ever come from the network, so a screen that renders by allowance waits on this
+     * rather than drawing the free state and swapping it out a moment later.
+     */
+    entitlementSettled: boolean;
     config: AppConfig;
     /** Whether the RevenueCat SDK is usable at all on this build/platform. */
     canPurchase: boolean;
@@ -136,6 +150,7 @@ type SubscriptionContextType = Entitlement & {
 const SubscriptionContext = createContext<SubscriptionContextType>({
     ...NO_ENTITLEMENT,
     entitlementLoaded: false,
+    entitlementSettled: false,
     config: CONFIG_FALLBACK,
     canPurchase: false,
     options: [],
@@ -157,6 +172,7 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
 
     const [entitlement, setEntitlement] = useState<Entitlement>(NO_ENTITLEMENT);
     const [entitlementLoaded, setEntitlementLoaded] = useState(false);
+    const [entitlementSettled, setEntitlementSettled] = useState(false);
     const [config, setConfig] = useState<AppConfig>(CONFIG_FALLBACK);
     const [options, setOptions] = useState<PlanOption[]>([]);
     const [optionsLoading, setOptionsLoading] = useState(false);
@@ -245,6 +261,7 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
             loggedInFor.current = null;
             setEntitlement(NO_ENTITLEMENT);
             setEntitlementLoaded(true);
+            setEntitlementSettled(true);
             logoutPurchases();
             loadConfig();
             return;
@@ -252,6 +269,9 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
 
         const userId = user.id;
         let cancelled = false;
+        // A new user's allowances are unknown until their own read lands.
+        setEntitlement(prev => ({ ...prev, allowances: null }));
+        setEntitlementSettled(false);
 
         (async () => {
             // 1. Cached value FIRST, so a subscriber never sees "Subscribe to premium"
@@ -277,7 +297,10 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
             await loadConfig();
             if (cancelled) return;
             await loadEntitlement(userId);
-            if (!cancelled) setEntitlementLoaded(true);
+            if (!cancelled) {
+                setEntitlementLoaded(true);
+                setEntitlementSettled(true);
+            }
         })();
 
         return () => { cancelled = true; };
@@ -363,6 +386,7 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
     const value = useMemo<SubscriptionContextType>(() => ({
         ...entitlement,
         entitlementLoaded,
+        entitlementSettled,
         config,
         canPurchase,
         options,
@@ -375,7 +399,7 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
         paywallVisible,
         openPaywall,
         closePaywall,
-    }), [entitlement, entitlementLoaded, config, canPurchase, options, optionsLoading,
+    }), [entitlement, entitlementLoaded, entitlementSettled, config, canPurchase, options, optionsLoading,
          trialEligible, refresh, refreshEntitlement, buy, restore, paywallVisible,
          openPaywall, closePaywall]);
 

@@ -23,6 +23,7 @@ export const PREMIUM_CODES = [
     'goal_limit_reached',
     'goal_locked',
     'budget_type_locked',
+    'debt_freedom_locked',
 ] as const;
 
 export type PremiumCode = (typeof PREMIUM_CODES)[number];

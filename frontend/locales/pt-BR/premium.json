@@ -125,7 +125,8 @@
     "goal_limit_reached": "Seu plano gratuito chegou ao limite de metas. O Premium oferece metas ilimitadas.",
     "goal_locked": "Esta meta está bloqueada no plano gratuito. Você ainda pode excluí-la, ou assinar o Premium para desbloqueá-la.",
     "budget_type_locked": "Esta divisão de orçamento faz parte do DollarSeeds Premium.",
-    "fallback": "Isto faz parte do DollarSeeds Premium."
+    "fallback": "Isto faz parte do DollarSeeds Premium.",
+    "debt_freedom_locked": "A Liberdade das dívidas faz parte do DollarSeeds Premium. Suas dívidas estão salvas."
   },
   "goalLock": {
     "badge": "BLOQUEADA",
