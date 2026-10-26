@@ -6,9 +6,9 @@
  * fields; there is deliberately no business logic in this file or in the components
  * that use it.
  *
- * Separate from the Goals tab's debt goals (`/savings/goal/?goal_type=debt`): these
- * routes read and write only the `debts` / `debt_transactions` / `debt_freedom_settings`
- * tables.
+ * The only place debts live: the Goals tab's old debt goals are retired. These routes
+ * read and write only the `debts` / `debt_transactions` / `debt_freedom_settings`
+ * tables; the server counts the payments toward the month's Goals budget itself.
  */
 import axios from 'axios';
 
@@ -98,6 +98,21 @@ export interface DebtTransaction {
     kind: TransactionKind;
     amount: number;
     balance_after: number;
+    occurred_on: string;
+    /** Detail history only: an extra payment in the current cycle of an active debt,
+     *  which the screen offers a delete for. The server still refuses it in a closed
+     *  month, with a message to show. */
+    deletable?: boolean;
+}
+
+/** One row of a month's Debt Freedom payments (GET /debt-freedom/payments). */
+export interface MonthDebtPayment {
+    id: number;
+    debt_id: number;
+    debt_name: string | null;
+    kind: 'payment_minimum' | 'payment_extra';
+    amount: number;
+    /** YYYY-MM-DD */
     occurred_on: string;
 }
 
@@ -191,8 +206,27 @@ export async function updateDebt(id: number, patch: Partial<DebtInput>): Promise
     return normaliseOne(data);
 }
 
+/** Refused (409, with a message) when the debt has payments in a closed month. */
 export async function deleteDebt(id: number): Promise<void> {
-    await axios.delete(`${BASE}/debt-freedom/${id}`);
+    await axios.delete(`${BASE}/debt-freedom/${id}`, { params: { today: localDateISO() } });
+}
+
+/** Delete an extra payment from the current billing cycle. Refused (409, with a
+ *  message) for anything else, and in a closed month. */
+export async function deletePayment(id: number, transactionId: number): Promise<PaymentResult> {
+    const { data } = await axios.delete<PaymentResult>(`${BASE}/debt-freedom/${id}/payments/${transactionId}`, {
+        params: { today: localDateISO() },
+    });
+    return { ...normaliseOne(data), transactions: data.transactions.map(normaliseTx) };
+}
+
+/** The Debt Freedom payments booked to budget month `month` (canonical English), newest
+ *  first — what the Goals split's "View all" lists next to its deposits. */
+export async function fetchMonthPayments(month: string): Promise<MonthDebtPayment[]> {
+    const { data } = await axios.get<{ data: MonthDebtPayment[] }>(`${BASE}/debt-freedom/payments`, {
+        params: { month, today: localDateISO() },
+    });
+    return (data.data ?? []).map(p => ({ ...p, amount: Number(p.amount) }));
 }
 
 /** `extraAmount` is only accepted on the focus debt; the server refuses it elsewhere.
@@ -210,7 +244,8 @@ export async function logPayment(
     return { ...normaliseOne(data), transactions: data.transactions.map(normaliseTx) };
 }
 
-/** The toggle's on → off. Refused (409) once the cycle's due date has passed. */
+/** The toggle's on → off: deletes this cycle's minimum. Refused (409) once the cycle's
+ *  due date has passed, and in a closed month. */
 export async function undoMinimum(id: number): Promise<OneDebt> {
     const { data } = await axios.post<OneDebt>(`${BASE}/debt-freedom/${id}/payments/undo-minimum`, {
         today: localDateISO(),

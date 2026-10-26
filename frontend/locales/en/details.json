@@ -8,12 +8,14 @@
   },
   "row": {
     "day": "Day {{day}}",
-    "noteAndDay": "{{note}} · Day {{day}}"
+    "noteAndDay": "{{note}} · Day {{day}}",
+    "debtPaymentA11y": "{{name}}, {{amount}} debt payment. Opens the debt."
   },
   "fallback": {
     "goalExpense": "Goal expense",
     "savingsDeposit": "Savings deposit",
     "setAside": "Set aside",
+    "debtPayment": "Debt payment",
     "income": "Income"
   },
   "monthClosed": {

@@ -31,7 +31,6 @@
   "empty": {
     "completed": "Nenhuma meta concluída ainda. Continue guardando!",
     "savings": "Nenhuma meta de poupança ainda. Plante a primeira!",
-    "debt": "Nenhuma dívida cadastrada. Adicione uma para começar a quitá-la!",
     "history": "Nenhuma movimentação ainda. Comece a guardar!"
   },
   "general": {
@@ -43,37 +42,28 @@
     "explain": "Dinheiro que você já tinha guardado mas depois gastou — devolva para recompor sua poupança.",
     "progress": " a devolver · {{repaid}} de {{owed}}"
   },
+  "legacyDebt": {
+    "meta": "Meta de dívida encerrada · não recebe mais dinheiro",
+    "held": " ainda guardados nela"
+  },
   "card": {
-    "debtCleared": "Dívida quitada! 🎉",
     "goalAchieved": "Meta alcançada! 🎉",
-    "paceDebt": "Pague {{amount}}/semana · faltam {{months}} meses",
     "paceSaving": "Guarde {{amount}}/semana · faltam {{months}} meses",
-    "ofTargetDebt": " de {{target}} pagos",
     "ofTargetSaving": " de {{target}}",
-    "completeDebtA11y": "Marcar dívida como quitada",
     "completeGoalA11y": "Mover meta para concluídas",
-    "completedMetaDebt": "{{amount}} pagos de {{target}} · {{month}} de {{year}}",
     "completedMetaSaving": "{{amount}} guardados de {{target}} · {{month}} de {{year}}"
   },
   "newGoal": {
     "button": "Plantar uma nova meta",
-    "titleDebt": "Nova dívida a quitar",
     "titleSaving": "Nova meta de poupança",
-    "typeLabel": "TIPO DE META",
-    "typeSaving": "Poupança",
-    "typeDebt": "Dívida",
-    "nameLabelDebt": "NOME DA DÍVIDA",
     "nameLabelSaving": "NOME DA META",
-    "namePlaceholderDebt": "Cartão de crédito, financiamento…",
     "namePlaceholderSaving": "Reserva de emergência, notebook novo…",
-    "amountLabelDebt": "TOTAL A QUITAR",
     "amountLabelSaving": "VALOR DA META",
     "monthLabel": "MÊS ALVO",
     "yearLabel": "ANO ALVO",
     "save": "Salvar meta"
   },
   "editGoal": {
-    "titleDebt": "Editar dívida",
     "titleSaving": "Editar meta",
     "save": "Salvar"
   },
@@ -81,14 +71,11 @@
     "missingInfoTitle": "Faltam informações",
     "missingInfoBody": "Informe um nome para a meta e um valor válido.",
     "editValidation": "Informe um nome e um valor maior que zero.",
-    "removeDebtTitle": "Remover esta dívida?",
     "removeGoalTitle": "Remover esta meta?",
     "removeBody": "\"{{title}}\" será removida. O dinheiro que você colocou em meses anteriores volta para a Poupança Geral, e o que você adicionou neste mês volta para o orçamento de Metas deste mês.",
     "remove": "Remover",
-    "completeDebtTitle": "Marcar esta dívida como quitada?",
     "completeGoalTitle": "Mover esta meta para concluídas?",
     "completeMoved": "{{amount}} vai sair da sua poupança e \"{{title}}\" será movida para Concluídas.",
-    "completeShortDebt": "Você pagou apenas {{saved}} da sua dívida de {{target}}. {{moved}}\n\nConcluir mesmo assim?",
     "completeShortSaving": "Você guardou apenas {{saved}} da sua meta de {{target}}. {{moved}}\n\nConcluir mesmo assim?",
     "completeConfirm": "Sim, concluir",
     "completeFailedTitle": "Não foi possível concluir a meta",

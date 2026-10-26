@@ -47,12 +47,12 @@ def dtx(on, kind, amount, id=1, debt_id=1):
     return {"id": id, "debt_id": debt_id, "kind": kind, "amount": amount, "occurred_on": on}
 
 
-def test_debt_total_counts_payments_and_subtracts_an_undone_minimum():
+def test_debt_total_counts_payments_and_nets_a_legacy_reversal():
     txns = [
         dtx("2026-07-14", df.KIND_MINIMUM, 50.0, id=1),
         dtx("2026-07-20", df.KIND_EXTRA, 200.0, id=2),
         dtx("2026-08-14", df.KIND_MINIMUM, 50.0, id=3),
-        # The toggle's undo of that August minimum.
+        # A legacy reversal (the toggle used to write one; it now deletes the minimum).
         dtx("2026-08-15", df.KIND_MINIMUM_REVERSAL, 50.0, id=4),
         # What the debt cost, not what was paid: ignored.
         dtx("2026-08-14", df.KIND_INTEREST, 12.5, id=5),
@@ -335,3 +335,22 @@ def test_route_is_scoped_to_the_caller(client, supabase_db, on_today):
     supabase_db.seed("savings_goals", {"user_id": USER_B, "title": "Trip", "target_amount": 100.0,
                                        "completed": False, "goal_type": "saving"})
     assert get(client) == {"debts": None, "goals": None}
+
+
+def test_route_paid_toward_debt_after_the_toggles_delete_based_undo(client, supabase_db, on_today):
+    """The toggle's undo now deletes the minimum, so paid-toward-debt drops by it and
+    the series carries no log/undo pair. TODAY (Sep 28) is in the cycle due Oct 14."""
+    supabase_db.seed("debts", debt_row(902))
+    path = "/debt-freedom/902/payments"
+    body = {"minimum": True, "today": TODAY.isoformat(), "occurred_on": TODAY.isoformat()}
+    assert client.post(path, headers=auth(USER_A), json=body).status_code == 200
+    assert client.post(path, headers=auth(USER_A),
+                       json={"extra_amount": 25, "today": TODAY.isoformat()}).status_code == 200
+    assert get(client)["debts"]["total_paid"] == 75.0
+
+    undo = client.post(f"{path}/undo-minimum", headers=auth(USER_A), json={"today": TODAY.isoformat()})
+    assert undo.status_code == 200, undo.text
+    debts = get(client)["debts"]
+    assert debts["total_paid"] == 25.0
+    assert debts["series"] == [{"month": "2026-09", "cumulative": 25.0}]
+    assert [t["kind"] for t in supabase_db.rows("debt_transactions")] == ["payment_extra"]

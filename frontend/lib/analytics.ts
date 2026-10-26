@@ -23,9 +23,7 @@ export type AnalyticsEvent =
     | 'expense_logged'
     | 'income_logged'
     | 'savings_goal_created'
-    | 'debt_goal_created'
     | 'savings_goal_funded'
-    | 'debt_goal_funded'
     | 'goal_completed'
     | 'debt_created'
     | 'debt_payment_logged'
@@ -64,10 +62,10 @@ export function useAnalytics() {
         // ── Finance (categories / ids / types only — never amounts) ──────────────
         expenseLogged: (p: { category: string }) => capture('expense_logged', p),
         incomeLogged: () => capture('income_logged'),
+        // Debt goals are retired (debts: the Debts tab, debt_* events below), so the
+        // old debt_goal_created / debt_goal_funded events no longer fire.
         savingsGoalCreated: () => capture('savings_goal_created'),
-        debtGoalCreated: () => capture('debt_goal_created'),
         savingsGoalFunded: (p: { goal_id: number }) => capture('savings_goal_funded', p),
-        debtGoalFunded: (p: { goal_id: number }) => capture('debt_goal_funded', p),
         goalCompleted: (p: { goal_id: number; goal_type: string }) =>
             capture('goal_completed', p),
 

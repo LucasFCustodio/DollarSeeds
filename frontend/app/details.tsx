@@ -1,21 +1,27 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
-import React, { useState, useEffect } from 'react';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useLocale } from '../context/LocaleContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { premiumErrorCode, usePremiumUpsell } from '../lib/premiumErrors';
+import { fetchMonthPayments } from '../lib/debtFreedom';
+import { DEBT_FREEDOM_ENABLED } from '../constants/features';
 const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 interface Expense {
     id: number; title: string; amount: number; day: number; category: string; month: string;
-    // The Goals view blends two sources: legacy "Goals" expense rows and
-    // income-sourced savings deposits. `kind` tells the delete handler which
-    // endpoint to hit; `note` is an optional subtitle (e.g. "Set aside").
-    kind?: 'expense' | 'savings';
+    // The Goals view blends three sources: legacy "Goals" expense rows,
+    // income-sourced savings deposits and Debt Freedom payments. `kind` tells the
+    // delete handler which endpoint to hit — a debt payment has none here: tapping it
+    // opens the debt, which is where its payments are deleted. `note` is an optional
+    // subtitle (e.g. "Set aside").
+    kind?: 'expense' | 'savings' | 'debt';
     note?: string;
+    /** kind 'debt' only: the debt the payment belongs to. */
+    debtId?: number;
 }
 interface Income {
     id: number;
@@ -60,10 +66,13 @@ export default function DetailsScreen() {
             t('monthClosed.body', { month: displayMonth(monthLabel) }),
         );
 
-    useEffect(() => {
+    // On every focus, not just mount: a debt payment opened from this list can be
+    // deleted on the debt's screen, and coming back must not show it still here.
+    useFocusEffect(useCallback(() => {
         if (type === 'expense') fetchDetailedExpenses();
         else fetchDetailedIncome();
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []));
 
     const getCategoryColor = () => {
         if (category === 'Needs') return theme.needs;
@@ -75,12 +84,19 @@ export default function DetailsScreen() {
     const fetchDetailedExpenses = async () => {
         try {
             if (category === 'Goals') {
-                // Goals = legacy "Goals" expense rows + income-sourced savings deposits.
-                // Fetch both so users can see (and delete) money set aside toward goals,
-                // which now lives in savings_transactions rather than the expenses table.
-                const [expRes, savRes] = await Promise.all([
+                // Goals = legacy "Goals" expense rows + income-sourced savings deposits
+                // + this month's Debt Freedom payments (the server counts all three in
+                // the split). The payments are their own request, so a failure there
+                // still shows the deposits.
+                const [expRes, savRes, debtPayments] = await Promise.all([
                     axios.get(`${BASE}/expenses/details/`, { params: { month, category, user_id: user?.id } }),
                     axios.get(`${BASE}/savings/history/`, { params: { user_id: user?.id, month } }),
+                    DEBT_FREEDOM_ENABLED
+                        ? fetchMonthPayments(String(monthLabel)).catch(err => {
+                            console.error('Error fetching debt payments:', err);
+                            return [];
+                        })
+                        : Promise.resolve([]),
                 ]);
                 const expItems: Expense[] = (expRes.data.data ?? []).map((i: any) => ({
                     id: i.id, title: i.title || i.sub_category || t('fallback.goalExpense'),
@@ -96,7 +112,15 @@ export default function DetailsScreen() {
                         amount: i.amount, day: i.day, month: i.month, category: 'Goals',
                         kind: 'savings', note: t('fallback.setAside'),
                     }));
-                setExpenses([...expItems, ...savItems].sort((a, b) => b.day - a.day));
+                const debtItems: Expense[] = debtPayments.map(p => ({
+                    id: p.id, title: p.debt_name ?? t('fallback.debtPayment'),
+                    amount: p.amount, day: Number(p.occurred_on.slice(8, 10)),
+                    month: String(monthLabel), category: 'Goals',
+                    kind: 'debt', note: t('fallback.debtPayment'), debtId: p.debt_id,
+                }));
+                // Newest first. The payments already arrive newest first and a stable
+                // sort keeps that order within a day.
+                setExpenses([...debtItems, ...expItems, ...savItems].sort((a, b) => b.day - a.day));
             } else {
                 const res = await axios.get(
                     `${BASE}/expenses/details/?month=${month}&category=${category}&user_id=${user?.id}`
@@ -200,8 +224,32 @@ export default function DetailsScreen() {
                         {type === 'expense' ? t('empty.expense') : t('empty.income')}
                     </Text>
                 ) : type === 'expense' ? (
-                    expenses.map((item, index) => (
-                        <View key={index} style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    expenses.map(item => item.kind === 'debt' ? (
+                        <Pressable
+                            key={`debt-${item.id}`}
+                            onPress={() => router.push({ pathname: '/debtDetail', params: { id: String(item.debtId) } })}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('row.debtPaymentA11y', { name: item.title, amount: fmtMoney(item.amount, 2) })}
+                            style={({ pressed }) => [
+                                styles.row, { backgroundColor: theme.surface, borderColor: theme.border },
+                                pressed && { opacity: 0.7 },
+                            ]}
+                        >
+                            <View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
+                            <View style={styles.rowInfo}>
+                                {/* The debt's own name, as the user typed it. */}
+                                <Text style={[styles.rowTitle, { color: theme.text }]}>{item.title}</Text>
+                                <Text style={[styles.rowDate, { color: theme.textMuted }]}>
+                                    {t('row.noteAndDay', { note: item.note, day: item.day })}
+                                </Text>
+                            </View>
+                            <Text style={[styles.rowAmount, { color: theme.text }]}>{fmtMoney(item.amount, 2)}</Text>
+                            <View style={styles.openBtn}>
+                                <Text style={[styles.openBtnText, { color: theme.textMuted }]}>›</Text>
+                            </View>
+                        </Pressable>
+                    ) : (
+                        <View key={`${item.kind}-${item.id}`} style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                             <View style={[styles.rowAccent, { backgroundColor: accentColor }]} />
                             <View style={styles.rowInfo}>
                                 <Text style={[styles.rowTitle, { color: theme.text }]}>{serverTitle(item.title)}</Text>
@@ -289,4 +337,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     deleteBtnText: { fontSize: 14, fontWeight: '700' },
+    // Same footprint as the delete button, so the amounts line up down the list.
+    openBtn: {
+        paddingHorizontal: 16,
+        alignSelf: 'stretch',
+        justifyContent: 'center',
+    },
+    openBtnText: { fontSize: 22, fontWeight: '600' },
 });

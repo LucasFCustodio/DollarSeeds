@@ -1,11 +1,14 @@
 /**
  * debtDetail — everything about one Debt Freedom debt, opened by tapping its plant
  * or card. Statement check-in, Edit, Delete (confirmed). Payments are logged from the
- * garden only (the min-payment switch and Extra). All figures are server-computed.
+ * garden only (the min-payment switch and Extra); an extra payment from the current
+ * billing cycle can be deleted here, from its history row (the server's `deletable`).
+ * All figures are server-computed.
  */
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { isAxiosError } from 'axios';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as WebBrowser from 'expo-web-browser';
@@ -15,10 +18,11 @@ import { DEBT_FREEDOM_ENABLED } from '../constants/features';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import BackHeader, { HeaderIconButton } from '../components/debts/BackHeader';
-import { IconGearMascot } from '../components/icons';
+import { IconGearMascot, IconTrash } from '../components/icons';
 import CheckinSheet from '../components/debts/CheckinSheet';
 import { useDebtFormat } from '../components/debts/format';
-import { deleteDebt, fetchDebt, type DebtDetail, type DebtTransaction } from '../lib/debtFreedom';
+import { MONTHS } from '../constants/months';
+import { deleteDebt, deletePayment, fetchDebt, type DebtDetail, type DebtTransaction } from '../lib/debtFreedom';
 
 const VERSE_COUNT = 5;
 
@@ -30,7 +34,7 @@ export default function DebtDetailRoute() {
 function DebtDetailScreen() {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
-    const { formatNumber } = useLocale();
+    const { formatNumber, monthLabel, serverError } = useLocale();
     const f = useDebtFormat();
     const router = useRouter();
     const insets = useSafeAreaInsets();
@@ -62,12 +66,46 @@ function DebtDetailScreen() {
                         await deleteDebt(id);
                         router.back();
                     } catch (e) {
-                        console.error('deleteDebt failed', e);
-                        Alert.alert(t('detail.errDelete'));
+                        // A 409 carries the server's reason (payments in a closed month).
+                        const detail = isAxiosError(e) && e.response?.status === 409 ? e.response.data?.detail : null;
+                        if (!detail) console.error('deleteDebt failed', e);
+                        Alert.alert(detail ? serverError(detail) : t('detail.errDelete'));
                     }
                 },
             },
         ]);
+    };
+
+    // Same control and wording pattern as deleting a savings deposit's goal on the
+    // Goals tab: a trash on the row, then "Remove this …?" with what happens to the money.
+    const confirmRemovePayment = (tx: DebtTransaction) => {
+        if (!data) return;
+        // occurred_on is YYYY-MM-DD; its month is the budget month the money returns to.
+        const month = MONTHS[Number(tx.occurred_on.slice(5, 7)) - 1];
+        Alert.alert(
+            t('detail.removePaymentTitle'),
+            t('detail.removePaymentBody', {
+                amount: f.money(tx.amount), name: data.debt.name, month: monthLabel(month),
+            }),
+            [
+                { text: t('detail.cancel'), style: 'cancel' },
+                {
+                    text: t('detail.remove'),
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deletePayment(id, tx.id);
+                            load();
+                        } catch (e) {
+                            const detail = isAxiosError(e) && e.response?.status === 409 ? e.response.data?.detail : null;
+                            if (!detail) console.error('deletePayment failed', e);
+                            Alert.alert(detail ? serverError(detail) : t('detail.errRemovePayment'));
+                            load();
+                        }
+                    },
+                },
+            ],
+        );
     };
 
     if (!data) {
@@ -188,6 +226,17 @@ function DebtDetailScreen() {
                                 {raisesBalance(tx) ? '+' : '−'}
                                 {f.money(Math.abs(tx.amount))}
                             </Text>
+                            {tx.deletable ? (
+                                <Pressable
+                                    onPress={() => confirmRemovePayment(tx)}
+                                    hitSlop={10}
+                                    style={styles.txDelete}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t('detail.removePaymentA11y', { amount: f.money(tx.amount) })}
+                                >
+                                    <IconTrash size={14} color={theme.ink3} />
+                                </Pressable>
+                            ) : null}
                         </View>
                     ))}
                 </Card>
@@ -273,6 +322,7 @@ const styles = StyleSheet.create({
     row: { paddingHorizontal: 12, paddingVertical: 12 },
     rowTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
     tx: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12 },
+    txDelete: { marginLeft: 12 },
     empty: { padding: 14, fontSize: 14 },
     verse: { borderRadius: 18, borderWidth: 1, padding: 18, marginTop: 8 },
     prompt: { borderRadius: 16, borderWidth: 1, padding: 14 },

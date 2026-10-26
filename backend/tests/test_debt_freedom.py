@@ -674,7 +674,8 @@ def test_toggle_on_off_and_its_cycle(client, supabase_db, clock):
     body = off.json()["debt"]
     assert body["current_balance"] == 1000.0 and body["min_logged_this_cycle"] is False
     assert body["species_locked"] is True
-    assert [t["kind"] for t in supabase_db.rows("debt_transactions")] == ["payment_minimum", "minimum_reversal"]
+    # The undo deletes the minimum: no log/undo pair is left behind.
+    assert supabase_db.rows("debt_transactions") == []
     assert client.post(f"{path}/undo-minimum", headers=auth(USER_A)).status_code == 409
 
     # On again, then the due date passes: a new cycle, the toggle is off, and the
@@ -696,7 +697,8 @@ def test_undo_never_shrinks_the_plant(client, supabase_db, clock):
     paid = client.post(f"/debt-freedom/{d['id']}/payments", headers=auth(USER_A), json={"minimum": True}).json()
     assert paid["debt"]["growth_step"] == 10                  # 95% paid
     undone = client.post(f"/debt-freedom/{d['id']}/payments/undo-minimum", headers=auth(USER_A)).json()
-    assert undone["debt"]["computed_step"] == 9 and undone["debt"]["growth_step"] == 10
+    # The minimum is gone, so the numbers alone say "seed"; the plant stays grown.
+    assert undone["debt"]["computed_step"] == 0 and undone["debt"]["growth_step"] == 10
     assert undone["debt"]["highest_step"] == 10
 
 

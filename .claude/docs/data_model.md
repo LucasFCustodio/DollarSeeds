@@ -57,10 +57,30 @@ A goal deposit is normally booked to the current `month`, but the Goals funding-
 | `completed_amount` | numeric | Nullable. What the goal held the moment it was completed — see below |
 | `completed_at` | timestamptz | Nullable. When it was completed |
 | `is_general` | bool | Default false; exactly one General Savings pool per user |
-| `goal_type` | text | `"saving"` (default) or `"debt"`. Debt goals behave identically to savings goals — same allocation math (`allocated_amount / target_amount`), same transactions, same transfer support. Only the Goals-tab grouping/labels differ. |
+| `goal_type` | text | `"saving"` (default) or `"debt"`. The Reconciliation goal is `"debt"`. User-created debt goals are **retired** for `limits` builds — see below. Old builds still create and fund them, unchanged. |
 | `created_at` | timestamp | |
 
-A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdrawals)` over `savings_transactions` with that `goal_id` (`_with_allocated` in `main.py`). Debt payments are just deposits with `source='income'`, so they count toward the Goals 20% budget exactly like savings deposits.
+A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdrawals)` over `savings_transactions` with that `goal_id` (`_with_allocated` in `main.py`). A deposit into a legacy debt goal is an ordinary `source='income'` deposit, so it counts toward the Goals budget like any other — but Debt Freedom payments are **not** savings rows at all; see "Budget Calculation".
+
+**Retired debt goals.** Debts live only on the Debts tab (`debts` / `debt_transactions`)
+now. A *user* debt goal is `goal_type = 'debt'` and not `is_reconciliation`
+(`_is_user_debt_goal`). For a client sending `X-Client-Features: limits`, and only for
+one:
+
+- **Holding $0** (`allocated_amount` ≤ half a cent, `_is_hidden_debt_goal`) → left out
+  of `GET /savings/goal/`, `GET /savings/goal/completed/`, and the goals half of
+  `GET /home/progress/` (counts, nearest goal, "saved toward goals", milestones).
+  `goals_near_completion` already skipped every debt goal.
+- **Still holding money** (only an old binary can deposit into one) → still listed, so
+  money is never hidden, and still deletable (prior-month money to General Savings, as
+  for any goal). `POST /savings/transaction/` (deposits) and `POST /savings/transfer/`
+  (as `to_goal_id`) refuse it with 409 `RETIRED_DEBT_GOAL_DETAIL`.
+- **Either kind** is excluded from the free tier's eligible goals: it never counts in
+  `goals_used`, is never `locked`, and never takes the active slot.
+
+Nothing is rewritten: no row is updated or deleted, `POST /savings/goal/` still accepts
+`goal_type = 'debt'`, and every response a build without `limits` reads is unchanged.
+The Reconciliation goal is untouched everywhere.
 
 **Completing a goal** (`POST /savings/goal/{id}/finish`) withdraws the goal's entire funded amount in one server-side transaction, which drives that computed value to $0 — hence the `completed_amount` snapshot, which is what the Completed tab actually renders (falling back to the computed value for goals completed before the column existed). The legacy `PATCH /savings/goal/{id}/complete` only flips the flag and writes no withdrawal; it exists solely for app builds already shipped, which write their own withdrawal first.
 
@@ -69,8 +89,10 @@ A goal's funded amount is computed (not stored) as `SUM(deposits) - SUM(withdraw
 **The free-tier goal cap is derived, not stored.** A free user (a client sending
 `X-Client-Features: limits`, with `premium_enabled` on and no entitlement) keeps one
 **eligible** goal. Eligible means `is_general` is not true, `is_reconciliation` is not
-true and `completed` is not true — nobody may be locked out of their one free goal by a
-goal the app created for them, and finishing a goal frees the slot. The **active** goal
+true, `completed` is not true and it is not a retired user debt goal (`goal_type =
+'debt'`) — nobody may be locked out of their one free goal by a goal the app created for
+them or by a debt goal that can no longer take money, and finishing a goal frees the
+slot. The **active** goal
 is the oldest eligible one by `created_at`, `id` as the tiebreak; every other eligible
 goal is **locked** and the server refuses writes to it with `goal_locked`. Deleting a
 locked goal is always allowed.
@@ -82,7 +104,7 @@ order it was built against. `GET /savings/goal/completed/` is newest-first for e
 
 No schema supports any of that: it is a query in `_Entitlements._eligible_goals`, which
 is why the rule needed no migration, no promotion logic and no backfill. `goal_type`,
-`is_general` and `is_reconciliation` are the only columns it reads. See
+`is_general`, `is_reconciliation` and `completed` are the only columns it reads. See
 [SUBSCRIPTION_REWORK.md](../../SUBSCRIPTION_REWORK.md) §5.
 
 ### `subscriptions`
@@ -156,9 +178,11 @@ atomically. This table only answers "what did RevenueCat tell us, and when".
 
 The Debts tab: each debt is a plant grown by paying it down with the snowball method.
 Migrations [0010](../../backend/migrations/0010_debt_freedom.sql) and
-[0011](../../backend/migrations/0011_debt_freedom_v2.sql) (v2: due-date cycles). **Entirely separate
-from debt goals** (`savings_goals.goal_type = 'debt'`) — nothing here touches
-`savings_goals` or `savings_transactions`. Routes live under `/debt-freedom/` in
+[0011](../../backend/migrations/0011_debt_freedom_v2.sql) (v2: due-date cycles). **The only place debts
+live in the new app** — debt goals (`savings_goals.goal_type = 'debt'`) are retired (see
+`savings_goals`). Nothing here writes `savings_goals` or `savings_transactions`; payments
+reach the Goals budget by being read there (see "The Goals split's spend" under Budget
+Calculation). Routes live under `/debt-freedom/` in
 `main.py`; **every rule is a pure function in
 [backend/debt_freedom.py](../../backend/debt_freedom.py)**, unit-tested in
 `tests/test_debt_freedom.py`. The client renders server-computed fields only.
@@ -192,7 +216,38 @@ from debt goals** (`savings_goals.goal_type = 'debt'`) — nothing here touches
 `minimum_reversal` — the last three added by 0011, CHECK widened `NOT VALID`), `amount`,
 `balance_after`, `occurred_on` (date). `balance_edit.amount` and
 `statement_adjustment.amount` are signed (new − old); `minimum_reversal.amount` is the
-positive amount put back on the balance (the toggle's undo).
+positive amount put back on the balance by the toggle's **old** undo.
+
+**`minimum_reversal` is legacy.** Nothing writes it any more — the toggle's undo now
+deletes the minimum (below) — but the kind stays valid in the CHECK and existing rows
+are never deleted. Every total keeps netting them (`net_minimum`, `net_paid`,
+`debt_payment_events`, `budget_paydown`). Only the history hides them:
+`df.cancelled_minimum_ids` pairs each reversal with the most recent uncancelled
+minimum of the same debt before it, and `GET /debt-freedom/{id}` and
+`GET /debt-freedom/payments` leave both rows out.
+
+**Removing a payment** (`_df_remove_payment`, shared by the undo and the extra delete):
+the row is deleted, its amount goes back on `current_balance`, and every later row of
+that debt (by `occurred_on`, then `id`) has `balance_after` raised by the same amount.
+`cycle_start_balance` is untouched (a payment never moved it), the species stays
+locked, and `highest_step` keeps the plant from shrinking. The delete is the race
+guard: a second overlapping request deletes nothing and is refused before it touches
+the balance.
+
+**Payment routes and closed months.** A payment is part of its month's Goals spend, so
+logging a minimum or an extra, undoing a minimum, and deleting an extra are refused
+with `_assert_month_open`'s 409 (`"{Month} is closed. Reopen it before making
+changes."`) when the budget month of the row's `occurred_on` is closed. A row dated
+outside the year its month name resolves to today belongs to no budget month and is
+never refused for this reason.
+
+| Route | Rule |
+|-------|------|
+| `POST /debt-freedom/{id}/payments/undo-minimum` | Deletes the current cycle's latest uncancelled `payment_minimum` (`df.minimum_row_to_undo`). However often the user toggles, a cycle ends with at most one minimum row. Still refused once the cycle's due date has passed |
+| `DELETE /debt-freedom/{id}/payments/{transaction_id}` | Deletes a `payment_extra` of this debt in its **current billing cycle**, on an **active** debt, in an **open** month; 409 with a reason otherwise. Earlier cycles were closed against the payment (interest, the full-payment check), so they stay. Returns the payment routes' payload (`debt`, `focus_id`, `plan_est_payoff_month`, `monthly_extra`, `previous_step`, `transactions: []`). Optional `today` |
+| `DELETE /debt-freedom/{id}` | Refused (409, "This debt has payments in a closed month…") when its net payments in any **closed** budget month are non-zero — deleting it would change that month. Otherwise unchanged; its open-month payments leave the Goals spend with it. Optional `today` |
+| `GET /debt-freedom/{id}` | History is newest first with legacy pairs collapsed; each row carries `deletable` (`df.extra_is_deletable`: an extra in the current cycle of an active debt). The closed-month rule is applied when the delete arrives, so its message can say why |
+| `GET /debt-freedom/payments?month=&today=` | The month's net Debt Freedom payments for the Goals split's "View all": `{id, debt_id, debt_name, kind, amount, occurred_on}`, minimums and extras only, legacy pairs collapsed, newest first. Same month/year rule as the budget, so it adds up to the debt part of the split. Declared before `/debt-freedom/{id}` |
 
 `debt_freedom_settings` (0011): `user_id` (PK), `monthly_extra` (numeric, nullable —
 blank/NULL = $0), `updated_at`. One row per user, upserted by
@@ -279,6 +334,40 @@ wants_budget  = budgetable * split.wants
 goals_budget  = budgetable * split.savings
 ```
 
+### The Goals split's spend
+
+```
+goals_spent = legacy 'Goals' expenses
+            + savings_transactions deposits with source = 'income'
+            + net Debt Freedom payments booked to the month
+```
+
+**Net Debt Freedom payments** = `payment_minimum` + `payment_extra` − `minimum_reversal`
+(legacy) rows in `debt_transactions`, dated by `occurred_on`. `interest`, `late_fee`,
+`balance_edit` and `statement_adjustment` never count — they are what the debt cost,
+not money the user paid. The rule is `df.budget_paydown`; `_debt_paydown` in `main.py`
+loads the rows.
+
+**They are read, never mirrored.** A debt payment writes no `savings_transactions` row:
+that would raise General Savings and the home's "saved toward goals" with money that
+left the user.
+
+**Which month a payment belongs to.** Months carry no year, payments do. A payment
+counts toward budget month M only when `occurred_on` is in calendar month M of the
+year `_month_year_at(M, today)` resolves to — so last October never counts toward this
+October. "Today" is the phone's date when the client sends the optional `today`
+(clamped by `_df_today`, as on the `/debt-freedom/` routes), else the server's.
+`/dashboard/{month}`, `/dashboard/trends/`, `/rollover/preview/` and
+`POST /rollover/close/` (body field) all accept it; `/home/summary/` already did.
+
+**One place, every consumer.** `_month_budget_numbers` adds it, so the dashboard, the
+home summary's over-budget list, the compliance score and the client's "all green"
+check agree; `_compute_target_rollover` adds the same `_debt_paydown`, so the close-out
+target is the leftover the home shows; trends applies `df.budget_paydown` per month.
+Old binaries cannot have Debt Freedom rows (the tab has never shipped in a store
+build), so their numbers are unchanged — and the total is only touched when there is a
+payment, so an int total stays an int in their JSON.
+
 `BUDGET_TYPES` in `main.py` is the single source of truth for the three splits —
 `balanced` 50/30/20, `wealth_builder` 30/20/50, `firm_foundation` 70/10/20. Only the
 KEY is ever stored (never the percentages), so they cannot drift.
@@ -322,7 +411,7 @@ storing a choice the dashboard would then ignore.
 
 ## Category Name Mismatch
 
-The dashboard's 50/30/20 split shows **"Needs / Wants / Goals"**, and the DB stores expense categories with those same plural names (`Needs`/`Wants`/`Goals`) — they match. The Goals bucket total = historical `Goals` expenses + income-sourced savings deposits (`savings_transactions` where `type='deposit'` AND `source='income'`); transfers between goals (`source='transfer'`) are excluded so they don't double-count. (Note: earlier docs described the categories as `Need/Want/Savings/Debt` — that was never the stored reality; see the audited values above.)
+The dashboard's 50/30/20 split shows **"Needs / Wants / Goals"**, and the DB stores expense categories with those same plural names (`Needs`/`Wants`/`Goals`) — they match. The Goals bucket total = historical `Goals` expenses + income-sourced savings deposits (`savings_transactions` where `type='deposit'` AND `source='income'`) + net Debt Freedom payments (see "The Goals split's spend" above); transfers between goals (`source='transfer'`) are excluded so they don't double-count. (Note: earlier docs described the categories as `Need/Want/Savings/Debt` — that was never the stored reality; see the audited values above.)
 
 ## Row Level Security
 

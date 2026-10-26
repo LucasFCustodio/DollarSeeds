@@ -72,7 +72,10 @@
     "reconciliationLocked": "A meta de Reconciliação é gerenciada automaticamente.",
     "reconciliationUndeletable": "A meta de Reconciliação é gerenciada automaticamente e não pode ser excluída.",
     "targetTooSmall": "O valor da meta precisa ser maior que zero.",
-    "alreadyCompleted": "Essa meta já foi concluída."
+    "alreadyCompleted": "Essa meta já foi concluída.",
+    "debtGoalRetired": "Metas de dívida não recebem mais dinheiro. Remova esta meta para levar o que ela guarda para a Poupança Geral.",
+    "debtHasClosedMonthPayments": "Esta dívida tem pagamentos em um mês fechado, então excluí-la mudaria esse mês. Você pode marcá-la como quitada.",
+    "extraNotThisCycle": "Só é possível excluir um pagamento extra do ciclo de cobrança atual."
   },
   "source": {
     "Paycheck": "Salário",

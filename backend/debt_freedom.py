@@ -4,9 +4,11 @@ Nothing here touches Supabase or FastAPI: main.py loads the rows, calls these, a
 writes back whatever they say changed. That keeps every rule unit-testable with plain
 dicts (tests/test_debt_freedom.py) and keeps the policy decisions in one place.
 
-This feature is deliberately separate from the older debt GOALS on the Goals tab
+This feature replaces the retired debt GOALS on the Goals tab
 (savings_goals.goal_type = 'debt'). It reads and writes only `debts`,
-`debt_transactions` and `debt_freedom_settings` (migrations 0010, 0011).
+`debt_transactions` and `debt_freedom_settings` (migrations 0010, 0011); its payments
+reach the Goals budget by being READ there (budget_paydown), never by writing a
+savings row.
 
 Rows are the dicts PostgREST returns. Money columns are `numeric`, which can arrive
 as a number or a string, so everything goes through _num().
@@ -296,6 +298,50 @@ def net_paid(transactions: list, start: datetime.date, end: datetime.date) -> fl
     return money(net_minimum(transactions, start, end) + extra)
 
 
+def _row_key(t: dict):
+    """History order: occurred_on, then id (the order rows were written in)."""
+    return (_date(t.get("occurred_on")) or datetime.date.min, t.get("id") or 0)
+
+
+def cancelled_minimum_ids(transactions: list) -> set:
+    """Ids of every legacy log/undo pair: each `minimum_reversal` and the minimum it
+    cancelled. The toggle's undo used to write a reversal; it now deletes the minimum
+    instead, so these pairs exist only in accounts that toggled before that change.
+
+    A reversal cancels the most recent not-yet-cancelled minimum of the same debt
+    before it — an undo only ever reversed the current cycle's minimum, which is the
+    latest one logged. Totals keep netting reversals (net_minimum, net_paid,
+    debt_payment_events); this only decides what the history shows."""
+    out: set = set()
+    for rows in _by_debt(transactions).values():
+        open_minimums: list = []
+        for t in sorted(rows, key=_row_key):
+            kind = t.get("kind")
+            if kind == KIND_MINIMUM:
+                open_minimums.append(t)
+            elif kind == KIND_MINIMUM_REVERSAL and open_minimums:
+                cancelled = open_minimums.pop()
+                out.add(cancelled.get("id"))
+                out.add(t.get("id"))
+    return out
+
+
+def visible_history(transactions: list) -> list:
+    """A debt's history as the detail screen lists it: newest first, with legacy
+    log/undo pairs collapsed so neither row shows."""
+    hidden = cancelled_minimum_ids(transactions)
+    return sorted((t for t in transactions if t.get("id") not in hidden), key=_row_key, reverse=True)
+
+
+def rows_after(transactions: list, row: dict) -> list:
+    """The debt's rows written after `row` in history order. Their balance_after was
+    computed with `row` in place, so deleting `row` shifts each of them."""
+    key = _row_key(row)
+    return [t for t in transactions
+            if t.get("debt_id") == row.get("debt_id") and t.get("id") != row.get("id")
+            and _row_key(t) > key]
+
+
 def current_cycle(debt: dict, today: datetime.date):
     """(start, end, due) of the cycle holding today. A debt with no due day has no
     real cycle; its stand-in is the calendar month (due None), so the toggle still
@@ -326,6 +372,39 @@ def minimum_to_undo(debt: dict, transactions: list, today: datetime.date) -> Opt
     start, end, _ = current_cycle(debt, today)
     amount = net_minimum(transactions, start, end)
     return amount if amount > CENT else None
+
+
+def minimum_row_to_undo(debt: dict, transactions: list, today: datetime.date) -> Optional[dict]:
+    """The `payment_minimum` row the toggle's undo deletes: the current cycle's latest
+    minimum that no legacy reversal already cancelled. None when there is nothing to
+    undo — including once the cycle's due date has passed (minimum_to_undo)."""
+    if minimum_to_undo(debt, transactions, today) is None:
+        return None
+    start, end, _ = current_cycle(debt, today)
+    hidden = cancelled_minimum_ids(transactions)
+    rows = [t for t in transactions
+            if t.get("kind") == KIND_MINIMUM and _in(t, start, end) and t.get("id") not in hidden]
+    return max(rows, key=_row_key) if rows else None
+
+
+def extra_is_deletable(debt: dict, t: dict, today: datetime.date) -> bool:
+    """An extra payment can be deleted while it is in the debt's current billing cycle
+    and the debt is still active. Earlier cycles were closed against it (interest,
+    the full-payment check), so they stay as they are. The closed-month rule is the
+    server's to apply at delete time, not part of this."""
+    if is_paid_off(debt) or t.get("kind") != KIND_EXTRA:
+        return False
+    start, end, _ = current_cycle(debt, today)
+    return _in(t, start, end)
+
+
+def budget_paydown(transactions: list, start: datetime.date, end: datetime.date) -> float:
+    """What a budget month's Goals split spent on Debt Freedom: net payments
+    (minimums + extras − legacy reversals) dated within [start, end]. Interest, late
+    fees, balance edits and statement adjustments are what the debt cost, never money
+    the user paid out, so they are not counted (debt_payment_events)."""
+    return money(sum(amount for day, amount in debt_payment_events(transactions)
+                     if start <= day <= end))
 
 
 def due_dates_to_process(debt: dict, today: datetime.date) -> list:
@@ -820,7 +899,7 @@ def pot_stage(debt: dict) -> str:
 
 def debt_payment_events(transactions: list) -> list:
     """(date, signed amount) for every dollar the user paid toward a debt: minimum
-    and extra payments in, minimum reversals (the toggle's undo) out, dated by
+    and extra payments in, legacy minimum reversals (the toggle's old undo) out, dated by
     occurred_on. Interest, late fees, balance edits and statement adjustments are
     what the debt cost, not what was paid, so they are ignored. A payment counts in
     full even when part of it only covered interest."""

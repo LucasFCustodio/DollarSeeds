@@ -4,7 +4,9 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
+import { isAxiosError } from 'axios';
 import { useTranslation } from 'react-i18next';
+import { isMonthClosedDetail } from '../../lib/serverStrings';
 import { Fonts, useTheme } from '../../context/ThemeContext';
 import { useLocale } from '../../context/LocaleContext';
 import Button from '../ui/Button';
@@ -22,7 +24,7 @@ interface Props {
 export default function LogPaymentSheet({ debt, onClose, onLogged }: Props) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
-    const { parseAmount } = useLocale();
+    const { parseAmount, serverError } = useLocale();
     const f = useDebtFormat();
     const [extra, setExtra] = useState('');
     const [busy, setBusy] = useState(false);
@@ -53,8 +55,13 @@ export default function LogPaymentSheet({ debt, onClose, onLogged }: Props) {
             const result = await logPayment(debt.id, { minimum: false, extraAmount: amount, occurredOn: localDateISO() });
             onLogged(result, true);
         } catch (e) {
-            console.error('logPayment failed', e);
-            setError(t('payment.errFailed'));
+            const detail = isAxiosError(e) ? e.response?.data?.detail : undefined;
+            if (isMonthClosedDetail(detail)) {
+                setError(serverError(detail));
+            } else {
+                console.error('logPayment failed', e);
+                setError(t('payment.errFailed'));
+            }
             setBusy(false);
         }
     };

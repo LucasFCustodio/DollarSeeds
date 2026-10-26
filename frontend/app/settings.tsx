@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import axios from 'axios';
+import { localDateISO } from '../lib/debtFreedom';
 
 import * as WebBrowser from 'expo-web-browser';
 
@@ -124,7 +125,8 @@ export default function SettingsScreen() {
     const computeEmergencySuggestion = async (): Promise<number | null> => {
         if (!user?.id) return null;
         try {
-            const res = await axios.get(`${BASE}/dashboard/trends/`, { params: { user_id: user.id } });
+            // `today`: the phone's date decides which year's debt payments a month counts.
+            const res = await axios.get(`${BASE}/dashboard/trends/`, { params: { user_id: user.id, today: localDateISO() } });
             const rows: any[] = res.data.data ?? [];
             const needsMonths = rows.map(r => r.needs).filter((n: number) => n > 0);
             if (needsMonths.length === 0) return null;
@@ -192,7 +194,6 @@ export default function SettingsScreen() {
                 pathname: '/(tabs)/piggyBank',
                 params: {
                     createGoal: '1',
-                    goalType: 'saving',
                     title: '3-Month Emergency Fund',
                     amount: suggestedEmergency != null ? String(suggestedEmergency) : '',
                 },

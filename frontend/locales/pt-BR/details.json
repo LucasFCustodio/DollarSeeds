@@ -8,12 +8,14 @@
   },
   "row": {
     "day": "Dia {{day}}",
-    "noteAndDay": "{{note}} · dia {{day}}"
+    "noteAndDay": "{{note}} · dia {{day}}",
+    "debtPaymentA11y": "{{name}}, pagamento de dívida de {{amount}}. Abre a dívida."
   },
   "fallback": {
     "goalExpense": "Gasto de meta",
     "savingsDeposit": "Depósito na poupança",
     "setAside": "Separado",
+    "debtPayment": "Pagamento de dívida",
     "income": "Renda"
   },
   "monthClosed": {
