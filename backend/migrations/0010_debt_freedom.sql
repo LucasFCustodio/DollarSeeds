@@ -118,4 +118,5 @@ create policy "Users control their own debt transactions"
 --   select tablename, policyname, qual from pg_policies
 --    where schemaname = 'public' order by tablename;
 
--- Applied to project … on <date>.
+-- Applied to project vbvsblpyeylnemrecyqv before 2026-09-29 (exact date not recorded;
+-- confirmed present by a read-only schema check on 2026-10-26).

@@ -100,4 +100,5 @@ create policy "Users control their own debt freedom settings"
 --   select policyname, cmd, roles, qual from pg_policies
 --    where schemaname = 'public' and tablename = 'debt_freedom_settings';
 
--- Applied to project … on <date>.
+-- Applied to project vbvsblpyeylnemrecyqv before 2026-09-29 (exact date not recorded;
+-- confirmed present by a read-only schema check on 2026-10-26).
