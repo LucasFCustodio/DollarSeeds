@@ -747,8 +747,10 @@ def get_spending_trends(today: Optional[datetime.date] = None,
 # phone's date when the client sends one (the optional `today` the /debt-freedom/
 # routes already take), clamped by _df_today.
 #
-# Old binaries cannot have rows in debt_transactions (Debt Freedom has never shipped
-# in a store build), so for them every number below is exactly what it was.
+# Binaries from before Debt Freedom shipped have no Debts tab, so a user who only has
+# one of them has no rows in debt_transactions and every number below is exactly what
+# it was. One who also uses a newer build sees their payments counted, which is the
+# right number; the response shape is unchanged.
 DEBT_BUDGET_KINDS = [df.KIND_MINIMUM, df.KIND_EXTRA, df.KIND_MINIMUM_REVERSAL]
 
 
@@ -3179,10 +3181,9 @@ class DebtCreate(BaseModel):
     current_balance: float
     min_payment: float
     apr: float
-    # Required since v2: every cycle rule hangs off the due date. The /debt-freedom/
-    # routes have never shipped in a store build (the tab is behind
-    # DEBT_FREEDOM_ENABLED), so no client in the wild creates debts without it. The
-    # column stays nullable; the API enforces it.
+    # Required since v2: every cycle rule hangs off the due date. It was required
+    # before the first store build with the Debts tab, so no client in the wild
+    # creates debts without it. The column stays nullable; the API enforces it.
     due_day: int
     debt_type: Optional[str] = None
     lender: Optional[str] = None

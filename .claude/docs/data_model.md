@@ -134,7 +134,7 @@ is two halves:
 | Half | Keys | Who gets them |
 |------|------|---------------|
 | Frozen | `premium_active`, `expires_at`, `product_id`, `pending_product_id`, `store`, `auto_renew` | **everyone** — the shipped premium build reads them, so they are never removed, renamed or retyped |
-| Allowances | `max_goals`, `goals_used`, `budget_types`, `video_series`, `max_bank_connections` | only clients sending `X-Client-Features: limits` |
+| Allowances | `max_goals`, `goals_used`, `budget_types`, `video_series`, `max_bank_connections`, `debt_freedom` | only clients sending `X-Client-Features: limits` |
 
 The allowances are **values, not verdicts** — the server states what the user is allowed
 and the client renders whatever it says. That is deliberate: with un-updatable binaries,
@@ -185,7 +185,29 @@ reach the Goals budget by being read there (see "The Goals split's spend" under 
 Calculation). Routes live under `/debt-freedom/` in
 `main.py`; **every rule is a pure function in
 [backend/debt_freedom.py](../../backend/debt_freedom.py)**, unit-tested in
-`tests/test_debt_freedom.py`. The client renders server-computed fields only.
+`tests/test_debt_freedom.py` and `tests/test_debt_missed_cycles.py`. The client
+renders server-computed fields only.
+
+**It has clients in the wild from the release that turned `DEBT_FREEDOM_ENABLED` on.**
+Until then no store build had the Debts tab, so these routes could change freely. From
+that release on, the API and database rules in CLAUDE.md apply to them like any other.
+
+**Premium.** Debt Freedom is premium: every write route (create, PATCH, DELETE,
+payments, undo-minimum, delete-payment, checkin, late-fee, complete, PUT settings)
+calls `_assert_debt_freedom_writable` first and answers 403 `debt_freedom_locked` unless
+the caller's `debt_freedom` allowance would be `full` — before the debt is loaded or a
+cycle closed, so a refused request changes nothing. It uses the goal gates' WRITE
+posture (`_Entitlements.debt_freedom_locked` = `enforced`, fails closed when RevenueCat
+is unreachable; a subscriber recorded in `subscriptions` never reaches RevenueCat).
+Reads (`GET /debt-freedom/`, `/{id}`, `/settings`, `/payments`) stay open, and the lazy
+cycle processing they run keeps a lapsed user's balances true. A caller without
+`limits` is never gated, as everywhere.
+
+| `debt_freedom` | When | App |
+|---|---|---|
+| `full` | entitled, or the limits are off for this caller (no `limits`, or `premium_enabled` false), or the RevenueCat lookup failed (read posture) | the garden |
+| `read_only` | not entitled, at least one row in `debts` (any status) | the garden and detail, every action hidden, a Subscribe banner |
+| `none` | not entitled, no debts | the tutorial |
 
 `debts`:
 
@@ -214,9 +236,18 @@ Calculation). Routes live under `/debt-freedom/` in
 `debt_transactions`: `debt_id` (FK, cascade), `kind` (`payment_minimum` \|
 `payment_extra` \| `interest` \| `balance_edit` \| `late_fee` \| `statement_adjustment` \|
 `minimum_reversal` — the last three added by 0011, CHECK widened `NOT VALID`), `amount`,
-`balance_after`, `occurred_on` (date). `balance_edit.amount` and
+`balance_after`, `occurred_on` (date), `cycle_due_date` (date, nullable, migration
+[0012](../../backend/migrations/0012_debt_cycle_due_date.sql)). `balance_edit.amount` and
 `statement_adjustment.amount` are signed (new − old); `minimum_reversal.amount` is the
 positive amount put back on the balance by the toggle's **old** undo.
+
+**`cycle_due_date` — late minimums.** Set only on a `payment_minimum` logged late from
+"View all min payments": the due date of the missed cycle it pays for. Such a minimum
+counts for **that** cycle wherever its `occurred_on` falls (`df.pays_cycle`); NULL — every
+row from before 0012 and every on-time minimum — keeps the old rule, the cycle its
+`occurred_on` falls in. Its `occurred_on` is the day it was logged, so it counts against
+**that** month's Goals budget (the budget rule is unchanged). Only a late minimum writes
+the column, so on-time payments work before 0012 is applied; logging a late one needs it.
 
 **`minimum_reversal` is legacy.** Nothing writes it any more — the toggle's undo now
 deletes the minimum (below) — but the kind stays valid in the CHECK and existing rows
@@ -243,7 +274,8 @@ never refused for this reason.
 
 | Route | Rule |
 |-------|------|
-| `POST /debt-freedom/{id}/payments/undo-minimum` | Deletes the current cycle's latest uncancelled `payment_minimum` (`df.minimum_row_to_undo`). However often the user toggles, a cycle ends with at most one minimum row. Still refused once the cycle's due date has passed |
+| `POST /debt-freedom/{id}/payments` | Optional `cycle_due_date` logs a LATE minimum: `minimum: true` and no extra (400 otherwise), the date must be one of the debt's `missed_cycles` (409 otherwise), the amount is that entry's, and the row stores the date. Absent: unchanged (the current cycle's minimum, 409 if already logged) |
+| `POST /debt-freedom/{id}/payments/undo-minimum` | Deletes the current cycle's latest uncancelled `payment_minimum` (`df.minimum_row_to_undo`). However often the user toggles, a cycle ends with at most one minimum row. Still refused once the cycle's due date has passed. With `cycle_due_date`: deletes that cycle's late minimum instead (`df.late_minimum_row_to_undo`) — only one logged in the **current** cycle, the same window the toggle's own undo has; the cycle is then owed again |
 | `DELETE /debt-freedom/{id}/payments/{transaction_id}` | Deletes a `payment_extra` of this debt in its **current billing cycle**, on an **active** debt, in an **open** month; 409 with a reason otherwise. Earlier cycles were closed against the payment (interest, the full-payment check), so they stay. Returns the payment routes' payload (`debt`, `focus_id`, `plan_est_payoff_month`, `monthly_extra`, `previous_step`, `transactions: []`). Optional `today` |
 | `DELETE /debt-freedom/{id}` | Refused (409, "This debt has payments in a closed month…") when its net payments in any **closed** budget month are non-zero — deleting it would change that month. Otherwise unchanged; its open-month payments leave the Goals spend with it. Optional `today` |
 | `GET /debt-freedom/{id}` | History is newest first with legacy pairs collapsed; each row carries `deletable` (`df.extra_is_deletable`: an extra in the current cycle of an active debt). The closed-month rule is applied when the delete arrives, so its message can say why |
@@ -281,6 +313,24 @@ blank/NULL = $0), `updated_at`. One row per user, upserted by
   the first cycle); (4) `cycle_start_balance` = new balance, `checkin_due_since` = the
   due date, `interest_checked_through` advances — by a conditional update on its old
   value, so overlapping requests cannot process a cycle twice.
+- **Missed cycles** (`df.missed_cycles`, on every decorated debt as `missed_cycles:
+  [{due_date, amount}]`, oldest first) — every due date after `created_at` and before
+  today whose cycle is not covered. Covered = the statement it opened with was ~$0, or
+  it was paid in full (net payments dated in it reach the statement), or **any** net
+  minimum pays for it (`pays_cycle`). Any amount counts because the toggle always logs
+  the full minimum of its moment and no historical minimum is stored: comparing with
+  today's `min_payment` would flag a cycle paid on time as missed after a check-in
+  raised the minimum. `amount` = current `min_payment` capped at the statement.
+- **Overdue** = `missed_cycles` is non-empty. A minimum logged for the current cycle no
+  longer clears an older miss, and a late minimum is never the current cycle's (the
+  toggle, `min_logged_this_cycle` and the plain undo all go through `pays_cycle`).
+  `late_minimums` on the decorated debt lists the late minimums still undoable.
+  `/home/summary/` overdue entries carry `missed_count`, and `missed_due_date` /
+  `days_overdue` are from the **oldest** missed cycle.
+- **`process_due_dates` ignores `cycle_due_date`.** It still reads payments by
+  `occurred_on`, so a late minimum logged in this cycle counts as money paid in this
+  cycle when it closes — including toward this cycle's late-fee test. A late payment
+  never refunds a fee already charged.
 - **Local date** — cycle routes take an optional `today` (the phone's date); one more
   than a day from the server's date is ignored. The first cycle's payment window opens
   the day before `created_at`, which is stamped in UTC.
@@ -364,9 +414,9 @@ October. "Today" is the phone's date when the client sends the optional `today`
 home summary's over-budget list, the compliance score and the client's "all green"
 check agree; `_compute_target_rollover` adds the same `_debt_paydown`, so the close-out
 target is the leftover the home shows; trends applies `df.budget_paydown` per month.
-Old binaries cannot have Debt Freedom rows (the tab has never shipped in a store
-build), so their numbers are unchanged — and the total is only touched when there is a
-payment, so an int total stays an int in their JSON.
+Binaries from before Debt Freedom shipped have no Debts tab, so a user on one alone
+has no Debt Freedom rows and their numbers are unchanged — and the total is only
+touched when there is a payment, so an int total stays an int in their JSON.
 
 `BUDGET_TYPES` in `main.py` is the single source of truth for the three splits —
 `balanced` 50/30/20, `wealth_builder` 30/20/50, `firm_foundation` 70/10/20. Only the

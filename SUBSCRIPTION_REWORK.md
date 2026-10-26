@@ -2,7 +2,7 @@
 
 *Context file for the subscription/pricing rework. Read alongside
 [.claude/docs/data_model.md](.claude/docs/data_model.md) and
-[.claude/docs/lessons_page.md](.claude/docs/lessons_page.md). Last updated: 2026-09-13.*
+[.claude/docs/lessons_page.md](.claude/docs/lessons_page.md). Last updated: 2026-10-26.*
 
 ---
 
@@ -16,6 +16,7 @@
 | 2b | Frontend: gating UI (locked goals, grayed states, budget lock) | **Unblocked — Phase 1 has landed** |
 | 3 | Release | **No flag to flip. The limits go live per install — see Phase 3** |
 | 4 | Contract: retire old products | Much later |
+| DF | Debt Freedom (Debts tab) as premium: `debt_freedom` allowance, `debt_freedom_locked` on every write, tutorial / read-only garden / home teaser, flag on for store builds | **Built on `debt-freedom-premium-branch`, not merged.** Needs migration 0012 applied before the backend deploys |
 
 All blocking decisions are settled. Remaining questions in §13 are non-blocking.
 
@@ -152,6 +153,7 @@ Premium limits the amount of a feature; it does not hide the feature.
 | Budget types | `balanced` only | + `wealth_builder`, `firm_foundation` |
 | Video series | free series only | all |
 | Bank connections | 0 | **1** (v1 — mechanism TBD) |
+| Debt Freedom (the Debts tab) | the tutorial; a lapsed subscriber keeps their debts **read-only** | full: add, pay, check in, complete |
 
 **Goal-cap rules:** goals flagged `is_general` (General Savings) and `is_reconciliation`
 (auto-created at month close) **do NOT count toward the cap**. **Neither do user-created
@@ -160,6 +162,13 @@ money, and a free user who still has old ones must be able to create their one s
 goal. Only user-created savings goals count. A user must never be locked out of their one free goal by a goal the
 app created for them. **Completed goals don't count either** — a free user who completes
 their goal can create a new one.
+
+**Debt Freedom is the one feature the free tier does not get a slice of.** A free user
+with no debts sees a short tutorial of the Snowball method ending in Subscribe; the home
+shows a teaser card where the next debt payment would be. Nothing is ever deleted: a
+subscriber who lapses keeps every debt, visible and read-only, and the server keeps
+closing their billing cycles (interest, late fees) on every read so the balances are
+true when they come back.
 
 **No grandfathering.** The rules apply to every user once all three hold: the new backend
 is deployed, the user is on a build that sends the `limits` token, and `premium_enabled`
@@ -180,6 +189,9 @@ When a subscriber lapses:
 - **Closed months keep the budget type they were closed with** — permanently. Already
   works; see §9.
 - **Unclosed months fall back to `balanced`.**
+- **Debts become read-only** (`debt_freedom: read_only`): the garden and every debt's
+  detail still render, every action is hidden, and every write is refused with
+  `debt_freedom_locked`. Background cycle processing continues.
 
 ### Which goal stays active (DECIDED)
 
@@ -243,7 +255,8 @@ the app's copy and needs an App Store update.
   "goals_used": 3,
   "budget_types": ["balanced"],
   "video_series": "free_only",
-  "max_bank_connections": 0
+  "max_bank_connections": 0,
+  "debt_freedom": "read_only"
 }
 ```
 
@@ -254,9 +267,10 @@ the app's copy and needs an App Store update.
 | `budget_types` | Allowed keys from `BUDGET_TYPES` |
 | `video_series` | `"free_only"` or `"all"` |
 | `max_bank_connections` | `0` free, `1` premium. `null` = unlimited |
+| `debt_freedom` | `"full"`, `"read_only"` (not entitled, has debts) or `"none"` (not entitled, no debts). Read posture: a lookup failure answers `"full"` |
 
 Entitled values: `max_goals: null`, `budget_types: ["balanced","wealth_builder","firm_foundation"]`,
-`video_series: "all"`, `max_bank_connections: 1`.
+`video_series: "all"`, `max_bank_connections: 1`, `debt_freedom: "full"`.
 
 **Hard constraint:** `premium_active`, `expires_at`, `product_id`, `pending_product_id`,
 `store`, `auto_renew` must stay exactly as they are — the shipped premium build reads them.
@@ -309,6 +323,7 @@ alongside it:
 | `goal_limit_reached` | `POST /savings/goal/` at the cap |
 | `budget_type_locked` | `PATCH /settings/` choosing a gated budget type |
 | `goal_locked` | Any write targeting a locked goal, except deleting it (§5) |
+| `debt_freedom_locked` | Any `/debt-freedom/` write by a caller whose `debt_freedom` is not `full`. Write posture (fails closed), like `goal_locked` |
 
 The detail string differs per code; a video needs the full paywall, a goal cap needs an
 inline upsell next to the button.
