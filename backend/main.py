@@ -3217,10 +3217,20 @@ class DebtPayment(BaseModel):
     # is UTC, which is already "tomorrow" for a US evening.
     occurred_on: Optional[datetime.date] = None
     today: Optional[datetime.date] = None
+    # A LATE minimum: the due date of the missed cycle it pays for (one of the debt's
+    # `missed_cycles`). Absent = this cycle's minimum, exactly as before. Written to
+    # debt_transactions.cycle_due_date (migration 0012).
+    cycle_due_date: Optional[datetime.date] = None
 
 
 class DebtToday(BaseModel):
     today: Optional[datetime.date] = None
+
+
+class DebtUndoMinimum(BaseModel):
+    today: Optional[datetime.date] = None
+    # Undo a LATE minimum for this cycle instead of the current cycle's.
+    cycle_due_date: Optional[datetime.date] = None
 
 
 class DebtCheckin(BaseModel):
@@ -3623,6 +3633,9 @@ def log_debt_payment(id: int, payment: DebtPayment, features: set = Depends(_cli
         raise _df_bad("extra_amount cannot be negative.")
     if not payment.minimum and extra <= 0:
         raise _df_bad("Nothing to pay: send minimum, extra_amount, or both.")
+    late_for = payment.cycle_due_date
+    if late_for is not None and (not payment.minimum or extra > 0):
+        raise _df_bad("cycle_due_date is only for a late minimum, on its own.")
 
     today = _df_today(payment.today or payment.occurred_on)
     debt, debts, own_txns = _df_fresh(user_id, id, today)
@@ -3632,7 +3645,14 @@ def log_debt_payment(id: int, payment: DebtPayment, features: set = Depends(_cli
         focus = df.focus_debt(df.order_debts(debts))
         if not focus or focus["id"] != id:
             raise HTTPException(status_code=409, detail="Extra payments go to the focus debt only.")
-    if payment.minimum and df.min_logged_this_cycle(debt, own_txns, today):
+    late = None
+    if late_for is not None:
+        # A late minimum: only for a cycle still owed one, at the amount it is owed.
+        late = next((c for c in df.missed_cycles(debt, own_txns, today)
+                     if c["due_date"] == late_for.isoformat()), None)
+        if late is None:
+            raise HTTPException(status_code=409, detail="That billing cycle has no missed minimum to log.")
+    elif payment.minimum and df.min_logged_this_cycle(debt, own_txns, today):
         raise HTTPException(status_code=409, detail="The minimum is already logged for this cycle.")
 
     occurred_on = payment.occurred_on or today
@@ -3642,7 +3662,7 @@ def log_debt_payment(id: int, payment: DebtPayment, features: set = Depends(_cli
     balance = df.money(debt.get("current_balance"))
     parts = []
     if payment.minimum:
-        parts.append((df.KIND_MINIMUM, df._num(debt.get("min_payment"))))
+        parts.append((df.KIND_MINIMUM, late["amount"] if late else df._num(debt.get("min_payment"))))
     if extra > 0:
         parts.append((df.KIND_EXTRA, extra))
     written = []
@@ -3655,6 +3675,10 @@ def log_debt_payment(id: int, payment: DebtPayment, features: set = Depends(_cli
             "user_id": user_id, "debt_id": id, "kind": kind, "amount": amount,
             "balance_after": balance, "occurred_on": occurred_on.isoformat(),
         }
+        if late and kind == df.KIND_MINIMUM:
+            # Only a late minimum writes the column, so an on-time payment never
+            # needs migration 0012.
+            row["cycle_due_date"] = late["due_date"]
         inserted = supabase.table("debt_transactions").insert(row).execute().data
         written.append(inserted[0] if inserted else row)
     if not written:
@@ -3670,21 +3694,31 @@ def log_debt_payment(id: int, payment: DebtPayment, features: set = Depends(_cli
 
 
 @app.post("/debt-freedom/{id}/payments/undo-minimum")
-def undo_debt_minimum(id: int, body: Optional[DebtToday] = None,
+def undo_debt_minimum(id: int, body: Optional[DebtUndoMinimum] = None,
                       features: set = Depends(_client_features),
                       user_id: str = Depends(get_current_user_id)):
     """The toggle's on → off: DELETES this cycle's minimum, so however often the user
     toggles, the cycle ends with at most one minimum row. (It used to write a
     minimum_reversal; those legacy rows are still netted everywhere and collapsed
     from the history.) Refused once the cycle's due date has passed, and in a closed
-    month. Never unlocks the species; the plant keeps its highest step."""
+    month. Never unlocks the species; the plant keeps its highest step.
+
+    With `cycle_due_date` it takes back a LATE minimum for that cycle instead, under
+    the same rules: only one logged in the current cycle, and not in a closed month.
+    The cycle is then owed its minimum again."""
     _assert_debt_freedom_writable(user_id, features)
     _df_owned(user_id, id)
     today = _df_today(body.today if body else None)
+    late_for = body.cycle_due_date if body else None
     debt, _, own_txns = _df_fresh(user_id, id, today)
-    row = df.minimum_row_to_undo(debt, own_txns, today)
-    if row is None:
-        raise HTTPException(status_code=409, detail="There is no minimum to undo in the current cycle.")
+    if late_for is not None:
+        row = df.late_minimum_row_to_undo(debt, own_txns, late_for, today)
+        if row is None:
+            raise HTTPException(status_code=409, detail="There is no late minimum to undo for that cycle.")
+    else:
+        row = df.minimum_row_to_undo(debt, own_txns, today)
+        if row is None:
+            raise HTTPException(status_code=409, detail="There is no minimum to undo in the current cycle.")
     _assert_debt_month_open(user_id, row.get("occurred_on"), today)
     _df_remove_payment(user_id, debt, own_txns, row)
     return {**_df_one(user_id, id, today), "transactions": []}

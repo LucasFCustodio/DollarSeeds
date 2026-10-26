@@ -19,7 +19,9 @@ from conftest import USER_A, USER_B, auth
 TODAY = datetime.date(2026, 9, 28)
 
 
-def card(id=1, balance=1000.0, *, minimum=50.0, due_day=14, created="2026-06-01T12:00:00+00:00",
+# Created after the Aug 14 due date by default, so with due day 14 the only passed
+# cycle is Aug 19 - Sep 14: every missed-cycle test below starts from one owed month.
+def card(id=1, balance=1000.0, *, minimum=50.0, due_day=14, created="2026-08-20T12:00:00+00:00",
          checked=None, status="active"):
     return {
         "id": id, "name": f"D{id}", "original_balance": 2000.0, "current_balance": balance,
@@ -29,9 +31,9 @@ def card(id=1, balance=1000.0, *, minimum=50.0, due_day=14, created="2026-06-01T
     }
 
 
-def txn(on, kind=df.KIND_MINIMUM, amount=50.0, balance_after=950.0, id=1, debt_id=1):
+def txn(on, kind=df.KIND_MINIMUM, amount=50.0, balance_after=950.0, id=1, debt_id=1, cycle=None):
     return {"id": id, "debt_id": debt_id, "kind": kind, "amount": amount,
-            "balance_after": balance_after, "occurred_on": on}
+            "balance_after": balance_after, "occurred_on": on, "cycle_due_date": cycle}
 
 
 # ── overdue ──────────────────────────────────────────────────────────────────
@@ -63,8 +65,15 @@ def test_paying_the_statement_in_full_is_never_overdue():
     assert df.is_overdue(card(balance=0.0, checked="2026-09-14"), txns, TODAY) is False
 
 
-def test_overdue_clears_once_a_minimum_is_logged_in_the_current_cycle():
+def test_a_current_cycle_minimum_no_longer_clears_a_missed_one():
+    """The old rule cleared the alert on ANY minimum in the current cycle, so a late
+    catch-up counted as this month's minimum. That minimum is October's now."""
     txns = [txn("2026-09-20")]
+    assert df.is_overdue(card(checked="2026-09-14"), txns, TODAY) is True
+
+
+def test_a_late_minimum_for_the_missed_cycle_clears_it():
+    txns = [txn("2026-09-20", cycle="2026-09-14")]
     assert df.is_overdue(card(checked="2026-09-14"), txns, TODAY) is False
 
 
@@ -276,6 +285,7 @@ def test_overdue_lists_one_debt_with_its_missed_due_date():
     assert s["overdue"] == [{
         "id": 1, "name": "D1", "min_payment": 150.0,
         "missed_due_date": "2026-09-14", "days_overdue": 14, "pay_url": None,
+        "missed_count": 1,
     }]
 
 
@@ -291,8 +301,16 @@ def test_overdue_is_ordered_longest_overdue_first():
 def test_an_overdue_debt_drops_off_once_its_minimum_is_logged():
     rows = [card(1, 1000.0, due_day=14, checked="2026-09-14")]
     assert _summary(rows)["overdue_count"] == 1
-    s = _summary(rows, [txn("2026-09-27", debt_id=1)])
+    s = _summary(rows, [txn("2026-09-27", debt_id=1, cycle="2026-09-14")])
     assert (s["overdue_count"], s["overdue"]) == (0, [])
+
+
+def test_overdue_counts_every_missed_month_from_the_oldest():
+    rows = [card(1, 1000.0, due_day=14, created="2026-06-01T12:00:00+00:00", checked="2026-09-14")]
+    s = _summary(rows)
+    assert s["overdue"][0]["missed_due_date"] == "2026-06-14"
+    assert s["overdue"][0]["days_overdue"] == (TODAY - __import__("datetime").date(2026, 6, 14)).days
+    assert s["overdue"][0]["missed_count"] == 4
 
 
 def test_overdue_carries_the_pay_url_or_null():
