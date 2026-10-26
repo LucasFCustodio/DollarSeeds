@@ -22,7 +22,11 @@ export default function DebtFreedomTeaser({ onLearn }: { onLearn: () => void }) 
                     <Text style={[homeType.small, { color: theme.ink2 }]} numberOfLines={1}>
                         {t('debtTeaser.eyebrow')}
                     </Text>
-                    <Text style={[homeType.medium, styles.line, { color: theme.ink }]}>
+                    {/* Two lines at most beside the button: the copy fits in two at
+                        375 pt in both languages; a larger system text size shrinks
+                        it a little rather than adding a third. */}
+                    <Text style={[homeType.medium, styles.line, { color: theme.ink }]}
+                        numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>
                         {t('debtTeaser.line')}
                     </Text>
                 </View>
