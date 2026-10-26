@@ -47,6 +47,9 @@ export default function IncomeHero({ left, income, over, onAdd, onOpenIncome }: 
                 drop.valid && { borderColor: drop.over ? theme.onBrand : GLASS.border, backgroundColor: drop.over ? GLASS.fill : 'transparent' },
             ]}
         >
+            {/* The + sits beside the NUMBER, not beside the number-and-label column:
+                with a short amount ("$0") the label is the wider of the two and would
+                push the + far to the right. */}
             <View style={styles.row}>
                 <Pressable
                     onPress={onOpenIncome}
@@ -62,7 +65,6 @@ export default function IncomeHero({ left, income, over, onAdd, onOpenIncome }: 
                     >
                         {formatMoney(left)}
                     </Text>
-                    <Text style={[homeType.small, { color: theme.onBrand }]}>{t('leftThisMonth')}</Text>
                 </Pressable>
                 <Pressable
                     onPress={onAdd}
@@ -74,6 +76,17 @@ export default function IncomeHero({ left, income, over, onAdd, onOpenIncome }: 
                     <IconPlus size={18} color={theme.brand} />
                 </Pressable>
             </View>
+            {/* Also opens the income list. Hidden from screen readers: the amount's
+                own label (hero.a11y) already includes this line. */}
+            <Pressable
+                onPress={onOpenIncome}
+                accessible={false}
+                importantForAccessibility="no-hide-descendants"
+                accessibilityElementsHidden
+                style={({ pressed }) => [styles.labelHit, pressed && { opacity: 0.6 }]}
+            >
+                <Text style={[homeType.small, { color: theme.onBrand }]}>{t('leftThisMonth')}</Text>
+            </Pressable>
             <AnimatedProgressBar
                 value={pct}
                 color={pct <= LOW_PCT ? theme.harvest : theme.onBrand}
@@ -93,8 +106,11 @@ const styles = StyleSheet.create({
     // The border is always there (transparent at rest) so a drag highlight never
     // shifts the layout.
     wrap: { borderRadius: 18, borderWidth: 1.5, borderColor: 'transparent', marginHorizontal: -10, paddingHorizontal: 10, paddingVertical: 6 },
-    row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    // A fixed gap after the number at every width; a long number shrinks to fit
+    // (adjustsFontSizeToFit) rather than pushing the + out.
+    row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     amountHit: { flexShrink: 1 },
+    labelHit: { alignSelf: 'flex-start' },
     plus: { width: 32, height: 32, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
     bar: { marginTop: 12 },
 });
