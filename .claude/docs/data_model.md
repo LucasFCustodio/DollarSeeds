@@ -327,10 +327,13 @@ blank/NULL = $0), `updated_at`. One row per user, upserted by
   `late_minimums` on the decorated debt lists the late minimums still undoable.
   `/home/summary/` overdue entries carry `missed_count`, and `missed_due_date` /
   `days_overdue` are from the **oldest** missed cycle.
-- **`process_due_dates` ignores `cycle_due_date`.** It still reads payments by
-  `occurred_on`, so a late minimum logged in this cycle counts as money paid in this
-  cycle when it closes — including toward this cycle's late-fee test. A late payment
-  never refunds a fee already charged.
+- **`process_due_dates` attributes minimums the same way.** Its late-fee test uses
+  `attributed_minimum`, so a late September minimum logged in October never covers
+  October: October still gets its fee (or its `late_fee_pending_for` question). A
+  `payment_minimum` with no `cycle_due_date` counts by `occurred_on`, exactly as before
+  0012. The full-payment test and the interest still read every payment by
+  `occurred_on` — the late minimum really did lower the balance in October. A late
+  payment never refunds a fee already charged.
 - **Local date** — cycle routes take an optional `today` (the phone's date); one more
   than a day from the server's date is ignored. The first cycle's payment window opens
   the day before `created_at`, which is stamped in UTC.

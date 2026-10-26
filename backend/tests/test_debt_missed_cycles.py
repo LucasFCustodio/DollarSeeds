@@ -157,15 +157,67 @@ def test_a_late_minimum_from_an_earlier_cycle_can_no_longer_be_taken_back():
     assert df.late_minimum_row_to_undo(card(), txns, D(2026, 9, 14), TODAY) is None
 
 
-def test_process_due_dates_is_unchanged_by_attribution():
-    """It still reads payments by occurred_on: the late minimum logged in this cycle
-    is money paid in this cycle when the cycle closes (interest and full-payment
-    check), exactly as before 0012."""
+NOV15 = D(2026, 11, 15)   # the Nov 14 due date closes the Oct 15 - Nov 14 cycle
+
+
+def late_fees(result) -> list:
+    return [(r["amount"], r["occurred_on"]) for r in result["transactions"] if r["kind"] == df.KIND_LATE_FEE]
+
+
+def test_a_late_minimum_does_not_prevent_the_current_cycles_late_fee():
+    """September's minimum, logged late on Oct 18, pays September. October's own
+    minimum was never logged, so closing October charges its late fee."""
     debt = card(late_fee=25.0)
-    txns = [minimum("2026-10-18", cycle="2026-09-14")]
+    late = [minimum("2026-10-18", cycle="2026-09-14")]
+    assert late_fees(df.process_due_dates(debt, late, NOV15)) == [(25.0, "2026-11-14")]
+
+
+def test_a_late_minimum_does_not_cover_the_current_cycle_when_the_fee_is_unknown():
+    debt = card(late_fee=None)
+    late = [minimum("2026-10-18", cycle="2026-09-14")]
+    assert df.process_due_dates(debt, late, NOV15)["patch"]["late_fee_pending_for"] == "2026-11-14"
+
+
+def test_a_late_minimum_still_lowers_the_balance_the_cycle_closes_on():
+    """Only the late-fee test is attributed. The money left the balance in October,
+    so October's interest is on the lower balance, as for any payment."""
+    debt = card(balance=950.0, late_fee=0.0, apr=24.0)
+    late = [minimum("2026-10-18", cycle="2026-09-14")]
     on_time = [minimum("2026-10-18")]
-    nov15 = D(2026, 11, 15)
-    assert df.process_due_dates(debt, txns, nov15) == df.process_due_dates(debt, on_time, nov15)
+    late_rows = df.process_due_dates(debt, late, NOV15)
+    on_time_rows = df.process_due_dates(debt, on_time, NOV15)
+    assert late_rows["patch"]["current_balance"] == on_time_rows["patch"]["current_balance"]
+    assert [r for r in late_rows["transactions"] if r["kind"] == df.KIND_INTEREST] == \
+        [r for r in on_time_rows["transactions"] if r["kind"] == df.KIND_INTEREST]
+
+
+@pytest.mark.parametrize("fee", [25.0, None, 0.0])
+@pytest.mark.parametrize("rows", [
+    pytest.param([], id="nothing logged"),
+    pytest.param([("2026-10-18", 50.0)], id="minimum in the cycle"),
+    pytest.param([("2026-11-14", 50.0)], id="minimum on the due date"),
+    pytest.param([("2026-10-14", 50.0)], id="minimum in the previous cycle"),
+    pytest.param([("2026-10-18", 20.0)], id="short minimum"),
+])
+def test_a_null_cycle_due_date_behaves_exactly_as_before(fee, rows):
+    """Every row from before 0012 has cycle_due_date NULL — or, from a select that
+    predates the column, no such key at all. Both must close cycles exactly as the
+    occurred_on rule did (net_minimum, which the pre-0012 code called)."""
+    debt = card(late_fee=fee)
+    with_null = [minimum(on, amount=amt, id=i) for i, (on, amt) in enumerate(rows, 1)]
+    without_key = [{k: v for k, v in t.items() if k != "cycle_due_date"} for t in with_null]
+    got_null = df.process_due_dates(debt, with_null, NOV15)
+    got_missing = df.process_due_dates(debt, without_key, NOV15)
+    assert got_null == got_missing
+    # ...and the attributed minimum is the pre-0012 net minimum, cycle by cycle.
+    for start, due in [(D(2026, 9, 15), D(2026, 10, 14)), (D(2026, 10, 15), D(2026, 11, 14))]:
+        assert df.attributed_minimum(with_null, start, due, due) == df.net_minimum(with_null, start, due)
+        assert df.attributed_minimum(without_key, start, due, due) == df.net_minimum(without_key, start, due)
+    owed_fee = not rows or rows[0][0] in ("2026-10-14",) or rows[0][1] < 50.0
+    if fee == 25.0:
+        assert late_fees(got_null) == ([(25.0, "2026-11-14")] if owed_fee else [])
+    if fee is None:
+        assert got_null["patch"].get("late_fee_pending_for") == ("2026-11-14" if owed_fee else None)
 
 
 # ══ routes ═════════════════════════════════════════════════════════════════════
@@ -231,6 +283,22 @@ def test_the_home_alert_count_drops_with_each_late_minimum(client, supabase_db):
     pay(client, d["id"], cycle_due_date="2026-09-14")
     pay(client, d["id"], cycle_due_date="2026-10-14")
     assert overdue() == []
+
+
+def test_a_late_minimum_does_not_spare_this_cycle_its_late_fee(client, supabase_db, monkeypatch):
+    """End to end: September logged late on Oct 20, October never paid. When the
+    Nov 14 due date closes, October gets its late fee and is still owed."""
+    d = seed(supabase_db, late_fee=25.0)
+    assert pay(client, d["id"], cycle_due_date="2026-09-14").status_code == 200
+    assert pay(client, d["id"], cycle_due_date="2026-08-14").status_code == 200
+    assert pay(client, d["id"], cycle_due_date="2026-10-14").status_code == 200
+
+    monkeypatch.setattr(main, "_df_server_today", lambda: NOV15)
+    garden = client.get("/debt-freedom/", headers=auth(USER_A)).json()["debts"][0]
+    fees = [(t["amount"], t["occurred_on"]) for t in supabase_db.rows("debt_transactions")
+            if t["kind"] == "late_fee"]
+    assert fees == [(25.0, "2026-11-14")]
+    assert dues(garden["missed_cycles"]) == ["2026-11-14"]
 
 
 def test_a_current_cycle_minimum_leaves_the_old_months_owed(client, supabase_db):

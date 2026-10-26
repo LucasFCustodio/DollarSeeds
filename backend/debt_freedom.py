@@ -451,7 +451,7 @@ def missed_cycles(debt: dict, transactions: list, today: datetime.date) -> list:
     A cycle is covered when:
       * its statement (the balance it opened with) was nothing, or
       * it was paid in full — net payments dated in it reach the statement, the
-        allowance missed_last_minimum and process_due_dates already make; or
+        allowance process_due_dates makes; or
       * a minimum pays for it (pays_cycle). ANY net minimum counts, not one that
         reaches today's min_payment: the toggle always logs the full minimum of its
         moment, and no historical minimum is stored, so comparing against today's
@@ -544,9 +544,15 @@ def process_due_dates(debt: dict, transactions: list, today: datetime.date) -> O
     For each due date, in order (catch-up processes all of them in one call):
       1. Full payment: the cycle's net payments are at least the statement balance
          (cycle_start_balance) → no fee, no interest.
-      2. Minimum: net payment_minimum below min_payment → a `late_fee` row when the
+      2. Minimum: the net minimum paying for THIS cycle (attributed_minimum, the same
+         attribution missed_cycles uses) below min_payment → a `late_fee` row when the
          debt has a late_fee above 0; when late_fee is unset, late_fee_pending_for is
-         set to the due date so the app can ask. (late_fee = 0 means "no fee".)
+         set to the due date so the app can ask. (late_fee = 0 means "no fee".) A late
+         minimum names an earlier cycle in cycle_due_date, so logging September's in
+         October never covers October; a minimum with no cycle_due_date counts for the
+         cycle its occurred_on falls in, exactly as before 0012. Step 1 and the interest
+         still read every payment by occurred_on: that is money the balance really lost
+         in this cycle, whichever cycle's minimum it was.
       3. Interest: one `interest` row, balance × APR / 100 / 365 × days since the
          previous due date (since creation for the first cycle), on the balance after
          the cycle's payments and fee.
@@ -589,7 +595,7 @@ def process_due_dates(debt: dict, transactions: list, today: datetime.date) -> O
         if statement is None:
             statement = money(balance + paid)
         if paid < statement - CENT:
-            if net_minimum(transactions, start, due) < min(minimum, statement) - CENT:
+            if attributed_minimum(transactions, start, due, due) < min(minimum, statement) - CENT:
                 if fee is None:
                     pending_for = due.isoformat()
                 elif fee > 0:
@@ -827,42 +833,6 @@ def balance_at(debt: dict, transactions: list, day: datetime.date) -> float:
         first = dated[0]
         return money(_num(first.get("balance_after")) - _effect(first))
     return money(debt.get("current_balance"))
-
-
-def last_passed_due_date(debt: dict, today: datetime.date) -> Optional[datetime.date]:
-    """The most recent due date strictly before today that the debt existed for
-    (the same due dates process_due_dates closes), else None."""
-    due_day = debt.get("due_day")
-    if not due_day:
-        return None
-    due = due_date_in(today.year, today.month, due_day)
-    if due >= today:
-        prev = add_months(today, -1)
-        due = due_date_in(prev.year, prev.month, due_day)
-    created = _date(debt.get("created_at"))
-    if created is not None and due <= created:
-        return None
-    return due
-
-
-def missed_last_minimum(debt: dict, transactions: list, today: datetime.date) -> bool:
-    """Did the cycle that closed on the last passed due date fail the late-fee test
-    process_due_dates applies? Not paid in full, and a net minimum below
-    min(min_payment, statement)."""
-    due = last_passed_due_date(debt, today)
-    if due is None:
-        return False
-    prev_month = add_months(due, -1)
-    start = due_date_in(prev_month.year, prev_month.month, debt["due_day"]) + DAY
-    created = _date(debt.get("created_at"))
-    if created is not None and created - DAY > start:
-        start = created - DAY
-    statement = balance_at(debt, transactions, start)
-    if statement <= CENT:
-        return False
-    if net_paid(transactions, start, due) >= statement - CENT:
-        return False
-    return net_minimum(transactions, start, due) < min(_num(debt.get("min_payment")), statement) - CENT
 
 
 def is_overdue(debt: dict, transactions: list, today: datetime.date) -> bool:
