@@ -234,6 +234,7 @@
       "grow": "Every month, log the minimum payment for this debt and every other debt you have. Little by little, the plant grows, reflecting your financial growth with it.",
       "free": "Once you fully pay off a debt, your plant is fully grown. Everything you were paying on it can now go to the next debt, so you can pay that one off faster."
     },
+    "sampleName": "Credit Card",
     "subscribe": "Subscribe to Premium",
     "next": "Next",
     "a11y": {

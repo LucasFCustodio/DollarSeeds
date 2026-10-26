@@ -8,8 +8,9 @@
  * when Reduce Motion is on. The floating tab bar stays visible: each page keeps its
  * content clear of it.
  *
- * The art is the garden's own (PlantView, WaterStream), one species and no pot label,
- * so the tutorial shows exactly what the tab will look like. Each plant is drawn as
+ * The art is the garden's own (PlantView, WaterStream), one species, with a sample
+ * debt name ("Credit Card") on the pot's label plate, so the tutorial shows exactly
+ * what the tab will look like. Each plant is drawn as
  * large as its page allows, anchored to the bottom of its area so the empty sky above
  * a young plant is what gets cropped.
  */
@@ -27,7 +28,7 @@ import type { PlantState } from '../../lib/debtFreedom';
 import PlantView from './PlantView';
 import WaterStream from './WaterStream';
 import { GROUND_Y } from './PlantSection';
-import { ART_TOP, ART_TOP_PAID_OFF, CANVAS_H, CANVAS_W, POT_WIDTH } from './art';
+import { ART_TOP, ART_TOP_PAID_OFF, CANVAS_H, CANVAS_W, POT_LABEL_BOX, POT_WIDTH } from './art';
 
 /** The custom tab bar's pill height (as on the Debts tab). */
 const TAB_BAR_HEIGHT = 58;
@@ -167,6 +168,18 @@ function StepArt({ step, width, height }: { step: Step; width: number; height: n
     const top = paidOff ? 0 : height - shownH;
     const left = (width - w) / 2;
 
+    // The pot's label plate is part of the pot drawing, so it is never empty in the
+    // garden: give it a sample debt's name, set like PotLabel's name line.
+    const labelH = POT_LABEL_BOX.height * s;
+    const potLabel = paidOff ? undefined : (
+        <View style={[styles.potLabel, { paddingHorizontal: labelH * 0.16 }]} importantForAccessibility="no-hide-descendants">
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}
+                style={{ color: theme.ink, fontFamily: Fonts.sansBold, fontSize: Math.max(11, labelH * 0.25), letterSpacing: -0.2 }}>
+                {t('tutorial.sampleName')}
+            </Text>
+        </View>
+    );
+
     const stake = paidOff ? (
         <View style={styles.stake}>
             <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
@@ -190,7 +203,7 @@ function StepArt({ step, width, height }: { step: Step; width: number; height: n
             ) : null}
             <View style={{ position: 'absolute', left, top: top - artTop * s, width: w }}>
                 <PlantView species={SPECIES} growthStep={step.step} state={step.state} isFocus={false}
-                    active={false} width={w} stakeLabel={stake} />
+                    active={false} width={w} potLabel={potLabel} stakeLabel={stake} />
             </View>
         </View>
     );
@@ -230,6 +243,7 @@ const styles = StyleSheet.create({
     area: { flex: 1, minHeight: 120 },
     clip: { overflow: 'hidden' },
     stake: { flex: 1, width: '90%', alignItems: 'center', justifyContent: 'center' },
+    potLabel: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     arrowRow: { alignItems: 'center' },
     arrow: {
         width: ARROW, height: ARROW, borderRadius: ARROW / 2, borderWidth: 1.5,
