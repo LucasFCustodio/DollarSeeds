@@ -5,6 +5,10 @@
  * Six required fields (the due day since v2: billing cycles hang off it); the rest sit
  * under a collapsed "More details". On create the
  * garden scrolls to the new debt and plays the seed-planting animation, once.
+ *
+ * Premium: only a `full` user reaches it. Anyone else is sent to the Debts tab, which
+ * shows the tutorial or the read-only garden — including when a save is refused with
+ * `debt_freedom_locked` and the entitlement refresh changes the allowance.
  */
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -24,9 +28,20 @@ import { queueGardenAnimation } from '../lib/debtFreedomEvents';
 import {
     createDebt, DEBT_TYPES, fetchDebt, updateDebt, type DebtInput, type DebtType,
 } from '../lib/debtFreedom';
+import { useDebtFreedomAccess, useDebtFreedomLockedHandler } from '../lib/debtFreedomAccess';
 
 export default function DebtFormRoute() {
+    const access = useDebtFreedomAccess();
+    const { theme } = useTheme();
     if (!DEBT_FREEDOM_ENABLED) return <Redirect href="/(tabs)" />;
+    if (access === 'loading') {
+        return (
+            <View style={{ flex: 1, backgroundColor: theme.bg, justifyContent: 'center' }}>
+                <ActivityIndicator color={theme.brand} />
+            </View>
+        );
+    }
+    if (access !== 'full') return <Redirect href="/(tabs)/debts" />;
     return <DebtForm />;
 }
 
@@ -46,6 +61,7 @@ function DebtForm() {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [more, setMore] = useState(false);
+    const onLocked = useDebtFreedomLockedHandler();
 
     const [name, setName] = useState('');
     const [original, setOriginal] = useState('');
@@ -161,6 +177,11 @@ function DebtForm() {
             }
             router.back();
         } catch (e) {
+            // The route redirects once the refreshed allowance arrives.
+            if (onLocked(e)) {
+                setBusy(false);
+                return;
+            }
             console.error('save debt failed', e);
             setError(t('form.errSave'));
             setBusy(false);

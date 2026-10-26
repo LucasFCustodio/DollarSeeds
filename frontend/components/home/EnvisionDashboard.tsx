@@ -73,7 +73,8 @@ type View2 = 'count' | 'amount';
 
 interface Props {
     progress: HomeProgress;
-    /** DEBT_FREEDOM_ENABLED. Off: the goals row only, no hairline. */
+    /** DEBT_FREEDOM_ENABLED and the `debt_freedom` allowance `full`. Off: the goals row
+     *  only, no hairline. */
     showDebts: boolean;
     onOpenDebts: (debtId?: number) => void;
     onAddDebt: () => void;

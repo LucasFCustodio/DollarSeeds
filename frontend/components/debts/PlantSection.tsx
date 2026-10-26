@@ -3,17 +3,19 @@
  * focus glow, the actions under the pot, and the water stream down to the next plant.
  *
  * Actions: "Mark as paid off" at a zero balance; otherwise the min-payment toggle on
- * every active debt, plus the filled "Extra" button on the focus debt.
+ * every active debt, plus the filled "Extra" button on the focus debt. A debt that owes
+ * minimums for passed cycles shows "View all min payments" where the toggle goes.
+ * Read-only (a lapsed subscriber): no actions at all.
  */
 import React, { memo, useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Fonts, shadow, useTheme } from '../../context/ThemeContext';
 import Button from '../ui/Button';
-import { plantStateOf, type Debt } from '../../lib/debtFreedom';
+import { missedCyclesOf, plantStateOf, type Debt } from '../../lib/debtFreedom';
 import PlantView, { type PlantViewHandle } from './PlantView';
 import PotLabel from './PotLabel';
-import MinToggle from './MinToggle';
+import MinToggle, { MissedMinsButton } from './MinToggle';
 import FocusGlow from './FocusGlow';
 import WaterStream from './WaterStream';
 import { CANVAS_RATIO, POT_LABEL_BOX, POT_WIDTH, CANVAS_W } from './art';
@@ -24,7 +26,7 @@ export const SECTION_ACTION_SPACE = 64;
 /** The stream is fully clear this far above the next section. */
 const STREAM_CLEARANCE = 28;
 /** Where the ground sits under a paid-off plant, in canvas units. */
-const GROUND_Y = 1185;
+export const GROUND_Y = 1185;
 
 interface Props {
     debt: Debt;
@@ -37,9 +39,11 @@ interface Props {
     busy: boolean;
     /** The min-payment switch's target while its request is in flight, else null. */
     togglePending: boolean | null;
+    readOnly: boolean;
     registerPlant: (id: number, handle: PlantViewHandle | null) => void;
     onOpen: (id: number) => void;
     onToggleMin: (id: number) => void;
+    onOpenMissed: (id: number) => void;
     onExtra: (id: number) => void;
     onComplete: (id: number) => void;
     streamAnimateIn: boolean;
@@ -51,8 +55,8 @@ export function canvasWidthFor(width: number, height: number) {
 }
 
 function PlantSection({
-    debt, hasNext, width, height, settled, busy, togglePending, registerPlant, onOpen, onToggleMin, onExtra,
-    onComplete, streamAnimateIn, onStreamRevealed,
+    debt, hasNext, width, height, settled, busy, togglePending, readOnly, registerPlant, onOpen, onToggleMin,
+    onOpenMissed, onExtra, onComplete, streamAnimateIn, onStreamRevealed,
 }: Props) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
@@ -66,6 +70,8 @@ function PlantSection({
     const setRef = useCallback((h: PlantViewHandle | null) => registerPlant(debt.id, h), [registerPlant, debt.id]);
     const open = useCallback(() => onOpen(debt.id), [onOpen, debt.id]);
     const revealed = useCallback(() => onStreamRevealed(debt.id), [onStreamRevealed, debt.id]);
+    const openMissed = useCallback(() => onOpenMissed(debt.id), [onOpenMissed, debt.id]);
+    const missed = missedCyclesOf(debt).length > 0;
 
     const a11y = state === 'paid_off'
         ? t('a11y.plantPaidOff', { name: debt.name, position: debt.position, total: debt.total })
@@ -128,7 +134,7 @@ function PlantSection({
                 />
             </Pressable>
 
-            {settled && !busy && state !== 'paid_off' ? (
+            {settled && !busy && !readOnly && state !== 'paid_off' ? (
                 debt.ready_to_complete ? (
                     <View style={[styles.action, { top: ch + 4, left: left + cw * 0.18, width: cw * 0.64 }]}>
                         <Button color={theme.brand} label={t('actions.markPaidOff')} variant="primary" size="md" fullWidth
@@ -139,7 +145,11 @@ function PlantSection({
                         ? { top: ch + 4, left: Math.max(16, left + cw * 0.06), right: Math.max(16, left + cw * 0.06) }
                         : { top: ch + 4, left: left + cw * 0.18, width: cw * 0.64 }]}>
                         <View style={styles.flex}>
-                            <MinToggle debt={debt} pendingValue={togglePending} onChange={() => onToggleMin(debt.id)} />
+                            {missed ? (
+                                <MissedMinsButton debt={debt} onPress={openMissed} />
+                            ) : (
+                                <MinToggle debt={debt} pendingValue={togglePending} onChange={() => onToggleMin(debt.id)} />
+                            )}
                         </View>
                         {debt.is_focus ? (
                             <Pressable

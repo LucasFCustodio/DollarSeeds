@@ -17,8 +17,11 @@
  * reason to come back. This file is layout only: state and requests live in
  * components/home/useHomeData.ts, the pieces in components/home/.
  *
- * Every debt element renders only with DEBT_FREEDOM_ENABLED on AND at least one
- * active debt; with it off the home is complete without them.
+ * Every debt element renders only with DEBT_FREEDOM_ENABLED on, the `debt_freedom`
+ * allowance `full` (Debt Freedom is premium), AND at least one active debt. A user
+ * without Debt Freedom gets the teaser card in the next payment's place instead, and
+ * the Envision dashboard's goals row stands alone. While the allowance is still
+ * loading, neither shows.
  */
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -40,6 +43,8 @@ import IncomeHero from '../../components/home/IncomeHero';
 import TitheEnvelope from '../../components/home/TitheEnvelope';
 import { ClosedLine, CloseOutCard } from '../../components/home/CloseOut';
 import NextPaymentCard from '../../components/home/NextPaymentCard';
+import DebtFreedomTeaser from '../../components/home/DebtFreedomTeaser';
+import { useDebtFreedomAccess } from '../../lib/debtFreedomAccess';
 import SplitContainers from '../../components/home/SplitContainers';
 import LoggingArea, { BubbleFace } from '../../components/home/LoggingArea';
 import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
@@ -77,6 +82,9 @@ function Home() {
     const { t } = useTranslation('dashboard');
     const zones = useDropZones();
     const home = useHomeData();
+    const debtAccess = useDebtFreedomAccess();
+    const debtFreedom = DEBT_FREEDOM_ENABLED && debtAccess === 'full';
+    const showTeaser = DEBT_FREEDOM_ENABLED && (debtAccess === 'none' || debtAccess === 'read_only');
 
     const { dashboard, summary, currentMonth } = home;
     const { total_income, budgets, expenses, tithe, rollover } = dashboard;
@@ -101,8 +109,8 @@ function Home() {
         total_income > 0 &&
         !home.dismissedCloseout.has(currentMonth);
 
-    // ── Debts: flag on AND at least one active debt ───────────────────────────
-    const rawDebts = DEBT_FREEDOM_ENABLED ? summary?.debts ?? null : null;
+    // ── Debts: flag on, premium, AND at least one active debt ─────────────────
+    const rawDebts = debtFreedom ? summary?.debts ?? null : null;
     const debts = rawDebts && rawDebts.total_count > rawDebts.paid_count ? rawDebts : null;
     const goalsNear = summary?.goals_near_completion ?? [];
     const nextPayment = debts?.next_payment ?? null;
@@ -170,6 +178,7 @@ function Home() {
                                     onPrune={() => openDebts(nextPayment.id)}
                                 />
                             ) : null}
+                            {showTeaser ? <DebtFreedomTeaser onLearn={() => openDebts()} /> : null}
                             {titheActive ? (
                                 <TitheEnvelope
                                     amount={titheAmount}
@@ -230,7 +239,7 @@ function Home() {
                             {home.progress ? (
                                 <EnvisionDashboard
                                     progress={home.progress}
-                                    showDebts={DEBT_FREEDOM_ENABLED}
+                                    showDebts={debtFreedom}
                                     onOpenDebts={openDebts}
                                     onAddDebt={addDebt}
                                     onOpenCompletedGoals={openCompletedGoals}

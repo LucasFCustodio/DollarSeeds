@@ -175,5 +175,11 @@
       "text": "Give, and it will be given to you. A good measure, pressed down, shaken together and running over, will be poured into your lap.",
       "ref": "Luke 6:38"
     }
+  },
+  "debtTeaser": {
+    "eyebrow": "Debt Freedom",
+    "line": "Start your journey to debt freedom.",
+    "cta": "Learn how",
+    "ctaA11y": "Learn how Debt Freedom works"
   }
 }

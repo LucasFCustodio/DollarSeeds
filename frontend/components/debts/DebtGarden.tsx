@@ -32,9 +32,12 @@ interface Props {
     busyId: number | null;
     /** The min-payment switch's target for a debt whose request is in flight. */
     togglePendingFor: (id: number) => boolean | null;
+    /** A lapsed subscriber: no actions under the plants. */
+    readOnly: boolean;
     onSettledChange: (debt: Debt | null) => void;
     onOpen: (id: number) => void;
     onToggleMin: (id: number) => void;
+    onOpenMissed: (id: number) => void;
     onExtra: (id: number) => void;
     onComplete: (id: number) => void;
     onStreamRevealed: (id: number) => void;
@@ -43,8 +46,8 @@ interface Props {
 const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
 const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
-    { debts, focusId, active, streamAnimId, busyId, togglePendingFor, onSettledChange, onOpen, onToggleMin, onExtra,
-        onComplete, onStreamRevealed },
+    { debts, focusId, active, streamAnimId, busyId, togglePendingFor, readOnly, onSettledChange, onOpen, onToggleMin,
+        onOpenMissed, onExtra, onComplete, onStreamRevealed },
     ref,
 ) {
     const listRef = useRef<FlatList<Debt>>(null);
@@ -99,16 +102,18 @@ const DebtGarden = forwardRef<DebtGardenHandle, Props>(function DebtGarden(
             settled={active && item.id === settledId}
             busy={item.id === busyId}
             togglePending={togglePendingFor(item.id)}
+            readOnly={readOnly}
             registerPlant={registerPlant}
             onOpen={onOpen}
             onToggleMin={onToggleMin}
+            onOpenMissed={onOpenMissed}
             onExtra={onExtra}
             onComplete={onComplete}
             streamAnimateIn={streamAnimId === item.id}
             onStreamRevealed={onStreamRevealed}
         />
-    ), [size?.w, sectionH, active, settledId, busyId, togglePendingFor, registerPlant, onOpen, onToggleMin, onExtra,
-        onComplete, streamAnimId, onStreamRevealed]);
+    ), [size?.w, sectionH, active, settledId, busyId, togglePendingFor, readOnly, registerPlant, onOpen, onToggleMin,
+        onOpenMissed, onExtra, onComplete, streamAnimId, onStreamRevealed]);
 
     const initialIndex = useMemo(() => {
         const i = debts.findIndex(d => d.id === focusId);

@@ -220,5 +220,31 @@
     "wasDue": "was due {{date}}",
     "due": "due {{date}}",
     "rowA11y": "{{month}}, {{date}}, {{amount}}"
+  },
+  "tutorial": {
+    "intro": {
+      "eyebrow": "Debt Freedom",
+      "title": "The Snowball method",
+      "what": "Pay the minimum on every debt, and put every extra dollar toward the one with the smallest balance. When it's paid off, roll its whole payment into the next smallest.",
+      "why": "Small balances clear quickly, and each win gives you momentum for the next. Every debt you finish frees up its payment, so the snowball grows as it rolls.",
+      "premium": "Debt Freedom is part of DollarSeeds Premium. Here's how it works."
+    },
+    "steps": {
+      "seed": "Every debt starts off as a small seed. Give that seed a name, a minimum payment amount and an interest rate.",
+      "grow": "Every month, log the minimum payment for this debt and every other debt you have. Little by little, the plant grows, reflecting your financial growth with it.",
+      "free": "Once you fully pay off a debt, your plant is fully grown. Everything you were paying on it can now go to the next debt, so you can pay that one off faster."
+    },
+    "subscribe": "Subscribe to Premium",
+    "next": "Next",
+    "a11y": {
+      "seed": "A seed in its pot",
+      "grow": "A plant about halfway grown",
+      "free": "A fully grown plant, with water flowing down to the next one"
+    }
+  },
+  "readOnly": {
+    "banner": "Your debts are saved. Subscribe to keep growing them.",
+    "subscribe": "Subscribe",
+    "subscribeA11y": "Subscribe to Premium"
   }
 }

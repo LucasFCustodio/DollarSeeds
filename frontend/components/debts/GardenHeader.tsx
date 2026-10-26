@@ -2,6 +2,9 @@
  * GardenHeader — fixed above the garden, describing the plant that has settled on
  * screen. Crossfades when a new plant settles. When that debt's statement check-in
  * is due, a harvest-yellow pill sits beside its "Free by" date.
+ *
+ * Read-only (a lapsed subscriber): only the plants/cards switch stays. Plan settings,
+ * Add and the check-in pill are writes, so they are not drawn.
  */
 import React, { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -19,13 +22,14 @@ interface Props {
     debt: Debt | null;
     planEstPayoffMonth: string | null;
     mode: GardenMode;
+    readOnly?: boolean;
     onToggleMode: () => void;
     onAdd: () => void;
     onSettings: () => void;
     onCheckin: (debt: Debt) => void;
 }
 
-function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd, onSettings, onCheckin }: Props) {
+function GardenHeader({ debt, planEstPayoffMonth, mode, readOnly, onToggleMode, onAdd, onSettings, onCheckin }: Props) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
     const f = useDebtFormat();
@@ -50,7 +54,7 @@ function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd, onS
     }
 
     const missingDate = debt && !debt.est_payoff_month && debt.status !== 'paid_off';
-    const checkinDue = !!debt && mode === 'plants' && debt.status !== 'paid_off' && !!debt.checkin_due_since;
+    const checkinDue = !readOnly && !!debt && mode === 'plants' && debt.status !== 'paid_off' && !!debt.checkin_due_since;
 
     return (
         <View style={styles.row}>
@@ -59,7 +63,7 @@ function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd, onS
                     <Animated.View key={`${debt.id}-${mode}`} entering={FadeIn.duration(260)} exiting={FadeOut.duration(160)}>
                         {/* Only these two lines sit beside the buttons; the "Free by"
                             row runs the full width so the check-in pill fits beside it. */}
-                        <View style={styles.besideActions}>
+                        <View style={readOnly ? styles.besideOneAction : styles.besideActions}>
                             <Text style={[styles.eyebrow, { color: theme.ink2, fontFamily: Fonts.monoSemiBold }]}>
                                 {eyebrow}
                             </Text>
@@ -96,16 +100,18 @@ function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd, onS
                 ) : null}
             </View>
             <View style={styles.actions}>
-                <Pressable
-                    onPress={onSettings}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('actions.planSettings')}
-                    hitSlop={8}
-                    style={[styles.iconBtn, { backgroundColor: theme.surface, borderColor: theme.ink }]}
-                >
-                    {/* The home screen's settings gear, in ink instead of white. */}
-                    <IconGearMascot size={18} color={theme.ink} />
-                </Pressable>
+                {readOnly ? null : (
+                    <Pressable
+                        onPress={onSettings}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('actions.planSettings')}
+                        hitSlop={8}
+                        style={[styles.iconBtn, { backgroundColor: theme.surface, borderColor: theme.ink }]}
+                    >
+                        {/* The home screen's settings gear, in ink instead of white. */}
+                        <IconGearMascot size={18} color={theme.ink} />
+                    </Pressable>
+                )}
                 <Pressable
                     onPress={onToggleMode}
                     accessibilityRole="button"
@@ -115,15 +121,17 @@ function GardenHeader({ debt, planEstPayoffMonth, mode, onToggleMode, onAdd, onS
                 >
                     {mode === 'plants' ? <CardsGlyph color={theme.ink} /> : <PlantGlyph color={theme.ink} />}
                 </Pressable>
-                <Pressable
-                    onPress={onAdd}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('actions.add')}
-                    hitSlop={8}
-                    style={[styles.iconBtn, { backgroundColor: theme.brand, borderColor: theme.ink }]}
-                >
-                    <IconPlus size={18} color={theme.onBrand} />
-                </Pressable>
+                {readOnly ? null : (
+                    <Pressable
+                        onPress={onAdd}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('actions.add')}
+                        hitSlop={8}
+                        style={[styles.iconBtn, { backgroundColor: theme.brand, borderColor: theme.ink }]}
+                    >
+                        <IconPlus size={18} color={theme.onBrand} />
+                    </Pressable>
+                )}
             </View>
         </View>
     );
@@ -158,6 +166,7 @@ const styles = StyleSheet.create({
     row: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6, minHeight: 104 },
     text: { flex: 1 },
     besideActions: { marginRight: ACTIONS_WIDTH + 12 },
+    besideOneAction: { marginRight: ICON_BTN + 12 },
     eyebrow: { fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 2 },
     amount: { fontSize: 44, lineHeight: 50 },
     subRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', columnGap: 8, rowGap: 4, marginTop: 2 },

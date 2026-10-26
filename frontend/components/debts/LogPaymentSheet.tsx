@@ -14,6 +14,7 @@ import InputField from '../ui/InputField';
 import { localDateISO, logPayment, type Debt, type PaymentResult } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
 import Sheet, { sheetStyles } from '../ui/Sheet';
+import { useDebtFreedomLockedHandler } from '../../lib/debtFreedomAccess';
 
 interface Props {
     debt: Debt | null;
@@ -38,6 +39,8 @@ export default function LogPaymentSheet({ debt, onClose, onLogged }: Props) {
         }
     }, [debt?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const onLocked = useDebtFreedomLockedHandler();
+
     const submit = async () => {
         if (!debt) return;
         const amount = extra.trim() ? parseAmount(extra) : null;
@@ -55,6 +58,11 @@ export default function LogPaymentSheet({ debt, onClose, onLogged }: Props) {
             const result = await logPayment(debt.id, { minimum: false, extraAmount: amount, occurredOn: localDateISO() });
             onLogged(result, true);
         } catch (e) {
+            if (onLocked(e)) {
+                setBusy(false);
+                onClose();
+                return;
+            }
             const detail = isAxiosError(e) ? e.response?.data?.detail : undefined;
             if (isMonthClosedDetail(detail)) {
                 setError(serverError(detail));
