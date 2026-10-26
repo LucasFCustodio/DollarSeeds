@@ -151,7 +151,7 @@ function MonthRow({ row, on, pending, fixed, onChange }: {
     return (
         <View style={[styles.row, { backgroundColor: owed ? theme.harvestSoft : on ? theme.brandSoft : theme.bg }]}>
             <View style={styles.flex}>
-                <Text numberOfLines={1} style={[styles.month, { color: theme.ink, fontFamily: Fonts.sansSemiBold }]}>{title}</Text>
+                <Text numberOfLines={2} style={[styles.month, { color: theme.ink, fontFamily: Fonts.sansSemiBold }]}>{title}</Text>
                 <Text style={[styles.when, { color: theme.ink2, fontFamily: Fonts.sans }]}>{when}</Text>
             </View>
             <Text style={[styles.amount, { color: theme.ink, fontFamily: Fonts.sansSemiBold }]}>{amount}</Text>
