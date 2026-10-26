@@ -50,7 +50,8 @@
     "payA11y": "Pay {{name}} online",
     "reviewA11y": "Review in Debts",
     "reviewDebtA11y": "Review {{name}} in Debts",
-    "close": "Close"
+    "close": "Close",
+    "wasDueMany": "{{count}} missed since {{date}}"
   },
   "split": {
     "needs": "Needs",
@@ -174,5 +175,11 @@
       "text": "Give, and it will be given to you. A good measure, pressed down, shaken together and running over, will be poured into your lap.",
       "ref": "Luke 6:38"
     }
+  },
+  "debtTeaser": {
+    "eyebrow": "Debt Freedom",
+    "line": "Start getting out of debt.",
+    "cta": "Learn how",
+    "ctaA11y": "Learn how Debt Freedom works"
   }
 }

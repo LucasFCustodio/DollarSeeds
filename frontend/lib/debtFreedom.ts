@@ -75,6 +75,11 @@ export interface Debt extends DebtRow {
     current_cycle_due_date: string | null;
     /** The toggle's state: a net minimum is logged in the current cycle. */
     min_logged_this_cycle: boolean;
+    /** Passed cycles still owed a minimum, oldest first. Non-empty = overdue: the
+     *  toggle becomes "View all min payments". Absent from a backend before it. */
+    missed_cycles?: MissedCycle[];
+    /** Late minimums logged this cycle, which can still be taken back. */
+    late_minimums?: MissedCycle[];
     suggested_payment: number;
     est_payoff_month: string | null;
     paid_off_count_through_here: number;
@@ -82,6 +87,13 @@ export interface Debt extends DebtRow {
     monthly_interest: number;
     interest_remaining: number | null;
     rolls_into_id: number | null;
+}
+
+/** A billing cycle by its due date, and the minimum it is owed (or was paid late). */
+export interface MissedCycle {
+    /** YYYY-MM-DD */
+    due_date: string;
+    amount: number;
 }
 
 export interface Garden {
@@ -164,12 +176,25 @@ export interface DebtInput {
 const NUMERIC = ['original_balance', 'current_balance', 'min_payment', 'apr', 'credit_limit',
     'late_fee', 'suggested_payment', 'pct_paid', 'monthly_interest', 'interest_remaining'] as const;
 
+function normaliseCycles(v: unknown): MissedCycle[] {
+    return Array.isArray(v) ? v.map(c => ({ due_date: String(c.due_date), amount: Number(c.amount) })) : [];
+}
+
 function normalise<T extends DebtRow>(d: T): T {
     const out = { ...d } as Record<string, unknown>;
     for (const k of NUMERIC) {
         if (out[k] != null) out[k] = Number(out[k]);
     }
+    if ('min_logged_this_cycle' in out) {
+        out.missed_cycles = normaliseCycles(out.missed_cycles);
+        out.late_minimums = normaliseCycles(out.late_minimums);
+    }
     return out as T;
+}
+
+/** The debt's missed cycles ([] from a backend that predates them). */
+export function missedCyclesOf(d: Debt): MissedCycle[] {
+    return d.missed_cycles ?? [];
 }
 
 function normaliseTx(t: DebtTransaction): DebtTransaction {
@@ -230,25 +255,30 @@ export async function fetchMonthPayments(month: string): Promise<MonthDebtPaymen
 }
 
 /** `extraAmount` is only accepted on the focus debt; the server refuses it elsewhere.
- *  A second minimum in the same cycle is refused (409). */
+ *  A second minimum in the same cycle is refused (409). `cycleDueDate` logs a LATE
+ *  minimum for that missed cycle instead (dated today, so it counts in this month's
+ *  budget); it must be one of the debt's `missed_cycles` (409 otherwise). */
 export async function logPayment(
     id: number,
-    body: { minimum: boolean; extraAmount?: number; occurredOn?: string },
+    body: { minimum: boolean; extraAmount?: number; occurredOn?: string; cycleDueDate?: string },
 ): Promise<PaymentResult> {
     const { data } = await axios.post<PaymentResult>(`${BASE}/debt-freedom/${id}/payments`, {
         minimum: body.minimum,
         ...(body.extraAmount ? { extra_amount: body.extraAmount } : {}),
         ...(body.occurredOn ? { occurred_on: body.occurredOn } : {}),
+        ...(body.cycleDueDate ? { cycle_due_date: body.cycleDueDate } : {}),
         today: localDateISO(),
     });
     return { ...normaliseOne(data), transactions: data.transactions.map(normaliseTx) };
 }
 
 /** The toggle's on → off: deletes this cycle's minimum. Refused (409) once the cycle's
- *  due date has passed, and in a closed month. */
-export async function undoMinimum(id: number): Promise<OneDebt> {
+ *  due date has passed, and in a closed month. With `cycleDueDate`, takes back the late
+ *  minimum for that cycle instead (same rules: logged this cycle, month open). */
+export async function undoMinimum(id: number, cycleDueDate?: string): Promise<OneDebt> {
     const { data } = await axios.post<OneDebt>(`${BASE}/debt-freedom/${id}/payments/undo-minimum`, {
         today: localDateISO(),
+        ...(cycleDueDate ? { cycle_due_date: cycleDueDate } : {}),
     });
     return normaliseOne(data);
 }

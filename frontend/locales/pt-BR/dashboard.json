@@ -50,7 +50,8 @@
     "payA11y": "Pagar {{name}} online",
     "reviewA11y": "Revisar em Dívidas",
     "reviewDebtA11y": "Revisar {{name}} em Dívidas",
-    "close": "Fechar"
+    "close": "Fechar",
+    "wasDueMany": "{{count}} em aberto desde {{date}}"
   },
   "split": {
     "needs": "Necessidades",
@@ -174,5 +175,11 @@
       "text": "Dai, e ser-vos-á dado; boa medida, recalcada, sacudida e transbordando vos darão.",
       "ref": "Lucas 6:38"
     }
+  },
+  "debtTeaser": {
+    "eyebrow": "Liberdade das dívidas",
+    "line": "Comece a sair das dívidas.",
+    "cta": "Saiba como",
+    "ctaA11y": "Saiba como funciona a Liberdade das dívidas"
   }
 }

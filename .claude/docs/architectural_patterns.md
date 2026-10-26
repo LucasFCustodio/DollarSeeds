@@ -90,7 +90,7 @@ Both expense and income forms follow the same structure.
 - `useFocusEffect` (not `useEffect`) refetches on every focus: `/dashboard/{month}` plus `GET /home/summary/` ([lib/homeSummary.ts](../../frontend/lib/homeSummary.ts)). The summary never blocks the screen — if it fails, the home renders without its parts
 - `GET /home/progress/` ([lib/homeProgress.ts](../../frontend/lib/homeProgress.ts)) is fetched alongside them for the Envision dashboard ([components/home/EnvisionDashboard.tsx](../../frontend/components/home/EnvisionDashboard.tsx)). Same rule: if it fails (or the backend predates it) the dashboard is hidden and the rest of the band renders
 - Month is a 0–11 index, picked from a bottom sheet opened by tapping the date
-- Every debt element is behind `DEBT_FREEDOM_ENABLED` **and** at least one active debt; the client computes nothing about debts
+- Every debt element is behind `DEBT_FREEDOM_ENABLED`, the `debt_freedom` allowance being `full` (Debt Freedom is premium — `useDebtFreedomAccess` in [lib/debtFreedomAccess.ts](../../frontend/lib/debtFreedomAccess.ts)), **and** at least one active debt; the client computes nothing about debts. A `none` / `read_only` user gets `DebtFreedomTeaser` in the next payment's place instead
 - Logging is on the home: the + buttons open `app/logExpense.tsx` / `app/logIncome.tsx`. There is no Transactions tab. Bank-connected logging is a placeholder in [lib/bankTransactions.ts](../../frontend/lib/bankTransactions.ts) — wiring Plaid only touches that file
 
 ---

@@ -1,8 +1,8 @@
 /**
  * check-locales — the safety net for a hand-maintained catalogue.
  *
- * There is no test runner in the frontend, so this script is the gate. It runs four
- * checks, and each one caught a real live bug during the pt-BR work:
+ * There is no test runner in the frontend, so this script is the gate. It runs five
+ * checks; each of the first four caught a real live bug during the pt-BR work:
  *
  *  1. KEY PARITY. Every locale must expose exactly the same key set. A key present
  *     in `en` but missing in `pt-BR` silently falls back to English, which looks like
@@ -26,10 +26,20 @@
  * Checks 3 and 4 are complements: 3 works value-first and misses interpolated keys,
  * 4 works key-first and misses nothing but needs to understand dynamic lookups.
  *
+ *  5. EVERY KEY THE CODE LOOKS UP EXISTS, IN THE NAMESPACE IT IS LOOKED UP IN. Checks
+ *     1–4 all start from the catalogue, so a t('…') whose key is missing, misspelled
+ *     or filed under another namespace than the component's useTranslation names
+ *     passes every one of them and renders on screen as the raw key — check 4 even
+ *     counts it as "referenced", because it searches for the key's text anywhere.
+ *     scripts/i18n-refs.mjs extracts each lookup with its namespace(s); a self-test
+ *     there fails this script if the extractor ever stops seeing the bug it is for.
+ *     verify-i18n resolves the same list through real i18next.
+ *
  * Run: node scripts/check-locales.mjs
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
+import { extractRefs, refResolves, selfTest } from './i18n-refs.mjs';
 
 const LOCALES_DIR = 'locales';
 const SOURCE_DIRS = ['app', 'components', 'constants', 'context', 'hooks', 'lib'];
@@ -267,6 +277,24 @@ for (const ns of namespaces) {
     }
 }
 
+// ── 5: every looked-up key exists where it is looked up ───────────────────────
+
+selfTest();
+let refCount = 0;
+for (const { file, text } of sources) {
+    for (const ref of extractRefs(file, text, namespaces)) {
+        refCount += 1;
+        if (refResolves(ref, baseFlat)) continue;
+        const where = ref.nsList.join('|');
+        const elsewhere = namespaces.filter(ns => !ref.nsList.includes(ns)
+            && refResolves({ ...ref, nsList: [ns] }, baseFlat));
+        problems.push(ref.dynamic
+            ? `[missing key] ${file}:${ref.line} — no ${where}:${ref.key}… key for \`${ref.key}\${…}\``
+            : `[missing key] ${file}:${ref.line} — ${where}:${ref.key} does not exist`
+              + (elsewhere.length ? ` (it is in ${elsewhere.join(', ')}: wrong namespace)` : ''));
+    }
+}
+
 // ── report ────────────────────────────────────────────────────────────────────
 
 const total = Object.values(baseFlat).reduce((n, f) => n + Object.keys(f).length, 0);
@@ -275,4 +303,4 @@ if (problems.length) {
     console.error(`\n✖ ${problems.length} problem(s) across ${locales.length} locales, ${total} keys`);
     process.exit(1);
 }
-console.log(`✔ ${locales.length} locales · ${namespaces.length} namespaces · ${total} keys · no drift`);
+console.log(`✔ ${locales.length} locales · ${namespaces.length} namespaces · ${total} keys · ${refCount} lookups · no drift`);

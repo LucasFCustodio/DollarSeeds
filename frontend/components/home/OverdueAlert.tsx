@@ -1,7 +1,7 @@
 /**
  * OverdueAlert — the overdue warning: a small harvest pill in the home's top bar,
  * "! {n}", that opens OverdueModal with every overdue debt. The parent renders it
- * only when a debt is overdue (overdue_count > 0, debts flag on).
+ * only when a debt is overdue (overdue_count > 0, Debt Freedom on and premium).
  *
  * It pulses to draw the eye: two beats (scale 1 → 1.12 → 1, 600 ms each), then a
  * 6 s rest, looping, on the UI thread. The loop pauses while the home is not the

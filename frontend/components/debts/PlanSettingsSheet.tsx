@@ -13,6 +13,7 @@ import InputField from '../ui/InputField';
 import { saveSettings } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
 import Sheet, { sheetStyles } from '../ui/Sheet';
+import { useDebtFreedomLockedHandler } from '../../lib/debtFreedomAccess';
 
 interface Props {
     visible: boolean;
@@ -37,6 +38,8 @@ export default function PlanSettingsSheet({ visible, monthlyExtra, onClose, onSa
         setBusy(false);
     }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const onLocked = useDebtFreedomLockedHandler();
+
     const submit = async () => {
         const value = extra.trim() ? parseAmount(extra) : null;
         if (extra.trim() && (value == null || value < 0)) {
@@ -50,6 +53,11 @@ export default function PlanSettingsSheet({ visible, monthlyExtra, onClose, onSa
             onSaved();
             onClose();
         } catch (e) {
+            if (onLocked(e)) {
+                setBusy(false);
+                onClose();
+                return;
+            }
             console.error('saveSettings failed', e);
             setError(t('settings.errFailed'));
             setBusy(false);

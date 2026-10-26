@@ -15,6 +15,7 @@ import { useAnalytics } from '../../lib/analytics';
 import { saveCheckin, type CheckinResult, type Debt } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
 import Sheet, { sheetStyles } from '../ui/Sheet';
+import { useDebtFreedomLockedHandler } from '../../lib/debtFreedomAccess';
 
 interface Props {
     debt: Debt | null;
@@ -44,6 +45,8 @@ export default function CheckinSheet({ debt, onClose, onSaved }: Props) {
         setGrewBy(null);
     }, [debt?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const onLocked = useDebtFreedomLockedHandler();
+
     const submit = async () => {
         if (!debt) return;
         const statementBalance = parseAmount(balance);
@@ -70,6 +73,11 @@ export default function CheckinSheet({ debt, onClose, onSaved }: Props) {
                 onClose();
             }
         } catch (e) {
+            if (onLocked(e)) {
+                setBusy(false);
+                onClose();
+                return;
+            }
             console.error('saveCheckin failed', e);
             setError(t('checkin.errFailed'));
             setBusy(false);

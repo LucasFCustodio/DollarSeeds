@@ -22,7 +22,7 @@ interface Props {
     /** 0–11 */
     selected: number;
     onPickMonth: (index: number) => void;
-    /** 0 hides the overdue alert. The parent passes 0 with the debts flag off. */
+    /** 0 hides the overdue alert. The parent passes 0 without Debt Freedom (flag off or not premium). */
     overdueCount: number;
     /** Undefined from a backend older than debts.overdue. */
     overdue?: OverdueDebt[];

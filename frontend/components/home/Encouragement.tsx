@@ -3,7 +3,7 @@
  * the Envision band (above the Envision dashboard).
  *
  * Every item renders only when its data exists; the card hides when none do. The
- * debt items are flag-gated by the parent passing `debts = null`. Goals near
+ * debt items are gated (flag and premium) by the parent passing `debts = null`. Goals near
  * completion work for everyone.
  *
  * The encouragement card is painted (PaintedCard): the art stays still while only

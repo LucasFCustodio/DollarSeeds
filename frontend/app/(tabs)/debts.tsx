@@ -5,7 +5,12 @@
  * sends water to the next one. The server computes all of it (lib/debtFreedom.ts);
  * this screen fetches, renders, and sequences the animations.
  *
- * Behind DEBT_FREEDOM_ENABLED: in a store build the tab is hidden and this route
+ * Debt Freedom is premium. The server's `debt_freedom` allowance picks the screen
+ * (lib/debtFreedomAccess.ts): `full` the garden, `read_only` the garden with every
+ * action hidden under a Subscribe banner, `none` the tutorial. Until this user's
+ * entitlement has loaded, the loading state — never the tutorial for a subscriber.
+ *
+ * Behind DEBT_FREEDOM_ENABLED: with it off the tab is hidden and this route
  * redirects home.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,7 +24,10 @@ import { Fonts, useTheme } from '@/context/ThemeContext';
 import Button from '@/components/ui/Button';
 import { DEBT_FREEDOM_ENABLED } from '@/constants/features';
 import { useAnalytics } from '@/lib/analytics';
-import { completeDebt, fetchGarden, type Debt, type Garden, type OneDebt, type PaymentResult } from '@/lib/debtFreedom';
+import {
+    completeDebt, fetchGarden, missedCyclesOf, type Debt, type Garden, type OneDebt, type PaymentResult,
+} from '@/lib/debtFreedom';
+import { useDebtFreedomAccess, useDebtFreedomLockedHandler } from '@/lib/debtFreedomAccess';
 import { claimRandomBug, takeGardenAnimation, type PendingAnimation } from '@/lib/debtFreedomEvents';
 import DebtGarden, { type DebtGardenHandle } from '@/components/debts/DebtGarden';
 import GardenHeader, { type GardenMode } from '@/components/debts/GardenHeader';
@@ -30,6 +38,9 @@ import LateFeeSheet from '@/components/debts/LateFeeSheet';
 import PlanSettingsSheet from '@/components/debts/PlanSettingsSheet';
 import { useMinToggle } from '@/components/debts/useMinToggle';
 import PlantView from '@/components/debts/PlantView';
+import DebtFreedomTutorial from '@/components/debts/DebtFreedomTutorial';
+import ReadOnlyBanner from '@/components/debts/ReadOnlyBanner';
+import MissedMinimumsModal from '@/components/debts/MissedMinimumsModal';
 
 const TAB_BAR_HEIGHT = 58;
 const BUG_DELAY_AFTER_PAYMENT_MS = 2000;
@@ -37,11 +48,23 @@ const BUG_DELAY_AFTER_PAYMENT_MS = 2000;
 const LATE_FEE_ASK_DELAY_MS = 700;
 
 export default function DebtsScreen() {
+    const access = useDebtFreedomAccess();
     if (!DEBT_FREEDOM_ENABLED) return <Redirect href="/(tabs)" />;
-    return <DebtsGardenScreen />;
+    if (access === 'loading') return <Loading />;
+    if (access === 'none') return <DebtFreedomTutorial />;
+    return <DebtsGardenScreen readOnly={access === 'read_only'} />;
 }
 
-function DebtsGardenScreen() {
+function Loading() {
+    const { theme } = useTheme();
+    return (
+        <View style={[styles.center, { backgroundColor: theme.bg }]}>
+            <ActivityIndicator color={theme.brand} />
+        </View>
+    );
+}
+
+function DebtsGardenScreen({ readOnly }: { readOnly: boolean }) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
     const router = useRouter();
@@ -63,6 +86,8 @@ function DebtsGardenScreen() {
     const [streamAnimId, setStreamAnimId] = useState<number | null>(null);
     const [appActive, setAppActive] = useState(AppState.currentState === 'active');
     const [completingId, setCompletingId] = useState<number | null>(null);
+    const [missedForId, setMissedForId] = useState<number | null>(null);
+    const onLocked = useDebtFreedomLockedHandler();
 
     const gardenRef = useRef<DebtGardenHandle>(null);
     const pending = useRef<PendingAnimation | null>(null);
@@ -142,10 +167,11 @@ function DebtsGardenScreen() {
 
     // The late-fee question: once per missed due date per session, when its plant
     // settles and nothing else is open.
-    const sheetOpen = !!payFor || !!checkinFor || !!lateFeeFor || settingsOpen;
+    const sheetOpen = !!payFor || !!checkinFor || !!lateFeeFor || settingsOpen || missedForId != null;
     useEffect(() => {
         const due = settledDebt?.late_fee_pending_for;
-        if (!active || !settledDebt || !due || sheetOpen || pending.current) return;
+        // Read-only: answering it is a write.
+        if (readOnly || !active || !settledDebt || !due || sheetOpen || pending.current) return;
         const key = `${settledDebt.id}:${due}`;
         if (askedLateFee.current.has(key)) return;
         const id = setTimeout(() => {
@@ -153,7 +179,7 @@ function DebtsGardenScreen() {
             setLateFeeFor(settledDebt);
         }, LATE_FEE_ASK_DELAY_MS);
         return () => clearTimeout(id);
-    }, [active, settledDebt, sheetOpen]);
+    }, [readOnly, active, settledDebt, sheetOpen]);
 
     const onSettledChange = useCallback((d: Debt | null) => setSettled(d), []);
     const openDetail = useCallback((id: number) => {
@@ -192,6 +218,14 @@ function DebtsGardenScreen() {
         const d = byIdRef.current.get(id);
         if (d) toggle(d);
     }, [toggle]);
+    const openMissed = useCallback((id: number) => setMissedForId(id), []);
+    const missedDebt = missedForId != null ? byId.get(missedForId) ?? null : null;
+    // The last missed month is logged: the modal has done its job, and the container
+    // under the plant is the ordinary toggle again.
+    useEffect(() => {
+        if (missedForId == null || !missedDebt) return;
+        if (missedCyclesOf(missedDebt).length === 0) setMissedForId(null);
+    }, [missedForId, missedDebt]);
 
     const onCheckinSaved = useCallback(() => { load(); }, [load]);
     const onLateFeeAnswered = useCallback(() => {
@@ -213,12 +247,14 @@ function DebtsGardenScreen() {
                 setStreamAnimId(id); // WaterStream reveals, then we scroll (below)
             }
         } catch (e) {
-            console.error('completeDebt failed', e);
-            Alert.alert(t('complete.errFailed'));
+            if (!onLocked(e)) {
+                console.error('completeDebt failed', e);
+                Alert.alert(t('complete.errFailed'));
+            }
         } finally {
             setCompletingId(null);
         }
-    }, [analytics, completingId, load, t]);
+    }, [analytics, completingId, load, onLocked, t]);
 
     const onStreamRevealed = useCallback(() => {
         setStreamAnimId(null);
@@ -252,15 +288,19 @@ function DebtsGardenScreen() {
     }
 
     if (garden.debts.length === 0) {
+        // Read-only with nothing left to show is the free state the tutorial is for.
+        if (readOnly) return <DebtFreedomTutorial />;
         return <EmptyGarden onPlant={onAdd} topInset={insets.top} bottomInset={tabClear} />;
     }
 
     return (
         <View style={[styles.fill, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
+            {readOnly ? <View style={styles.banner}><ReadOnlyBanner /></View> : null}
             <GardenHeader
                 debt={headerDebt}
                 planEstPayoffMonth={garden.plan_est_payoff_month}
                 mode={mode}
+                readOnly={readOnly}
                 onToggleMode={toggleMode}
                 onAdd={onAdd}
                 onSettings={openSettings}
@@ -276,9 +316,11 @@ function DebtsGardenScreen() {
                         streamAnimId={streamAnimId}
                         busyId={completingId}
                         togglePendingFor={pendingValueFor}
+                        readOnly={readOnly}
                         onSettledChange={onSettledChange}
                         onOpen={openDetail}
                         onToggleMin={onToggleMin}
+                        onOpenMissed={openMissed}
                         onExtra={openExtra}
                         onComplete={onComplete}
                         onStreamRevealed={onStreamRevealed}
@@ -298,6 +340,12 @@ function DebtsGardenScreen() {
             <LateFeeSheet debt={lateFeeFor} onClose={() => setLateFeeFor(null)} onAnswered={onLateFeeAnswered} />
             <PlanSettingsSheet visible={settingsOpen} monthlyExtra={garden.monthly_extra}
                 onClose={() => setSettingsOpen(false)} onSaved={load} />
+            <MissedMinimumsModal
+                debt={readOnly ? null : missedDebt}
+                pendingValueFor={pendingValueFor}
+                onToggle={toggle}
+                onClose={() => setMissedForId(null)}
+            />
         </View>
     );
 }
@@ -324,4 +372,5 @@ const styles = StyleSheet.create({
     emptyTitle: { fontSize: 34, textAlign: 'center' },
     emptyBody: { fontSize: 15, lineHeight: 22, textAlign: 'center', marginTop: 8, maxWidth: 340 },
     emptyPlant: { marginVertical: 12 },
+    banner: { paddingTop: 6, paddingBottom: 2 },
 });

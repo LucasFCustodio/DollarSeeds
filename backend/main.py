@@ -747,8 +747,10 @@ def get_spending_trends(today: Optional[datetime.date] = None,
 # phone's date when the client sends one (the optional `today` the /debt-freedom/
 # routes already take), clamped by _df_today.
 #
-# Old binaries cannot have rows in debt_transactions (Debt Freedom has never shipped
-# in a store build), so for them every number below is exactly what it was.
+# Binaries from before Debt Freedom shipped have no Debts tab, so a user who only has
+# one of them has no rows in debt_transactions and every number below is exactly what
+# it was. One who also uses a newer build sees their payments counted, which is the
+# right number; the response shape is unchanged.
 DEBT_BUDGET_KINDS = [df.KIND_MINIMUM, df.KIND_EXTRA, df.KIND_MINIMUM_REVERSAL]
 
 
@@ -2093,6 +2095,15 @@ FREE_BUDGET_TYPES = (DEFAULT_BUDGET_TYPE,)
 FREE_MAX_BANK_CONNECTIONS = 0
 PAID_MAX_BANK_CONNECTIONS = 1
 
+# Debt Freedom (the Debts tab) is premium. The allowance is a VALUE the client renders
+# rather than a premium flag it interprets, like the others:
+#   full       - every action (entitled, or the limits are off for this caller)
+#   read_only  - not entitled but has debts: the garden stays visible, nothing changes
+#   none       - not entitled and no debts: the app shows the tutorial instead
+DEBT_FREEDOM_FULL = "full"
+DEBT_FREEDOM_READ_ONLY = "read_only"
+DEBT_FREEDOM_NONE = "none"
+
 # Two switches, deliberately not one:
 #   * Hiding premium series from UNMARKED clients is ALWAYS on. It is backward
 #     compatibility, not a business rule, and must survive every rollback.
@@ -2140,6 +2151,7 @@ PREMIUM_REQUIRED_DETAILS = {
     "goal_limit_reached": "Your free plan keeps one goal at a time. Premium gives you unlimited goals.",
     "budget_type_locked": "This budget type is part of DollarSeeds Premium. Your free plan uses Balanced.",
     "goal_locked": "This goal is locked because your free plan keeps one goal active. Premium unlocks it again.",
+    "debt_freedom_locked": "Debt Freedom is part of DollarSeeds Premium. Your debts are saved and you can still view them.",
 }
 
 
@@ -2354,7 +2366,7 @@ class _Entitlements:
     budget type) uses the read posture; everything it REFUSES uses the write one.
     """
 
-    __slots__ = ("user_id", "limits_on", "paid", "lookup_unavailable", "_eligible")
+    __slots__ = ("user_id", "limits_on", "paid", "lookup_unavailable", "_eligible", "_has_debts")
 
     def __init__(self, user_id: str, *, limits_on: bool, paid: bool,
                  lookup_unavailable: bool):
@@ -2363,6 +2375,7 @@ class _Entitlements:
         self.paid = paid
         self.lookup_unavailable = lookup_unavailable
         self._eligible: Optional[list] = None
+        self._has_debts: Optional[bool] = None
 
     # ── the two postures ──────────────────────────────────────────────────────
     @property
@@ -2415,6 +2428,7 @@ class _Entitlements:
             "budget_types": list(self.budget_types),
             "video_series": self.video_series,
             "max_bank_connections": self.max_bank_connections,
+            "debt_freedom": self.debt_freedom(),
         }
 
     # ── goals ─────────────────────────────────────────────────────────────────
@@ -2472,6 +2486,26 @@ class _Entitlements:
         """Write posture: an unreachable RevenueCat refuses a new goal rather than
         handing out an unlimited one."""
         return self.enforced and self.goals_used() >= FREE_MAX_GOALS
+
+    # ── Debt Freedom ──────────────────────────────────────────────────────────
+    def debt_freedom(self) -> str:
+        """The Debt Freedom allowance, in the READ posture: a lookup timeout never
+        hides a paying user's garden behind the tutorial. The debts query runs only
+        for a caller the limits actually apply to, and at most once."""
+        if not self.enforced_on_reads:
+            return DEBT_FREEDOM_FULL
+        if self._has_debts is None:
+            rows = (supabase.table("debts").select("id").eq("user_id", self.user_id)
+                    .limit(1).execute().data)
+            self._has_debts = bool(rows)
+        return DEBT_FREEDOM_READ_ONLY if self._has_debts else DEBT_FREEDOM_NONE
+
+    @property
+    def debt_freedom_locked(self) -> bool:
+        """WRITE posture, the same one the goal gates use: fails CLOSED. A paying
+        user whose subscription is in our own table never reaches RevenueCat, so an
+        outage can only refuse someone the table does not know is paying."""
+        return self.enforced
 
 
 def _entitlements(user_id: str, features: set) -> _Entitlements:
@@ -3147,10 +3181,9 @@ class DebtCreate(BaseModel):
     current_balance: float
     min_payment: float
     apr: float
-    # Required since v2: every cycle rule hangs off the due date. The /debt-freedom/
-    # routes have never shipped in a store build (the tab is behind
-    # DEBT_FREEDOM_ENABLED), so no client in the wild creates debts without it. The
-    # column stays nullable; the API enforces it.
+    # Required since v2: every cycle rule hangs off the due date. It was required
+    # before the first store build with the Debts tab, so no client in the wild
+    # creates debts without it. The column stays nullable; the API enforces it.
     due_day: int
     debt_type: Optional[str] = None
     lender: Optional[str] = None
@@ -3185,10 +3218,20 @@ class DebtPayment(BaseModel):
     # is UTC, which is already "tomorrow" for a US evening.
     occurred_on: Optional[datetime.date] = None
     today: Optional[datetime.date] = None
+    # A LATE minimum: the due date of the missed cycle it pays for (one of the debt's
+    # `missed_cycles`). Absent = this cycle's minimum, exactly as before. Written to
+    # debt_transactions.cycle_due_date (migration 0012).
+    cycle_due_date: Optional[datetime.date] = None
 
 
 class DebtToday(BaseModel):
     today: Optional[datetime.date] = None
+
+
+class DebtUndoMinimum(BaseModel):
+    today: Optional[datetime.date] = None
+    # Undo a LATE minimum for this cycle instead of the current cycle's.
+    cycle_due_date: Optional[datetime.date] = None
 
 
 class DebtCheckin(BaseModel):
@@ -3395,6 +3438,26 @@ def _df_remove_payment(user_id: str, debt: dict, own_txns: list, row: dict) -> N
         }).eq("id", later["id"]).eq("user_id", user_id).execute()
 
 
+def _assert_debt_freedom_writable(user_id: str) -> None:
+    """Every Debt Freedom WRITE is premium: 403 `debt_freedom_locked` unless the user
+    is `full`. Reads stay open, so a lapsed subscriber can still see their debts, and
+    the lazy cycle processing every read runs keeps their balances true.
+
+    Called FIRST in each write route, before the debt is loaded or any cycle closed:
+    a refused request must change nothing.
+
+    WHATEVER X-Client-Features SAYS. Everywhere else a request without `limits` is
+    exempt, because it comes from a binary that predates the limits and cannot be
+    patched. No such binary has ever called these routes: the Debts tab was behind
+    DEBT_FREEDOM_ENABLED = __DEV__ in every store build until the release that made it
+    premium. So the marker would only be a way around the paywall, and the gate
+    resolves the entitlement as for a `limits` caller instead. Everything else the
+    resolver does still applies: premium_enabled off (the kill switch) or
+    LIMITS_TEST_USER_IDS, a subscriber, and the fail-closed write posture."""
+    if _entitlements(user_id, {LIMITS_FEATURE}).debt_freedom_locked:
+        raise PremiumRequired("debt_freedom_locked")
+
+
 @app.get("/debt-freedom/")
 def get_debt_garden(today: Optional[datetime.date] = None, user_id: str = Depends(get_current_user_id)):
     garden, _ = _df_garden(user_id, _df_today(today))
@@ -3403,6 +3466,7 @@ def get_debt_garden(today: Optional[datetime.date] = None, user_id: str = Depend
 
 @app.post("/debt-freedom/")
 def create_debt(debt: DebtCreate, user_id: str = Depends(get_current_user_id)):
+    _assert_debt_freedom_writable(user_id)
     fields = _df_clean(debt.model_dump())
     row = {
         **fields,
@@ -3427,6 +3491,7 @@ def get_debt_freedom_settings(user_id: str = Depends(get_current_user_id)):
 
 @app.put("/debt-freedom/settings")
 def put_debt_freedom_settings(settings: DebtFreedomSettings, user_id: str = Depends(get_current_user_id)):
+    _assert_debt_freedom_writable(user_id)
     value = settings.monthly_extra
     if value is not None and (value < 0 or value != value):
         raise _df_bad("monthly_extra cannot be negative.")
@@ -3494,6 +3559,7 @@ def get_debt(id: int, today: Optional[datetime.date] = None, user_id: str = Depe
 
 @app.patch("/debt-freedom/{id}")
 def update_debt(id: int, update: DebtUpdate, user_id: str = Depends(get_current_user_id)):
+    _assert_debt_freedom_writable(user_id)
     current = _df_owned(user_id, id)
     fields = _df_clean({k: getattr(update, k) for k in update.model_fields_set
                         if k not in ("user_id", "today")})
@@ -3538,6 +3604,7 @@ DEBT_DELETE_CLOSED_DETAIL = ("This debt has payments in a closed month, so delet
 @app.delete("/debt-freedom/{id}")
 def delete_debt(id: int, today: Optional[datetime.date] = None,
                 user_id: str = Depends(get_current_user_id)):
+    _assert_debt_freedom_writable(user_id)
     _df_owned(user_id, id)
     # Its payments are part of their months' Goals spend, so deleting the debt edits
     # every month it was paid in. A closed month is read-only: refuse when any of
@@ -3563,12 +3630,16 @@ def delete_debt(id: int, today: Optional[datetime.date] = None,
 
 @app.post("/debt-freedom/{id}/payments")
 def log_debt_payment(id: int, payment: DebtPayment, user_id: str = Depends(get_current_user_id)):
+    _assert_debt_freedom_writable(user_id)
     _df_owned(user_id, id)
     extra = payment.extra_amount or 0
     if extra < 0:
         raise _df_bad("extra_amount cannot be negative.")
     if not payment.minimum and extra <= 0:
         raise _df_bad("Nothing to pay: send minimum, extra_amount, or both.")
+    late_for = payment.cycle_due_date
+    if late_for is not None and (not payment.minimum or extra > 0):
+        raise _df_bad("cycle_due_date is only for a late minimum, on its own.")
 
     today = _df_today(payment.today or payment.occurred_on)
     debt, debts, own_txns = _df_fresh(user_id, id, today)
@@ -3578,7 +3649,14 @@ def log_debt_payment(id: int, payment: DebtPayment, user_id: str = Depends(get_c
         focus = df.focus_debt(df.order_debts(debts))
         if not focus or focus["id"] != id:
             raise HTTPException(status_code=409, detail="Extra payments go to the focus debt only.")
-    if payment.minimum and df.min_logged_this_cycle(debt, own_txns, today):
+    late = None
+    if late_for is not None:
+        # A late minimum: only for a cycle still owed one, at the amount it is owed.
+        late = next((c for c in df.missed_cycles(debt, own_txns, today)
+                     if c["due_date"] == late_for.isoformat()), None)
+        if late is None:
+            raise HTTPException(status_code=409, detail="That billing cycle has no missed minimum to log.")
+    elif payment.minimum and df.min_logged_this_cycle(debt, own_txns, today):
         raise HTTPException(status_code=409, detail="The minimum is already logged for this cycle.")
 
     occurred_on = payment.occurred_on or today
@@ -3588,7 +3666,7 @@ def log_debt_payment(id: int, payment: DebtPayment, user_id: str = Depends(get_c
     balance = df.money(debt.get("current_balance"))
     parts = []
     if payment.minimum:
-        parts.append((df.KIND_MINIMUM, df._num(debt.get("min_payment"))))
+        parts.append((df.KIND_MINIMUM, late["amount"] if late else df._num(debt.get("min_payment"))))
     if extra > 0:
         parts.append((df.KIND_EXTRA, extra))
     written = []
@@ -3601,6 +3679,10 @@ def log_debt_payment(id: int, payment: DebtPayment, user_id: str = Depends(get_c
             "user_id": user_id, "debt_id": id, "kind": kind, "amount": amount,
             "balance_after": balance, "occurred_on": occurred_on.isoformat(),
         }
+        if late and kind == df.KIND_MINIMUM:
+            # Only a late minimum writes the column, so an on-time payment never
+            # needs migration 0012.
+            row["cycle_due_date"] = late["due_date"]
         inserted = supabase.table("debt_transactions").insert(row).execute().data
         written.append(inserted[0] if inserted else row)
     if not written:
@@ -3616,18 +3698,30 @@ def log_debt_payment(id: int, payment: DebtPayment, user_id: str = Depends(get_c
 
 
 @app.post("/debt-freedom/{id}/payments/undo-minimum")
-def undo_debt_minimum(id: int, body: Optional[DebtToday] = None, user_id: str = Depends(get_current_user_id)):
+def undo_debt_minimum(id: int, body: Optional[DebtUndoMinimum] = None,
+                      user_id: str = Depends(get_current_user_id)):
     """The toggle's on → off: DELETES this cycle's minimum, so however often the user
     toggles, the cycle ends with at most one minimum row. (It used to write a
     minimum_reversal; those legacy rows are still netted everywhere and collapsed
     from the history.) Refused once the cycle's due date has passed, and in a closed
-    month. Never unlocks the species; the plant keeps its highest step."""
+    month. Never unlocks the species; the plant keeps its highest step.
+
+    With `cycle_due_date` it takes back a LATE minimum for that cycle instead, under
+    the same rules: only one logged in the current cycle, and not in a closed month.
+    The cycle is then owed its minimum again."""
+    _assert_debt_freedom_writable(user_id)
     _df_owned(user_id, id)
     today = _df_today(body.today if body else None)
+    late_for = body.cycle_due_date if body else None
     debt, _, own_txns = _df_fresh(user_id, id, today)
-    row = df.minimum_row_to_undo(debt, own_txns, today)
-    if row is None:
-        raise HTTPException(status_code=409, detail="There is no minimum to undo in the current cycle.")
+    if late_for is not None:
+        row = df.late_minimum_row_to_undo(debt, own_txns, late_for, today)
+        if row is None:
+            raise HTTPException(status_code=409, detail="There is no late minimum to undo for that cycle.")
+    else:
+        row = df.minimum_row_to_undo(debt, own_txns, today)
+        if row is None:
+            raise HTTPException(status_code=409, detail="There is no minimum to undo in the current cycle.")
     _assert_debt_month_open(user_id, row.get("occurred_on"), today)
     _df_remove_payment(user_id, debt, own_txns, row)
     return {**_df_one(user_id, id, today), "transactions": []}
@@ -3641,6 +3735,7 @@ def delete_debt_payment(id: int, transaction_id: int, today: Optional[datetime.d
     open: an earlier cycle was already closed against it (interest, the full-payment
     check). The money goes back on the balance and, through the budget rule, back to
     the month's Goals split. Suggestions, focus and payoff dates recompute."""
+    _assert_debt_freedom_writable(user_id)
     _df_owned(user_id, id)
     local_today = _df_today(today)
     debt, _, own_txns = _df_fresh(user_id, id, local_today)
@@ -3659,6 +3754,7 @@ def delete_debt_payment(id: int, transaction_id: int, today: Optional[datetime.d
 
 @app.post("/debt-freedom/{id}/checkin")
 def debt_statement_checkin(id: int, checkin: DebtCheckin, user_id: str = Depends(get_current_user_id)):
+    _assert_debt_freedom_writable(user_id)
     """The statement check-in: the statement balance and minimum become the app's.
     A changed balance writes a signed statement_adjustment row."""
     _df_owned(user_id, id)
@@ -3684,6 +3780,7 @@ def debt_statement_checkin(id: int, checkin: DebtCheckin, user_id: str = Depends
 
 @app.post("/debt-freedom/{id}/late-fee")
 def debt_late_fee(id: int, body: DebtLateFee, user_id: str = Depends(get_current_user_id)):
+    _assert_debt_freedom_writable(user_id)
     """Answers the late-fee question for a missed minimum: an amount writes a
     late_fee row (and, with `remember`, becomes the debt's late_fee); None skips.
     Both clear late_fee_pending_for. The cycle's interest was already computed
@@ -3716,6 +3813,7 @@ def debt_late_fee(id: int, body: DebtLateFee, user_id: str = Depends(get_current
 
 @app.post("/debt-freedom/{id}/complete")
 def complete_debt(id: int, user_id: str = Depends(get_current_user_id)):
+    _assert_debt_freedom_writable(user_id)
     debt = _df_owned(user_id, id)
     if df.is_paid_off(debt):
         raise HTTPException(status_code=409, detail="This debt is already paid off.")
@@ -3788,16 +3886,13 @@ def get_home_progress(today: Optional[datetime.date] = None,
                     .select("id, goal_id, amount, type, created_at")
                     .eq("user_id", user_id).execute().data or [])
     if LIMITS_FEATURE in features:
-        # Retired debt goals holding no money are not goals to this build: not in the
-        # ring's counts, not the nearest goal, and not "saved toward goals" (paying a
-        # debt is not saving). Completed ones hold $0 too, so they go with them.
-        held: dict = {}
-        for t in savings_txns:
-            gid = t.get("goal_id")
-            held[gid] = held.get(gid, 0.0) + (df._num(t.get("amount")) if t.get("type") == "deposit"
-                                              else -df._num(t.get("amount")))
-        hidden = {g["id"] for g in goals
-                  if _is_hidden_debt_goal({**g, "allocated_amount": max(0.0, held.get(g["id"], 0.0))})}
+        # Retired user debt goals are not goals to this build, whether or not they
+        # still hold money: debts live on the Debts tab. So none of them is in the
+        # ring's counts, the nearest goal, the "saved toward goals" series or the
+        # milestones (paying a debt is not saving). A funded one stays listed on the
+        # Goals tab only, so that money is never hidden. The Reconciliation goal is
+        # not a user debt goal and is handled by home_progress_goals as before.
+        hidden = {g["id"] for g in goals if _is_user_debt_goal(g)}
         goals = [g for g in goals if g["id"] not in hidden]
         savings_txns = [t for t in savings_txns if t.get("goal_id") not in hidden]
 

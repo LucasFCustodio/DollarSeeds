@@ -209,5 +209,43 @@
       "text": "Posso todas as coisas naquele que me fortalece.",
       "ref": "Filipenses 4:13"
     }
+  },
+  "missed": {
+    "button": "Ver todos os mínimos",
+    "buttonA11y": "Ver todos os mínimos de {{name}}. {{count}} mês em aberto.",
+    "buttonA11y_plural": "Ver todos os mínimos de {{name}}. {{count}} meses em aberto.",
+    "title": "Pagamentos mínimos",
+    "close": "Fechar",
+    "monthMinimum": "Mínimo de {{month}}",
+    "wasDue": "venceu em {{date}}",
+    "due": "vence em {{date}}",
+    "rowA11y": "{{month}}, {{date}}, {{amount}}"
+  },
+  "tutorial": {
+    "intro": {
+      "eyebrow": "Liberdade das dívidas",
+      "title": "O método bola de neve",
+      "what": "Pague o mínimo de todas as dívidas e coloque cada real a mais na de menor saldo. Quando ela for quitada, passe todo o pagamento dela para a próxima menor.",
+      "why": "Saldos pequenos acabam rápido, e cada vitória dá impulso para a próxima. Cada dívida quitada libera o pagamento dela, então a bola de neve cresce enquanto rola.",
+      "premium": "A Liberdade das dívidas faz parte do DollarSeeds Premium. Veja como funciona."
+    },
+    "steps": {
+      "seed": "Toda dívida começa como uma pequena semente. Dê a essa semente um nome, um valor de pagamento mínimo e uma taxa de juros.",
+      "grow": "Todo mês, registre o pagamento mínimo desta dívida e de todas as outras que você tem. Pouco a pouco, a planta cresce, refletindo o seu crescimento financeiro.",
+      "free": "Quando você quita uma dívida por completo, a planta está totalmente crescida. Tudo o que você pagava nela agora pode ir para a próxima dívida, para quitá-la mais rápido."
+    },
+    "sampleName": "Cartão de Crédito",
+    "subscribe": "Assinar o Premium",
+    "next": "Próximo",
+    "a11y": {
+      "seed": "Uma semente no vaso",
+      "grow": "Uma planta crescida até a metade",
+      "free": "Uma planta totalmente crescida, com água descendo para a próxima"
+    }
+  },
+  "readOnly": {
+    "banner": "Suas dívidas estão salvas. Assine para continuar a cultivá-las.",
+    "subscribe": "Assinar",
+    "subscribeA11y": "Assinar o Premium"
   }
 }

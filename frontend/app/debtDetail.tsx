@@ -3,9 +3,14 @@
  * or card. Statement check-in, Edit, Delete (confirmed). Payments are logged from the
  * garden only (the min-payment switch and Extra); an extra payment from the current
  * billing cycle can be deleted here, from its history row (the server's `deletable`).
+ * A debt that owes minimums for passed cycles gets "View all min payments" here too.
  * All figures are server-computed.
+ *
+ * Premium: `none` (no debts, not premium) never reaches this screen — it goes to the
+ * Debts tab, which shows the tutorial. `read_only` renders everything with every
+ * action hidden, under the Subscribe banner.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { isAxiosError } from 'axios';
@@ -22,16 +27,36 @@ import { IconGearMascot, IconTrash } from '../components/icons';
 import CheckinSheet from '../components/debts/CheckinSheet';
 import { useDebtFormat } from '../components/debts/format';
 import { MONTHS } from '../constants/months';
-import { deleteDebt, deletePayment, fetchDebt, type DebtDetail, type DebtTransaction } from '../lib/debtFreedom';
+import {
+    deleteDebt, deletePayment, fetchDebt, missedCyclesOf, type DebtDetail, type DebtTransaction, type OneDebt,
+} from '../lib/debtFreedom';
+import { useDebtFreedomAccess, useDebtFreedomLockedHandler } from '../lib/debtFreedomAccess';
+import { queueGardenAnimation } from '../lib/debtFreedomEvents';
+import ReadOnlyBanner from '../components/debts/ReadOnlyBanner';
+import MissedMinimumsModal from '../components/debts/MissedMinimumsModal';
+import { MissedMinsButton } from '../components/debts/MinToggle';
+import { useMinToggle } from '../components/debts/useMinToggle';
 
 const VERSE_COUNT = 5;
 
 export default function DebtDetailRoute() {
+    const access = useDebtFreedomAccess();
     if (!DEBT_FREEDOM_ENABLED) return <Redirect href="/(tabs)" />;
-    return <DebtDetailScreen />;
+    if (access === 'none') return <Redirect href="/(tabs)/debts" />;
+    if (access === 'loading') return <RouteLoading />;
+    return <DebtDetailScreen readOnly={access === 'read_only'} />;
 }
 
-function DebtDetailScreen() {
+function RouteLoading() {
+    const { theme } = useTheme();
+    return (
+        <View style={[styles.fill, { backgroundColor: theme.bg, justifyContent: 'center' }]}>
+            <ActivityIndicator color={theme.brand} />
+        </View>
+    );
+}
+
+function DebtDetailScreen({ readOnly }: { readOnly: boolean }) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
     const { formatNumber, monthLabel, serverError } = useLocale();
@@ -44,7 +69,9 @@ function DebtDetailScreen() {
     const [data, setData] = useState<DebtDetail | null>(null);
     const [error, setError] = useState(false);
     const [checkingIn, setCheckingIn] = useState(false);
+    const [missedOpen, setMissedOpen] = useState(false);
     const [verse] = useState(() => Math.floor(Math.random() * VERSE_COUNT));
+    const onLocked = useDebtFreedomLockedHandler();
 
     const load = useCallback(() => {
         fetchDebt(id)
@@ -53,6 +80,20 @@ function DebtDetailScreen() {
     }, [id]);
 
     useFocusEffect(load);
+
+    // "View all min payments": the server's debt, applied at once; the drops play in
+    // the garden the next time it settles on this plant.
+    const onToggled = useCallback((result: OneDebt, on: boolean) => {
+        setData(prev => (prev ? { ...prev, debt: result.debt } : prev));
+        if (on) queueGardenAnimation({ kind: 'payment', debtId: result.debt.id, extra: false });
+        load();
+    }, [load]);
+    const { toggle, pendingValueFor } = useMinToggle(onToggled, load);
+    const missedCount = data ? missedCyclesOf(data.debt).length : 0;
+    // The last missed month is logged: close, as the garden does.
+    useEffect(() => {
+        if (missedOpen && missedCount === 0) setMissedOpen(false);
+    }, [missedOpen, missedCount]);
 
     const confirmDelete = () => {
         if (!data) return;
@@ -66,6 +107,7 @@ function DebtDetailScreen() {
                         await deleteDebt(id);
                         router.back();
                     } catch (e) {
+                        if (onLocked(e)) return;
                         // A 409 carries the server's reason (payments in a closed month).
                         const detail = isAxiosError(e) && e.response?.status === 409 ? e.response.data?.detail : null;
                         if (!detail) console.error('deleteDebt failed', e);
@@ -97,6 +139,7 @@ function DebtDetailScreen() {
                             await deletePayment(id, tx.id);
                             load();
                         } catch (e) {
+                            if (onLocked(e)) return;
                             const detail = isAxiosError(e) && e.response?.status === 409 ? e.response.data?.detail : null;
                             if (!detail) console.error('deletePayment failed', e);
                             Alert.alert(detail ? serverError(detail) : t('detail.errRemovePayment'));
@@ -135,13 +178,14 @@ function DebtDetailScreen() {
                     eyebrow={t('detail.position', { position: d.position, total: d.total })}
                     title={d.name}
                     backLabel={t('actions.back')}
-                    right={(
+                    right={readOnly ? undefined : (
                         // Edit, as the home screen's settings gear (in ink instead of white).
                         <HeaderIconButton label={t('detail.edit')} onPress={edit}>
                             <IconGearMascot size={18} color={theme.ink} />
                         </HeaderIconButton>
                     )}
                 />
+                {readOnly ? <View style={styles.banner}><ReadOnlyBanner /></View> : null}
             </View>
             <ScrollView contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}>
                 <Card theme={theme} padding={18}>
@@ -161,14 +205,19 @@ function DebtDetailScreen() {
                             <Text style={{ color: d.est_payoff_month ? theme.ink2 : theme.danger }}>{f.monthYear(d.est_payoff_month)}</Text>
                         ) : null}
                     </Text>
-                    {!paidOff ? (
+                    {!paidOff && !readOnly && missedCount > 0 ? (
+                        <View style={styles.checkin}>
+                            <MissedMinsButton debt={d} onPress={() => setMissedOpen(true)} />
+                        </View>
+                    ) : null}
+                    {!paidOff && !readOnly ? (
                         <View style={styles.checkin}>
                             <Button color={theme.brand} label={t('detail.checkin')} variant="secondary" fullWidth onPress={() => setCheckingIn(true)} />
                         </View>
                     ) : null}
                 </Card>
 
-                {!paidOff && !d.due_day ? (
+                {!paidOff && !readOnly && !d.due_day ? (
                     <View style={[styles.prompt, { backgroundColor: theme.dangerSoft, borderColor: theme.danger }]}>
                         <Text style={{ color: theme.danger, fontFamily: Fonts.sansSemiBold, fontSize: 14, lineHeight: 20 }}>{t('detail.addDueDay')}</Text>
                         <View style={styles.promptCta}>
@@ -226,7 +275,7 @@ function DebtDetailScreen() {
                                 {raisesBalance(tx) ? '+' : '−'}
                                 {f.money(Math.abs(tx.amount))}
                             </Text>
-                            {tx.deletable ? (
+                            {tx.deletable && !readOnly ? (
                                 <Pressable
                                     onPress={() => confirmRemovePayment(tx)}
                                     hitSlop={10}
@@ -259,11 +308,19 @@ function DebtDetailScreen() {
                     </Text>
                 </View>
 
-                <View style={styles.delete}>
-                    <Button color={theme.danger} label={t('detail.delete')} variant="dangerSoft" fullWidth onPress={confirmDelete} />
-                </View>
+                {readOnly ? null : (
+                    <View style={styles.delete}>
+                        <Button color={theme.danger} label={t('detail.delete')} variant="dangerSoft" fullWidth onPress={confirmDelete} />
+                    </View>
+                )}
             </ScrollView>
-            <CheckinSheet debt={checkingIn ? d : null} onClose={() => setCheckingIn(false)} onSaved={load} />
+            <CheckinSheet debt={checkingIn && !readOnly ? d : null} onClose={() => setCheckingIn(false)} onSaved={load} />
+            <MissedMinimumsModal
+                debt={missedOpen && !readOnly ? d : null}
+                pendingValueFor={pendingValueFor}
+                onToggle={toggle}
+                onClose={() => setMissedOpen(false)}
+            />
         </View>
     );
 }
@@ -328,4 +385,5 @@ const styles = StyleSheet.create({
     prompt: { borderRadius: 16, borderWidth: 1, padding: 14 },
     promptCta: { marginTop: 10, alignItems: 'flex-start' },
     delete: { marginTop: 8 },
+    banner: { paddingBottom: 6 },
 });

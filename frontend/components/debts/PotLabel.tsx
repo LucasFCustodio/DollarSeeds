@@ -2,6 +2,9 @@
  * PotLabel — the debt's name and numbers, as real text laid over the pot's label
  * panel so it stays sharp and accessible at any size. PlantView positions it over
  * the `pot_label` box; this fills that box.
+ *
+ * It reads only the fields in PotLabelDebt, so the Debts tutorial can draw the same
+ * label for a sample debt without inventing a whole server Debt.
  */
 import React, { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -10,8 +13,11 @@ import { Fonts, useTheme } from '../../context/ThemeContext';
 import type { Debt } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
 
+/** The fields the label draws. A garden Debt is one; so is the tutorial's sample. */
+export type PotLabelDebt = Pick<Debt, 'name' | 'missing' | 'next_due_date' | 'min_payment' | 'status' | 'pct_paid'>;
+
 interface Props {
-    debt: Debt;
+    debt: PotLabelDebt;
     /** Height of the label panel in px; the type scales from it. */
     boxHeight: number;
 }

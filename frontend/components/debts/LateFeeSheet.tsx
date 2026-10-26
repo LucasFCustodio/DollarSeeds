@@ -16,6 +16,7 @@ import { useAnalytics } from '../../lib/analytics';
 import { answerLateFee, type Debt, type OneDebt } from '../../lib/debtFreedom';
 import { useDebtFormat } from './format';
 import Sheet, { sheetStyles } from '../ui/Sheet';
+import { useDebtFreedomLockedHandler } from '../../lib/debtFreedomAccess';
 
 interface Props {
     debt: Debt | null;
@@ -43,6 +44,8 @@ export default function LateFeeSheet({ debt, onClose, onAnswered }: Props) {
         }
     }, [debt?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    const onLocked = useDebtFreedomLockedHandler();
+
     const send = async (fee: number | null) => {
         if (!debt?.late_fee_pending_for) return;
         setBusy(true);
@@ -52,6 +55,11 @@ export default function LateFeeSheet({ debt, onClose, onAnswered }: Props) {
             analytics.debtLateFeeEntered({ debt_id: debt.id, outcome: fee ? 'saved' : 'skipped' });
             onAnswered(result);
         } catch (e) {
+            if (onLocked(e)) {
+                setBusy(false);
+                onClose();
+                return;
+            }
             console.error('answerLateFee failed', e);
             setError(t('lateFee.errFailed'));
             setBusy(false);

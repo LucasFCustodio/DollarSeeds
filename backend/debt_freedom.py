@@ -342,6 +342,33 @@ def rows_after(transactions: list, row: dict) -> list:
             and _row_key(t) > key]
 
 
+def pays_cycle(t: dict, start: datetime.date, end: datetime.date, due: Optional[datetime.date]) -> bool:
+    """Does a `payment_minimum` pay for the cycle [start, end] that closes on `due`?
+
+    A late minimum names its cycle in `cycle_due_date` (migration 0012) and counts for
+    that cycle wherever its occurred_on falls. Every other minimum (cycle_due_date
+    NULL: every row from before 0012, and every on-time one since) counts for the
+    cycle its occurred_on falls in."""
+    named = _date(t.get("cycle_due_date"))
+    if named is not None:
+        return due is not None and named == due
+    return _in(t, start, end)
+
+
+def attributed_minimum(transactions: list, start: datetime.date, end: datetime.date,
+                       due: Optional[datetime.date]) -> float:
+    """The net minimum paying for one cycle, by attribution (pays_cycle): minimums
+    that pay it, less legacy `minimum_reversal` rows dated in it."""
+    total = 0.0
+    for t in transactions:
+        kind = t.get("kind")
+        if kind == KIND_MINIMUM and pays_cycle(t, start, end, due):
+            total += _num(t.get("amount"))
+        elif kind == KIND_MINIMUM_REVERSAL and _in(t, start, end):
+            total -= _num(t.get("amount"))
+    return money(total)
+
+
 def current_cycle(debt: dict, today: datetime.date):
     """(start, end, due) of the cycle holding today. A debt with no due day has no
     real cycle; its stand-in is the calendar month (due None), so the toggle still
@@ -365,12 +392,13 @@ def min_logged_this_cycle(debt: dict, transactions: list, today: datetime.date) 
 
 
 def minimum_to_undo(debt: dict, transactions: list, today: datetime.date) -> Optional[float]:
-    """The net minimum logged in the current cycle, which an undo reverses; None
-    when there is none — including once that cycle's due date has passed."""
+    """The net minimum paying for the current cycle, which an undo reverses; None
+    when there is none — including once that cycle's due date has passed. A late
+    minimum logged today for an EARLIER cycle is not this cycle's (pays_cycle)."""
     if is_paid_off(debt):
         return None
-    start, end, _ = current_cycle(debt, today)
-    amount = net_minimum(transactions, start, end)
+    start, end, due = current_cycle(debt, today)
+    amount = attributed_minimum(transactions, start, end, due)
     return amount if amount > CENT else None
 
 
@@ -380,10 +408,93 @@ def minimum_row_to_undo(debt: dict, transactions: list, today: datetime.date) ->
     undo — including once the cycle's due date has passed (minimum_to_undo)."""
     if minimum_to_undo(debt, transactions, today) is None:
         return None
+    start, end, due = current_cycle(debt, today)
+    hidden = cancelled_minimum_ids(transactions)
+    rows = [t for t in transactions
+            if t.get("kind") == KIND_MINIMUM and pays_cycle(t, start, end, due) and t.get("id") not in hidden]
+    return max(rows, key=_row_key) if rows else None
+
+
+# ── missed cycles ────────────────────────────────────────────────────────────
+#
+# "View all min payments": every passed cycle still owed a minimum, which the user
+# can log late. A late minimum is dated the day it is logged (so it counts against
+# that month's Goals budget, like any payment) and names its cycle in
+# `cycle_due_date`, so it covers that cycle and no other.
+
+def passed_cycles(debt: dict, today: datetime.date) -> list:
+    """(start, due) of every cycle whose due date is after the debt was created and
+    strictly before today, oldest first — the due dates process_due_dates closes.
+    A cycle runs from the day after the previous due date through its own; the first
+    one opens the day before creation (created_at is UTC), as _window_start does."""
+    due_day = debt.get("due_day")
+    created = _date(debt.get("created_at"))
+    if not due_day or created is None or is_paid_off(debt):
+        return []
+    out = []
+    cursor = datetime.date(created.year, created.month, 1)
+    while True:
+        due = due_date_in(cursor.year, cursor.month, due_day)
+        if due >= today:
+            return out
+        if due > created:
+            prev_month = add_months(due, -1)
+            start = max(due_date_in(prev_month.year, prev_month.month, due_day) + DAY, created - DAY)
+            out.append((start, due))
+        cursor = add_months(cursor, 1)
+
+
+def missed_cycles(debt: dict, transactions: list, today: datetime.date) -> list:
+    """Every passed cycle with no minimum paying for it, oldest first, as
+    [{"due_date": "YYYY-MM-DD", "amount": float}].
+
+    A cycle is covered when:
+      * its statement (the balance it opened with) was nothing, or
+      * it was paid in full — net payments dated in it reach the statement, the
+        allowance process_due_dates makes; or
+      * a minimum pays for it (pays_cycle). ANY net minimum counts, not one that
+        reaches today's min_payment: the toggle always logs the full minimum of its
+        moment, and no historical minimum is stored, so comparing against today's
+        figure would mark a cycle paid on time as missed after a check-in raised it.
+
+    `amount` is what logging it late writes: the current min_payment, capped at the
+    cycle's statement like the late-fee test."""
+    if is_paid_off(debt):
+        return []
+    minimum = _num(debt.get("min_payment"))
+    out = []
+    for start, due in passed_cycles(debt, today):
+        statement = balance_at(debt, transactions, start)
+        if statement <= CENT:
+            continue
+        if net_paid(transactions, start, due) >= statement - CENT:
+            continue
+        if attributed_minimum(transactions, start, due, due) > CENT:
+            continue
+        out.append({"due_date": due.isoformat(), "amount": money(min(minimum, statement))})
+    return out
+
+
+def late_minimum_rows(debt: dict, transactions: list, today: datetime.date) -> list:
+    """The late minimums the user can still take back: rows naming an earlier cycle
+    (cycle_due_date set), logged in the CURRENT cycle, not cancelled — the same
+    window the toggle's own undo has. Oldest cycle first."""
+    if is_paid_off(debt):
+        return []
     start, end, _ = current_cycle(debt, today)
     hidden = cancelled_minimum_ids(transactions)
     rows = [t for t in transactions
-            if t.get("kind") == KIND_MINIMUM and _in(t, start, end) and t.get("id") not in hidden]
+            if t.get("kind") == KIND_MINIMUM and _date(t.get("cycle_due_date")) is not None
+            and _in(t, start, end) and t.get("id") not in hidden]
+    return sorted(rows, key=lambda t: (_date(t.get("cycle_due_date")), _row_key(t)))
+
+
+def late_minimum_row_to_undo(debt: dict, transactions: list, cycle_due_date: datetime.date,
+                             today: datetime.date) -> Optional[dict]:
+    """The row an undo of a late minimum deletes: the latest late minimum for that
+    cycle that is still undoable (late_minimum_rows). None when there is none."""
+    rows = [t for t in late_minimum_rows(debt, transactions, today)
+            if _date(t.get("cycle_due_date")) == cycle_due_date]
     return max(rows, key=_row_key) if rows else None
 
 
@@ -433,9 +544,15 @@ def process_due_dates(debt: dict, transactions: list, today: datetime.date) -> O
     For each due date, in order (catch-up processes all of them in one call):
       1. Full payment: the cycle's net payments are at least the statement balance
          (cycle_start_balance) → no fee, no interest.
-      2. Minimum: net payment_minimum below min_payment → a `late_fee` row when the
+      2. Minimum: the net minimum paying for THIS cycle (attributed_minimum, the same
+         attribution missed_cycles uses) below min_payment → a `late_fee` row when the
          debt has a late_fee above 0; when late_fee is unset, late_fee_pending_for is
-         set to the due date so the app can ask. (late_fee = 0 means "no fee".)
+         set to the due date so the app can ask. (late_fee = 0 means "no fee".) A late
+         minimum names an earlier cycle in cycle_due_date, so logging September's in
+         October never covers October; a minimum with no cycle_due_date counts for the
+         cycle its occurred_on falls in, exactly as before 0012. Step 1 and the interest
+         still read every payment by occurred_on: that is money the balance really lost
+         in this cycle, whichever cycle's minimum it was.
       3. Interest: one `interest` row, balance × APR / 100 / 365 × days since the
          previous due date (since creation for the first cycle), on the balance after
          the cycle's payments and fee.
@@ -478,7 +595,7 @@ def process_due_dates(debt: dict, transactions: list, today: datetime.date) -> O
         if statement is None:
             statement = money(balance + paid)
         if paid < statement - CENT:
-            if net_minimum(transactions, start, due) < min(minimum, statement) - CENT:
+            if attributed_minimum(transactions, start, due, due) < min(minimum, statement) - CENT:
                 if fee is None:
                     pending_for = due.isoformat()
                 elif fee > 0:
@@ -662,6 +779,11 @@ def decorate_garden(debts: list, transactions: list, today: datetime.date,
             # The due date that closes the cycle the toggle belongs to (= next_due_date).
             "current_cycle_due_date": due.isoformat() if due else None,
             "min_logged_this_cycle": min_logged_this_cycle(d, txns, today),
+            # Passed cycles still owed a minimum, oldest first ("View all min payments").
+            "missed_cycles": missed_cycles(d, txns, today),
+            # Late minimums logged this cycle, which can still be taken back.
+            "late_minimums": [{"due_date": str(t.get("cycle_due_date"))[:10], "amount": money(t.get("amount"))}
+                              for t in late_minimum_rows(d, txns, today)],
             "checkin_due_since": None if paid_off else d.get("checkin_due_since"),
             "late_fee_pending_for": None if paid_off else d.get("late_fee_pending_for"),
             "late_fee": d.get("late_fee"),
@@ -713,50 +835,11 @@ def balance_at(debt: dict, transactions: list, day: datetime.date) -> float:
     return money(debt.get("current_balance"))
 
 
-def last_passed_due_date(debt: dict, today: datetime.date) -> Optional[datetime.date]:
-    """The most recent due date strictly before today that the debt existed for
-    (the same due dates process_due_dates closes), else None."""
-    due_day = debt.get("due_day")
-    if not due_day:
-        return None
-    due = due_date_in(today.year, today.month, due_day)
-    if due >= today:
-        prev = add_months(today, -1)
-        due = due_date_in(prev.year, prev.month, due_day)
-    created = _date(debt.get("created_at"))
-    if created is not None and due <= created:
-        return None
-    return due
-
-
-def missed_last_minimum(debt: dict, transactions: list, today: datetime.date) -> bool:
-    """Did the cycle that closed on the last passed due date fail the late-fee test
-    process_due_dates applies? Not paid in full, and a net minimum below
-    min(min_payment, statement)."""
-    due = last_passed_due_date(debt, today)
-    if due is None:
-        return False
-    prev_month = add_months(due, -1)
-    start = due_date_in(prev_month.year, prev_month.month, debt["due_day"]) + DAY
-    created = _date(debt.get("created_at"))
-    if created is not None and created - DAY > start:
-        start = created - DAY
-    statement = balance_at(debt, transactions, start)
-    if statement <= CENT:
-        return False
-    if net_paid(transactions, start, due) >= statement - CENT:
-        return False
-    return net_minimum(transactions, start, due) < min(_num(debt.get("min_payment")), statement) - CENT
-
-
 def is_overdue(debt: dict, transactions: list, today: datetime.date) -> bool:
-    """An active debt whose last passed due date closed without its minimum. It stays
-    overdue until a minimum is logged in the current cycle."""
-    if is_paid_off(debt):
-        return False
-    if min_logged_this_cycle(debt, transactions, today):
-        return False
-    return missed_last_minimum(debt, transactions, today)
+    """An active debt with at least one passed cycle still owed a minimum
+    (missed_cycles). Each missed cycle is cleared only by a minimum that pays for IT:
+    a minimum logged for the current cycle no longer clears an older one."""
+    return bool(missed_cycles(debt, transactions, today))
 
 
 def is_due_soon(debt: dict, transactions: list, today: datetime.date) -> bool:
@@ -811,13 +894,14 @@ def home_debt_summary(garden: dict, transactions: list, today: datetime.date) ->
         key=lambda c: (c[1]["next_due_date"], c[0]),
     )
     # Every overdue debt, longest overdue first (garden order on a tie). The missed
-    # due date is the one missed_last_minimum tested: last_passed_due_date.
+    # due date is the OLDEST cycle still owed a minimum, so days_overdue counts from
+    # when the debt fell behind; missed_count says how many cycles are owed.
     overdue = []
     for i, d in enumerate(active):
-        if not is_overdue(d, by_debt.get(d["id"], []), today):
+        missed = missed_cycles(d, by_debt.get(d["id"], []), today)
+        if not missed:
             continue
-        missed = last_passed_due_date(d, today)
-        overdue.append((i, d, missed))
+        overdue.append((i, d, _date(missed[0]["due_date"]), len(missed)))
     overdue.sort(key=lambda c: (-(today - c[2]).days, c[0]))
     next_month = month_key(add_months(today, 1))
     almost = next((d for d in active if d.get("est_payoff_month") == next_month), None)
@@ -833,7 +917,8 @@ def home_debt_summary(garden: dict, transactions: list, today: datetime.date) ->
             "missed_due_date": missed.isoformat(),
             "days_overdue": (today - missed).days,
             "pay_url": d.get("pay_url") or None,
-        } for _, d, missed in overdue],
+            "missed_count": count,
+        } for _, d, missed, count in overdue],
         "due_soon_count": len(due_soon),
         "due_soon": [{
             "id": d["id"],
