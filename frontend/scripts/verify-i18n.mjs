@@ -24,10 +24,19 @@
  *  - Fall-through. An unrecognised stored value (a sub-category or source added later)
  *    must render as its raw English, never as a bare `source.Freelance` key.
  *
+ *  - EVERY LOOKUP IN THE SOURCE RENDERS TEXT, in every language. The checks above test
+ *    a hand-picked list; a key the code asks for but no catalogue serves (missing,
+ *    misspelled, or under another namespace than the component's useTranslation)
+ *    rendered on screen as "tutorial.sampleName" without failing either script. This
+ *    resolves every static lookup scripts/i18n-refs.mjs finds — through the same
+ *    namespace list the component would use — and fails on any that comes back as
+ *    its own key. check-locales check 5 is the file-level half of the same guard.
+ *
  * Run: node scripts/verify-i18n.mjs
  */
 import i18next from '../node_modules/i18next/dist/esm/i18next.js';
 import { readFileSync, readdirSync } from 'node:fs';
+import { extractRefs, readSources } from './i18n-refs.mjs';
 
 const load = loc => Object.fromEntries(
   readdirSync(`locales/${loc}`).filter(f => f.endsWith('.json'))
@@ -81,6 +90,24 @@ for (const ns of Object.keys(en)) {
   }
 }
 check('no object-valued keys', objectValued, 0);
+
+// Every static lookup in the source, through real i18next, in every language.
+const namespaces = Object.keys(en);
+const refs = readSources().flatMap(s => extractRefs(s.file, s.text, namespaces)).filter(r => !r.dynamic);
+const leafIn = r => r.nsList.some(ns => en[ns] && Object.prototype.hasOwnProperty.call(flat(en[ns]), r.key));
+const groupIn = r => r.nsList.some(ns => en[ns] && Object.keys(flat(en[ns])).some(k => k.startsWith(`${r.key}.`)));
+const rawKeys = [];
+for (const lng of ['en', 'pt-BR']) {
+  for (const r of refs) {
+    if (!leafIn(r) && groupIn(r)) continue;   // a returnObjects group: nothing to render
+    const tr = i18next.getFixedT(lng, r.nsList);
+    const v = tr(r.key, { count: 2 });
+    if (typeof v !== 'string' || v === r.key || r.nsList.some(ns => v === `${ns}:${r.key}`)) {
+      rawKeys.push(`${lng} ${r.file}:${r.line} ${r.nsList.join('|')}:${r.key}`);
+    }
+  }
+}
+check(`every source lookup renders text (${refs.length} lookups × 2 languages)`, rawKeys.join(', '), '');
 
 for (const l of ok) console.log('  ok  ' + l);
 for (const l of fail) console.error('  FAIL ' + l);
