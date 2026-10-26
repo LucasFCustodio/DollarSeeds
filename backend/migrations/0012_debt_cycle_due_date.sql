@@ -56,4 +56,4 @@ comment on column public.debt_transactions.cycle_due_date is
 --   select policyname, cmd, roles, qual from pg_policies
 --    where schemaname = 'public' and tablename = 'debt_transactions';
 
--- Applied to project … on <date>.
+-- Applied to project vbvsblpyeylnemrecyqv on 2026-10-26.
