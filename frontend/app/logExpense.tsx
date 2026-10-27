@@ -1,7 +1,8 @@
 /**
  * logExpense — the expense form as its own screen, opened from the home's + buttons
- * and the tracking nudge. An optional `category` param ('needs' | 'wants') preselects
- * the category. After a successful save it returns to the home.
+ * and the tracking nudge. A `category` param ('needs' | 'wants') fixes the category
+ * and hides the Needs/Wants picker; without one the picker shows. After a successful
+ * save it returns to the home.
  */
 import React from 'react';
 import { View } from 'react-native';
@@ -16,7 +17,10 @@ export default function LogExpenseScreen() {
     const onSaved = useReturnHome();
     return (
         <View style={{ flex: 1, backgroundColor: theme.bg }}>
-            <ExpenseContainer initialCategory={category === 'wants' ? 'wants' : 'needs'} onSaved={onSaved} />
+            <ExpenseContainer
+                initialCategory={category === 'needs' || category === 'wants' ? category : undefined}
+                onSaved={onSaved}
+            />
         </View>
     );
 }

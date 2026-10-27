@@ -1,6 +1,8 @@
 {
   "expense": {
     "screenTitle": "Novo gasto",
+    "screenTitleNeed": "Registrar necessidade",
+    "screenTitleWant": "Registrar desejo",
     "screenSubtitle": "Plante onde faz diferença",
     "subcategoryLabel": "SUBCATEGORIA",
     "titleLabel": "TÍTULO",

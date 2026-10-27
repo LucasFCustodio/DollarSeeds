@@ -1,6 +1,8 @@
 {
   "expense": {
     "screenTitle": "New Expense",
+    "screenTitleNeed": "Log Need",
+    "screenTitleWant": "Log Want",
     "screenSubtitle": "Plant where it counts",
     "subcategoryLabel": "SUB-CATEGORY",
     "titleLabel": "TITLE",
