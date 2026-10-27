@@ -99,7 +99,9 @@
     "paidTowardDebt": "paid toward debt",
     "savedTowardGoals": "saved toward goals",
     "firstPayment": "Your first payment starts this line",
-    "firstDeposit": "Your first deposit starts this line"
+    "firstDeposit": "Your first deposit starts this line",
+    "keptSinceJoined": "{{amount}} kept under budget since you joined",
+    "keptUnderBudget": "Kept under budget"
   },
   "graph": {
     "debtsTitle": "Debt {{symbol}} paid off - {{year}}",
@@ -112,7 +114,8 @@
     "mergedDebts": "{{count}} debt paid off",
     "mergedDebts_plural": "{{count}} debts paid off",
     "mergedGoals": "{{count}} goal completed",
-    "mergedGoals_plural": "{{count}} goals completed"
+    "mergedGoals_plural": "{{count}} goals completed",
+    "keptTitle": "{{symbol}} kept under budget - {{year}}"
   },
   "verse": {
     "proverbs-21-20": {

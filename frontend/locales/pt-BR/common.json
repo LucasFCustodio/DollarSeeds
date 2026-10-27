@@ -62,7 +62,10 @@
     "rollover": "Sobra de {{month}}",
     "rolloverRecovery": "Recuperação da sobra de {{month}}",
     "spentAfterClose": "Gasto após o fechamento de {{month}}",
-    "transferToGoal": "Transferência da Poupança Geral para {{goal}}"
+    "transferToGoal": "Transferência da Poupança Geral para {{goal}}",
+    "Ready to Replant": "Pronto para Replantar",
+    "Moved to Ready to Replant": "Movido para Pronto para Replantar",
+    "plantedInto": "Plantado de Pronto para Replantar em {{goal}}"
   },
   "serverError": {
     "monthClosed": "{{month}} está fechado. Reabra o mês antes de fazer alterações.",
@@ -75,7 +78,21 @@
     "alreadyCompleted": "Essa meta já foi concluída.",
     "debtGoalRetired": "Metas de dívida não recebem mais dinheiro. Remova esta meta para levar o que ela guarda para a Poupança Geral.",
     "debtHasClosedMonthPayments": "Esta dívida tem pagamentos em um mês fechado, então excluí-la mudaria esse mês. Você pode marcá-la como quitada.",
-    "extraNotThisCycle": "Só é possível excluir um pagamento extra do ciclo de cobrança atual."
+    "extraNotThisCycle": "Só é possível excluir um pagamento extra do ciclo de cobrança atual.",
+    "replantManaged": "Pronto para Replantar é gerenciado automaticamente.",
+    "targetInPast": "Escolha um mês a partir deste.",
+    "savedReachesTarget": "Você já guardou o valor todo, então essa meta já está concluída.",
+    "savedNegative": "O valor já guardado não pode ser negativo.",
+    "savedSource": "Conta pra gente de onde vem o dinheiro que você já guardou.",
+    "goalNoMoney": "Essa meta não pode receber dinheiro novo.",
+    "noMinimum": "Essa meta não tem um valor mensal.",
+    "minimumAlready": "O valor deste mês já foi adicionado.",
+    "noMinimumToUndo": "Não há valor mensal para desfazer neste mês.",
+    "goalFull": "Essa meta já tem o valor todo.",
+    "amountPositive": "Informe um valor maior que zero.",
+    "moneySource": "Escolha de onde vem o dinheiro.",
+    "replantTooMuch": "Isso é mais do que há em Pronto para Replantar.",
+    "historyUndeletable": "Esse lançamento não pode ser removido."
   },
   "source": {
     "Paycheck": "Salário",

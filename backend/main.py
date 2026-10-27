@@ -12,6 +12,7 @@ import uuid
 import httpx
 import jwt
 import debt_freedom as df
+import goals_v2 as gv
 import home_progress as hp
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -240,6 +241,31 @@ def _log_client_mix() -> None:
         print(f"client-mix: {_marked_requests}/{total} requests on v2+ ({pct:.1f}%)")
 
 
+# A FOURTH capability (the other three are explained with the subscription code below).
+# A build that sends it has the Goals rework (GOALS_REWORK.md): monthly minimums with a
+# toggle and an extra-payment button, "on pace for", no General Savings anywhere, the
+# "kept under budget" stat and Ready to Replant. Every changed behaviour is gated on it;
+# a request without it gets exactly the code and the responses it got before.
+# Defined up here, unlike the others, because the helper right below needs it.
+GOALS_V2_FEATURE = "goals_v2"
+
+# Columns migration 0013 added. A select('*') returns them to every caller once it is
+# applied, so they are taken back OUT of every row served to a build without goals_v2:
+# that build gets byte-for-byte the rows it got before the migration
+# (tests/test_backcompat_goals_v2.py proves it against goldens captured from `main`).
+GOAL_V2_COLUMNS = frozenset({"monthly_minimum", "auto_minimum", "auto_minimum_month",
+                             "is_replant", "replant_seed_amount"})
+TXN_V2_COLUMNS = frozenset({"kind"})
+
+
+def _legacy_rows(rows: list, columns: frozenset, features: set) -> list:
+    """`rows` as a build without goals_v2 has always received them."""
+    if GOALS_V2_FEATURE in features or not rows:
+        return rows
+    return [{k: v for k, v in r.items() if k not in columns} if isinstance(r, dict) else r
+            for r in rows]
+
+
 # NOTE on `user_id` in the models below: it is accepted (older app builds still send
 # it) but NEVER trusted. Every handler overwrites it with the id from the verified
 # token before anything reaches the database. It is Optional so a future client can
@@ -290,6 +316,14 @@ class SavingsGoal(BaseModel):
     # "saving" (default) | "debt". Debt goals behave identically to savings goals;
     # the only difference is grouping/labeling in the Goals tab UI.
     goal_type: str = "saving"
+    # goals_v2 only, all optional; read only for a goals_v2 caller and never written as
+    # columns of their own (GOAL_CREATE_V2_FIELDS). "Amount saved up" and where it came
+    # from ('income' = this month's budget, 'opening' = money already saved), the
+    # automatic-minimum switch, and the phone's date.
+    saved_amount: Optional[float] = None
+    saved_source: Optional[str] = None
+    auto_minimum: Optional[bool] = None
+    today: Optional[datetime.date] = None
 
 class SavingsGoalUpdate(BaseModel):
     """Partial edit of a user-created goal. Every field is optional; only the ones
@@ -300,6 +334,29 @@ class SavingsGoalUpdate(BaseModel):
     target_amount: Optional[float] = None
     target_month: Optional[str] = None
     target_year: Optional[int] = None
+    # goals_v2 only (ignored for every other caller): the automatic-minimum switch, and
+    # the phone's date for recomputing the monthly minimum.
+    auto_minimum: Optional[bool] = None
+    today: Optional[datetime.date] = None
+
+GOAL_CREATE_V2_FIELDS = {"saved_amount", "saved_source", "auto_minimum", "today"}
+GOAL_UPDATE_V2_FIELDS = {"auto_minimum", "today"}
+
+class GoalToday(BaseModel):
+    """Body of the goals_v2 minimum toggle routes: the phone's date (optional)."""
+    today: Optional[datetime.date] = None
+
+class GoalExtraPayment(BaseModel):
+    amount: float
+    # 'income' = from this month's budget (counts against its Goals split);
+    # 'opening' = from money already saved (the budget math ignores it).
+    source: str = "income"
+    today: Optional[datetime.date] = None
+
+class ReplantPlant(BaseModel):
+    to_goal_id: int
+    amount: float
+    today: Optional[datetime.date] = None
 
 class SavingsGoalFinish(BaseModel):
     """Completing a goal in one tap: the server withdraws whatever the goal holds
@@ -1121,7 +1178,8 @@ def create_savings_transaction(entry: SavingsEntry,
     payload = entry.model_dump()
     payload["user_id"] = user_id  # never trust the body's user_id
     response = supabase.table("savings_transactions").insert(payload).execute()
-    return {"message": "Savings transaction recorded.", "data": response.data}
+    return {"message": "Savings transaction recorded.",
+            "data": _legacy_rows(response.data, TXN_V2_COLUMNS, features)}
 
 # Pre-app savings the user already had when they signed up. Excluded from budget math.
 OPENING_SOURCE = "opening"
@@ -1133,10 +1191,18 @@ def set_starting_balance(entry: StartingBalance, user_id: str = Depends(get_curr
     source is excluded from the budget math (which allowlists source='income'), so
     money brought in from before never consumes the Goals budget of the month it lands
     in. Idempotent: a user can only ever have one opening row."""
-    existing = supabase.table("savings_transactions").select("id") \
-        .eq("user_id", user_id).eq("source", OPENING_SOURCE).limit(1).execute()
-    if existing.data:
-        return {"message": "Starting balance already set.", "already_set": True}
+    # Scoped to the General Savings pool. A goals_v2 build writes source='opening'
+    # deposits into ordinary goals too ("money I'd already saved"), and those must not
+    # read as "starting balance already set" to an older build on the same account.
+    # Every opening row written before goals_v2 is in General Savings, so for that data
+    # the answer is unchanged. Looked up without creating the pool: no pool, no row.
+    gen = supabase.table("savings_goals").select("id").eq("user_id", user_id).eq("is_general", True).execute()
+    if gen.data:
+        existing = supabase.table("savings_transactions").select("id") \
+            .eq("user_id", user_id).eq("source", OPENING_SOURCE) \
+            .eq("goal_id", gen.data[0]["id"]).limit(1).execute()
+        if existing.data:
+            return {"message": "Starting balance already set.", "already_set": True}
 
     # A user starting from nothing may legitimately enter 0. The table's amount > 0
     # CHECK forbids a zero row, so record nothing and let them through.
@@ -1203,12 +1269,16 @@ def transfer_from_general(transfer: SavingsTransfer,
     return {"message": "Transfer recorded."}
 
 @app.get("/savings/history/")
-def get_savings_history(month: str = None, user_id: str = Depends(get_current_user_id)):
+def get_savings_history(month: str = None,
+                        features: set = Depends(_client_features),
+                        user_id: str = Depends(get_current_user_id)):
     query = supabase.table("savings_transactions").select("*").eq("user_id", user_id)
     if month:
         query = query.eq("month", month)
     response = query.order("created_at", desc=True).execute()
-    return {"data": _collapse_transfers(response.data)}
+    if GOALS_V2_FEATURE not in features:
+        return {"data": _legacy_rows(_collapse_transfers(response.data), TXN_V2_COLUMNS, features)}
+    return {"data": _history_v2(user_id, response.data)}
 
 def _collapse_transfers(rows: list) -> list:
     """Fold each General-Savings→goal transfer (two rows sharing a transfer_group)
@@ -1247,6 +1317,13 @@ def delete_savings_transaction(id: int,
     if LIMITS_FEATURE in features:
         columns += ", goal_id"
     row = supabase.table("savings_transactions").select(columns).eq("id", id).eq("user_id", user_id).execute()
+    if row.data and GOALS_V2_FEATURE in features:
+        # A goals_v2 build shows no General Savings: an entry that would put money
+        # back there (or take the one-time move, or a deleted goal's returned money,
+        # out of Ready to Replant) would make money vanish from its screens. The
+        # history marks these `deletable: false`; this is the server's half.
+        if not _history_row_deletable_v2(user_id, id):
+            raise HTTPException(status_code=409, detail=HISTORY_UNDELETABLE_DETAIL)
     if row.data:
         _assert_month_open(user_id, row.data[0].get("month"))
         group = row.data[0].get("transfer_group")
@@ -1267,9 +1344,9 @@ def delete_savings_transaction(id: int,
             # to the overall balance, since a transfer never changed total seeds saved.
             response = supabase.table("savings_transactions").delete() \
                 .eq("transfer_group", group).eq("user_id", user_id).execute()
-            return response.data
+            return _legacy_rows(response.data, TXN_V2_COLUMNS, features)
     response = supabase.table("savings_transactions").delete().eq("id", id).eq("user_id", user_id).execute()
-    return response.data
+    return _legacy_rows(response.data, TXN_V2_COLUMNS, features)
 
 def _with_allocated(goals_data: list, user_id: str) -> list:
     if not goals_data:
@@ -1377,10 +1454,17 @@ def _ensure_general_savings(user_id: str) -> int:
 
 @app.get("/savings/goal/")
 def get_savings_goals(goal_type: Optional[str] = None,
+                      today: Optional[datetime.date] = None,
                       features: set = Depends(_client_features),
                       user_id: str = Depends(get_current_user_id)):
     # Lazily seed General Savings for this user if it doesn't exist yet
     _ensure_general_savings(user_id)
+    goals_v2 = GOALS_V2_FEATURE in features
+    local_today = _df_today(today)
+    if goals_v2:
+        # Ready to Replant, and — the first time only — the one-time move of the
+        # General Savings balance into it. Before the query, so it is in the list.
+        _ensure_replant(user_id, local_today)
     query = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("completed", False)
     # Optional filter: "saving" | "debt". Allocation math is identical for both.
     if goal_type in ("saving", "debt"):
@@ -1424,7 +1508,12 @@ def get_savings_goals(goal_type: Optional[str] = None,
         for g in goals:
             g["locked"] = g["id"] in locked
 
-    return {"data": goals}
+    if goals_v2:
+        return {"data": _goals_v2_list(user_id, goals, local_today)}
+    # Ready to Replant is a goals_v2 container. An older build would list it as an
+    # ordinary goal it could fund, complete or delete, so it never sees it.
+    goals = [g for g in goals if not g.get("is_replant")]
+    return {"data": _legacy_rows(goals, GOAL_V2_COLUMNS, features)}
 
 def _decorate_reconciliation(goals: list, user_id: str) -> list:
     """The Reconciliation goal's funded math is owed/repaid (not the generic
@@ -1454,7 +1543,7 @@ def get_completed_goals(goal_type: Optional[str] = None,
     goals = _with_allocated(goals_res.data, user_id)
     if LIMITS_FEATURE in features:
         goals = [g for g in goals if not _is_hidden_debt_goal(g)]
-    return {"data": goals}
+    return {"data": _legacy_rows(goals, GOAL_V2_COLUMNS, features)}
 
 @app.patch("/savings/goal/{id}/complete")
 def complete_savings_goal(id: int,
@@ -1464,7 +1553,8 @@ def complete_savings_goal(id: int,
     # behaves exactly as it does today (200 with an empty data list).
     _assert_goals_unlocked(_entitlements(user_id, features), id)
     response = supabase.table("savings_goals").update({"completed": True}).eq("id", id).eq("user_id", user_id).execute()
-    return {"message": "Goal marked as complete.", "data": response.data}
+    return {"message": "Goal marked as complete.",
+            "data": _legacy_rows(response.data, GOAL_V2_COLUMNS, features)}
 
 @app.post("/savings/goal/")
 def create_savings_goal(goal: SavingsGoal,
@@ -1481,10 +1571,13 @@ def create_savings_goal(goal: SavingsGoal,
     # lazily), and exempting the flag would hand a client an unlimited-goals bypass.
     if _entitlements(user_id, features).at_goal_cap():
         raise PremiumRequired("goal_limit_reached")
-    payload = goal.model_dump()
+    # The goals_v2 fields are request-only: none of them is a column of that name.
+    payload = goal.model_dump(exclude=GOAL_CREATE_V2_FIELDS)
     payload["user_id"] = user_id  # never trust the body's user_id
+    if GOALS_V2_FEATURE in features:
+        return _create_goal_v2(user_id, goal, payload)
     response = supabase.table("savings_goals").insert(payload).execute()
-    return {"message": "Goal created.", "data": response.data}
+    return {"message": "Goal created.", "data": _legacy_rows(response.data, GOAL_V2_COLUMNS, features)}
 
 def _editable_goal(id: int, user_id: str) -> dict:
     """Load a user-created goal, rejecting the two auto-managed ones."""
@@ -1496,6 +1589,8 @@ def _editable_goal(id: int, user_id: str) -> dict:
         raise HTTPException(status_code=400, detail="General Savings cannot be edited.")
     if goal.get("is_reconciliation"):
         raise HTTPException(status_code=400, detail="The Reconciliation goal is managed automatically.")
+    if goal.get("is_replant"):
+        raise HTTPException(status_code=400, detail=REPLANT_MANAGED_DETAIL)
     return goal
 
 @app.patch("/savings/goal/{id}")
@@ -1504,13 +1599,24 @@ def update_savings_goal(id: int, update: SavingsGoalUpdate,
                         user_id: str = Depends(get_current_user_id)):
     goal = _editable_goal(id, user_id)
     _assert_goals_unlocked(_entitlements(user_id, features), id)
+    goals_v2 = GOALS_V2_FEATURE in features
 
-    fields = update.model_dump(exclude={"user_id"}, exclude_none=True)
+    # The goals_v2 fields are never written for any other caller.
+    fields = update.model_dump(exclude={"user_id"} | GOAL_UPDATE_V2_FIELDS, exclude_none=True)
+    if goals_v2 and update.auto_minimum is not None:
+        fields["auto_minimum"] = update.auto_minimum
     if not fields:
-        return {"message": "Nothing to update.", "data": [goal]}
+        return {"message": "Nothing to update.", "data": _legacy_rows([goal], GOAL_V2_COLUMNS, features)}
 
     if "target_amount" in fields and fields["target_amount"] <= 0:
         raise HTTPException(status_code=400, detail="Target amount must be greater than zero.")
+
+    local_today = _df_today(update.today)
+    date_changed = ("target_month" in fields or "target_year" in fields)
+    if goals_v2 and date_changed and gv.target_before_this_month(
+            fields.get("target_month", goal.get("target_month")),
+            fields.get("target_year", goal.get("target_year")), local_today):
+        raise HTTPException(status_code=400, detail=TARGET_IN_PAST_DETAIL)
 
     new_title = fields.get("title")
     if new_title and new_title != goal["title"]:
@@ -1518,6 +1624,11 @@ def update_savings_goal(id: int, update: SavingsGoalUpdate,
             .eq("user_id", user_id).eq("title", new_title).neq("id", id).execute()
         if clash.data:
             raise HTTPException(status_code=400, detail="A goal with this name already exists.")
+
+    if goals_v2 and gv.takes_minimum(goal) and (date_changed or "target_amount" in fields):
+        # Section 2: the minimum is recomputed ONLY here (and at creation), from what
+        # the goal holds right now — never because of a payment or a skipped month.
+        fields["monthly_minimum"] = _goal_minimum_now(user_id, {**goal, **fields}, local_today)
 
     response = supabase.table("savings_goals").update(fields).eq("id", id).eq("user_id", user_id).execute()
 
@@ -1528,7 +1639,7 @@ def update_savings_goal(id: int, update: SavingsGoalUpdate,
         supabase.table("savings_transactions").update({"title": new_title}) \
             .eq("goal_id", id).eq("user_id", user_id).eq("title", goal["title"]).execute()
 
-    return {"message": "Goal updated.", "data": response.data}
+    return {"message": "Goal updated.", "data": _legacy_rows(response.data, GOAL_V2_COLUMNS, features)}
 
 @app.post("/savings/goal/{id}/finish")
 def finish_savings_goal(id: int, body: SavingsGoalFinish,
@@ -1585,7 +1696,10 @@ def finish_savings_goal(id: int, body: SavingsGoalFinish,
     return {"message": "Goal completed.", "allocated": allocated, "completed_amount": snapshot}
 
 @app.delete("/savings/goal/{id}")
-def delete_savings_goal(id: int, current_month: str, user_id: str = Depends(get_current_user_id)):
+def delete_savings_goal(id: int, current_month: str,
+                        today: Optional[datetime.date] = None,
+                        features: set = Depends(_client_features),
+                        user_id: str = Depends(get_current_user_id)):
     # Block deletion of General Savings
     goal_res = supabase.table("savings_goals").select("is_general, is_reconciliation").eq("id", id).eq("user_id", user_id).execute()
     if not goal_res.data:
@@ -1594,6 +1708,9 @@ def delete_savings_goal(id: int, current_month: str, user_id: str = Depends(get_
         raise HTTPException(status_code=400, detail="General Savings cannot be deleted.")
     if goal_res.data[0].get("is_reconciliation"):
         raise HTTPException(status_code=400, detail="The Reconciliation goal is managed automatically and cannot be deleted.")
+    if GOALS_V2_FEATURE in features:
+        # Leftover money goes to Ready to Replant, not General Savings.
+        return _delete_goal_v2(user_id, id, _df_today(today))
 
     # Ensure General Savings exists to receive redistributed funds
     general_id = _ensure_general_savings(user_id)
@@ -1628,6 +1745,502 @@ def delete_savings_goal(id: int, current_month: str, user_id: str = Depends(get_
     # Now safe to delete the goal itself
     supabase.table("savings_goals").delete().eq("id", id).eq("user_id", user_id).execute()
     return {"message": "Goal deleted and funds redistributed."}
+
+
+
+# ══ Goals v2 ══════════════════════════════════════════════════════════════════
+# GOALS_REWORK.md. Everything below runs ONLY for a request sending goals_v2; the
+# routes above call into it behind that check, and the new routes are only ever called
+# by a build that sends it. Every rule is a pure function in goals_v2.py (gv), unit-
+# tested in tests/test_goals_v2.py; these helpers load rows and persist what it says.
+#
+#   * Each goal stores a whole-dollar MONTHLY MINIMUM (savings_goals.monthly_minimum),
+#     set at creation and recomputed only when the target amount or date is edited.
+#     Goals from before have none: the first goals_v2 read computes and stores it.
+#   * The minimum toggle writes ONE source='income' deposit with kind='minimum' for
+#     this month, and its undo DELETES that row — any number of toggles leave at most
+#     one minimum row per goal per month.
+#   * The automatic minimum is added lazily on read, once the month has income.
+#     auto_minimum_month records the month as handled, so toggling an auto-added
+#     minimum off is never undone by the next read.
+#   * Ready to Replant is its own savings_goals row (is_replant). It receives a deleted
+#     goal's leftover money, and — once per user — the General Savings balance as it
+#     stood the first time a goals_v2 build loaded the goals. Rollover keeps writing to
+#     General Savings afterwards, for the "kept under budget" stat; none of it ever
+#     reaches Ready to Replant.
+
+REPLANT_TITLE = "Ready to Replant"
+REPLANT_SEED_TITLE = "Moved to Ready to Replant"
+REPLANT_RETURN_TITLE = "Returned from deleted goal"
+REPLANT_PLANT_PREFIX = "Planted from Ready to Replant into "
+MONEY_SOURCES = ("income", OPENING_SOURCE)
+
+# English, like every other `detail`: the app maps them for display (serverStrings).
+REPLANT_MANAGED_DETAIL = "Ready to Replant is managed automatically."
+TARGET_IN_PAST_DETAIL = "Pick a target month from this month onward."
+SAVED_REACHES_TARGET_DETAIL = "You've already saved your whole target, so this goal is already done."
+SAVED_NEGATIVE_DETAIL = "The amount saved up can't be below zero."
+SAVED_SOURCE_DETAIL = "Tell us where the money you've saved up comes from."
+GOAL_NO_MONEY_DETAIL = "This goal can't take new money."
+NO_MINIMUM_DETAIL = "This goal doesn't have a monthly amount."
+MINIMUM_ALREADY_DETAIL = "This month's amount is already in."
+NO_MINIMUM_TO_UNDO_DETAIL = "There's no monthly amount to take back this month."
+GOAL_FULL_DETAIL = "This goal already holds its whole target."
+AMOUNT_POSITIVE_DETAIL = "Enter an amount greater than zero."
+MONEY_SOURCE_DETAIL = "Choose where the money comes from."
+REPLANT_TOO_MUCH_DETAIL = "That's more than Ready to Replant is holding."
+HISTORY_UNDELETABLE_DETAIL = "This entry can't be removed."
+
+_V2_TXN_COLUMNS = "id, goal_id, amount, type, source, kind, month, created_at, transfer_group"
+
+
+def _month_name(today: datetime.date) -> str:
+    return MONTHS[today.month - 1]
+
+
+def _goal_rows(user_id: str, goal_id: int) -> list:
+    return (supabase.table("savings_transactions").select(_V2_TXN_COLUMNS)
+            .eq("user_id", user_id).eq("goal_id", goal_id).execute().data or [])
+
+
+def _goal_minimum_now(user_id: str, goal: dict, today: datetime.date) -> Optional[int]:
+    """Section 2's formula with what the goal holds right now."""
+    rows = _goal_rows(user_id, goal["id"])
+    logged = gv.minimum_row_this_month(rows, today) is not None
+    return gv.monthly_minimum(goal.get("target_amount"), gv.balance(rows), today,
+                              gv.target_index(goal), logged)
+
+
+def _minimum_amount(goal: dict, goal_rows: list) -> float:
+    """What the toggle deposits: the stored minimum, capped at what is left to save,
+    so the last month never overshoots the target."""
+    remaining = df._num(goal.get("target_amount")) - gv.balance(goal_rows)
+    return df.money(max(0.0, min(df._num(goal.get("monthly_minimum")), remaining)))
+
+
+def _insert_minimum(user_id: str, goal: dict, amount: float, today: datetime.date) -> dict:
+    row = {
+        "user_id": user_id, "title": goal["title"], "amount": amount, "type": "deposit",
+        "goal_id": goal["id"], "source": "income", "kind": gv.KIND_MINIMUM,
+        "day": today.day, "month": _month_name(today),
+    }
+    inserted = supabase.table("savings_transactions").insert(row).execute().data
+    return inserted[0] if inserted else row
+
+
+def _mark_auto_handled(user_id: str, goal_id: int, today: datetime.date) -> None:
+    supabase.table("savings_goals").update(
+        {"auto_minimum_month": gv.first_of_month(today).isoformat()}
+    ).eq("id", goal_id).eq("user_id", user_id).execute()
+
+
+# ── Ready to Replant ─────────────────────────────────────────────────────────
+
+def _replant_goal(user_id: str) -> Optional[dict]:
+    rows = (supabase.table("savings_goals").select("*").eq("user_id", user_id)
+            .eq("is_replant", True).execute().data)
+    return rows[0] if rows else None
+
+
+def _ensure_replant(user_id: str, today: datetime.date) -> Optional[dict]:
+    """The user's Ready to Replant row, created on first use together with the
+    one-time move of the General Savings balance into it (section 5d).
+
+    At most once per user, and safe under concurrent first loads:
+      1. The row is created with the General Savings balance stored on it
+         (replant_seed_amount). A partial UNIQUE index allows one per user, so of two
+         overlapping first loads one insert wins and the other re-reads the winner's
+         row — both then agree on the amount.
+      2. The move itself is ONE insert of both legs (atomic), guarded by a second
+         partial UNIQUE index on kind='replant_seed': a concurrent second attempt fails
+         whole. Until it has landed, every read retries it from the stored amount, so a
+         request that died between the two steps loses nothing."""
+    goal = _replant_goal(user_id)
+    if goal is None:
+        general_id = _ensure_general_savings(user_id)
+        seed = max(0.0, _goal_balance(user_id, general_id))
+        try:
+            inserted = supabase.table("savings_goals").insert({
+                "user_id": user_id, "title": REPLANT_TITLE, "is_replant": True,
+                "completed": False, "goal_type": "saving", "replant_seed_amount": seed,
+            }).execute().data
+            goal = inserted[0] if inserted else _replant_goal(user_id)
+        except Exception as e:
+            if not _is_unique_violation(e):
+                raise
+            goal = _replant_goal(user_id)
+    if goal is not None:
+        _finish_replant_seed(user_id, goal, today)
+    return goal
+
+
+def _finish_replant_seed(user_id: str, goal: dict, today: datetime.date) -> None:
+    seed = df.money(goal.get("replant_seed_amount"))
+    if seed <= 0.005:
+        return
+    done = (supabase.table("savings_transactions").select("id").eq("user_id", user_id)
+            .eq("kind", gv.KIND_REPLANT_SEED).limit(1).execute().data)
+    if done:
+        return
+    general_id = _ensure_general_savings(user_id)
+    group = str(uuid.uuid4())
+    base = {"user_id": user_id, "amount": seed, "source": "transfer", "kind": gv.KIND_REPLANT_SEED,
+            "transfer_group": group, "day": today.day, "month": _month_name(today)}
+    try:
+        supabase.table("savings_transactions").insert([
+            {**base, "title": REPLANT_SEED_TITLE, "type": "withdrawal", "goal_id": general_id},
+            {**base, "title": REPLANT_TITLE, "type": "deposit", "goal_id": goal["id"]},
+        ]).execute()
+    except Exception as e:
+        if not _is_unique_violation(e):
+            raise
+
+
+# ── The goals list ───────────────────────────────────────────────────────────
+
+def _goals_v2_list(user_id: str, goals: list, today: datetime.date) -> list:
+    """GET /savings/goal/ for goals_v2: store any missing minimum, add the month's
+    automatic minimums, then decorate every row."""
+    rows = (supabase.table("savings_transactions").select(_V2_TXN_COLUMNS)
+            .eq("user_id", user_id).execute().data or [])
+    by_goal: dict = {}
+    for r in rows:
+        by_goal.setdefault(r.get("goal_id"), []).append(r)
+
+    for g in goals:
+        if not gv.takes_minimum(g) or g.get("monthly_minimum") is not None:
+            continue
+        grows = by_goal.get(g["id"], [])
+        minimum = gv.monthly_minimum(g.get("target_amount"), gv.balance(grows), today,
+                                     gv.target_index(g),
+                                     gv.minimum_row_this_month(grows, today) is not None)
+        if minimum is None:
+            continue
+        # Conditional, so a minimum another request just stored is never overwritten.
+        supabase.table("savings_goals").update({"monthly_minimum": minimum}) \
+            .eq("id", g["id"]).eq("user_id", user_id).is_("monthly_minimum", None).execute()
+        g["monthly_minimum"] = minimum
+
+    _apply_auto_minimums(user_id, goals, by_goal, today)
+    return [_decorate_goal_v2(g, by_goal.get(g["id"], []), today) for g in goals]
+
+
+def _apply_auto_minimums(user_id: str, goals: list, by_goal: dict, today: datetime.date) -> None:
+    """Section 4: add this month's minimum to every goal that has it on, once the
+    month has ANY income logged. The month is claimed first with a conditional update,
+    so overlapping reads add it once, and a month the user already handled (toggled an
+    auto-added minimum off) is never re-added."""
+    due = [g for g in goals if gv.auto_minimum_due(g, today, True)]
+    if not due:
+        return
+    month = _month_name(today)
+    income = supabase.table("income").select("amount").eq("user_id", user_id).eq("month", month).execute().data or []
+    if sum(df._num(r.get("amount")) for r in income) <= 0 or _is_month_closed(user_id, month):
+        return
+    first = gv.first_of_month(today).isoformat()
+    for g in due:
+        claimed = (supabase.table("savings_goals").update({"auto_minimum_month": first})
+                   .eq("id", g["id"]).eq("user_id", user_id)
+                   .or_(f"auto_minimum_month.is.null,auto_minimum_month.lt.{first}").execute().data)
+        if not claimed:
+            continue
+        g["auto_minimum_month"] = first
+        grows = by_goal.setdefault(g["id"], [])
+        if gv.minimum_row_this_month(grows, today) is not None:
+            continue
+        amount = _minimum_amount(g, grows)
+        if amount > 0:
+            grows.append(_insert_minimum(user_id, g, amount, today))
+
+
+def _decorate_goal_v2(goal: dict, goal_rows: list, today: datetime.date) -> dict:
+    """The ADDED keys a goals_v2 build reads. Every existing key is kept."""
+    out = dict(goal)
+    out["is_replant"] = bool(goal.get("is_replant"))
+    out["auto_minimum"] = bool(goal.get("auto_minimum"))
+    if not goal.get("is_reconciliation"):
+        out["allocated_amount"] = gv.balance(goal_rows)
+    out["minimum_logged"] = False
+    out["minimum_amount"] = None
+    out["on_pace"] = None
+    out["ready_to_complete"] = False
+    if gv.takes_minimum(goal) and goal.get("monthly_minimum") is not None:
+        row = gv.minimum_row_this_month(goal_rows, today)
+        saved = out["allocated_amount"]
+        out["minimum_logged"] = row is not None
+        out["minimum_amount"] = df.money(row.get("amount")) if row else _minimum_amount(goal, goal_rows)
+        out["on_pace"] = gv.on_pace(goal.get("target_amount"), saved, goal.get("monthly_minimum"),
+                                    today, gv.target_index(goal), row is not None)
+        out["ready_to_complete"] = gv.ready_to_complete(goal.get("target_amount"), saved)
+    return out
+
+
+def _goal_for_money(user_id: str, goal_id: int, features: set, *, allow_recon: bool) -> dict:
+    """A goal that may take new money: owned, still running, not a container, not a
+    retired debt goal, and not locked. 404 before 409 before 403, as elsewhere."""
+    rows = supabase.table("savings_goals").select("*").eq("id", goal_id).eq("user_id", user_id).execute().data
+    if not rows:
+        raise HTTPException(status_code=404, detail="Goal not found.")
+    goal = rows[0]
+    if (goal.get("is_general") or goal.get("is_replant") or goal.get("completed")
+            or _is_user_debt_goal(goal) or (goal.get("is_reconciliation") and not allow_recon)):
+        raise HTTPException(status_code=409, detail=GOAL_NO_MONEY_DETAIL)
+    _assert_goals_unlocked(_entitlements(user_id, features), goal_id)
+    return goal
+
+
+def _create_goal_v2(user_id: str, goal: SavingsGoal, payload: dict) -> dict:
+    """POST /savings/goal/ for goals_v2: the date default and checks of section 1, the
+    stored minimum, and the "Amount saved up" deposit. Every check runs before
+    anything is written, so a refused create leaves nothing behind."""
+    today = _df_today(goal.today)
+    if not payload.get("target_month") or payload.get("target_year") is None:
+        payload["target_month"], payload["target_year"] = gv.default_target(today)
+    if payload.get("target_month") not in MONTHS:
+        raise HTTPException(status_code=400, detail=TARGET_IN_PAST_DETAIL)
+    if gv.target_before_this_month(payload["target_month"], payload["target_year"], today):
+        raise HTTPException(status_code=400, detail=TARGET_IN_PAST_DETAIL)
+    target = df._num(payload.get("target_amount"))
+    if target <= 0:
+        raise HTTPException(status_code=400, detail="Target amount must be greater than zero.")
+    saved = df.money(goal.saved_amount or 0)
+    if saved < 0:
+        raise HTTPException(status_code=400, detail=SAVED_NEGATIVE_DETAIL)
+    if saved >= target - 0.005:
+        raise HTTPException(status_code=400, detail=SAVED_REACHES_TARGET_DETAIL)
+    month = _month_name(today)
+    if saved > 0:
+        if goal.saved_source not in MONEY_SOURCES:
+            raise HTTPException(status_code=400, detail=SAVED_SOURCE_DETAIL)
+        _assert_month_open(user_id, month)
+
+    payload["monthly_minimum"] = (gv.monthly_minimum(target, saved, today, gv.target_index(payload))
+                                  if payload.get("goal_type", "saving") != "debt" else None)
+    payload["auto_minimum"] = bool(goal.auto_minimum)
+    created = supabase.table("savings_goals").insert(payload).execute().data
+    if saved > 0 and created:
+        supabase.table("savings_transactions").insert({
+            "user_id": user_id, "title": created[0]["title"], "amount": saved, "type": "deposit",
+            "goal_id": created[0]["id"], "source": goal.saved_source,
+            "day": today.day, "month": month,
+        }).execute()
+    return {"message": "Goal created.", "data": created}
+
+
+def _delete_goal_v2(user_id: str, goal_id: int, today: datetime.date) -> dict:
+    """DELETE /savings/goal/{id} for goals_v2 (section 5d). This month's budget money
+    is dropped, refunding the month, as before. Everything else the goal holds goes to
+    Ready to Replant — the net amount, never more than it held. Money that came FROM
+    Ready to Replant goes back by deleting those transfer pairs, so no "planted" entry
+    is left behind able to return it a second time."""
+    goal = supabase.table("savings_goals").select("*").eq("id", goal_id).eq("user_id", user_id).execute().data[0]
+    if goal.get("is_replant"):
+        raise HTTPException(status_code=400, detail=REPLANT_MANAGED_DETAIL)
+    grows = _goal_rows(user_id, goal_id)
+    split = gv.delete_split(grows, today)
+    if split["refunded"] > 0:
+        # Dropping budget money changes this month's Goals split.
+        _assert_month_open(user_id, _month_name(today))
+
+    replanted = 0.0
+    if split["to_replant"] > 0.005:
+        replant = _ensure_replant(user_id, today)
+        legs, unwound = gv.replant_unwinds(grows, _goal_rows(user_id, replant["id"]), split["to_replant"])
+        for leg in legs:
+            supabase.table("savings_transactions").delete().eq("id", leg["id"]).eq("user_id", user_id).execute()
+        rest = df.money(split["to_replant"] - unwound)
+        if rest > 0.005:
+            supabase.table("savings_transactions").insert({
+                "user_id": user_id, "title": REPLANT_RETURN_TITLE, "amount": rest, "type": "deposit",
+                "goal_id": replant["id"], "source": "transfer", "kind": gv.KIND_REPLANT_RETURN,
+                "day": today.day, "month": _month_name(today),
+            }).execute()
+        replanted = split["to_replant"]
+
+    supabase.table("savings_transactions").delete().eq("goal_id", goal_id).eq("user_id", user_id).execute()
+    supabase.table("savings_goals").delete().eq("id", goal_id).eq("user_id", user_id).execute()
+    return {"message": "Goal deleted.", "replanted": df.money(replanted), "refunded": split["refunded"]}
+
+
+# ── History ──────────────────────────────────────────────────────────────────
+
+def _general_ids(user_id: str) -> set:
+    rows = supabase.table("savings_goals").select("*").eq("user_id", user_id).eq("is_general", True).execute().data or []
+    return {g["id"] for g in rows}
+
+
+def _entry_deletable_v2(legs: list, general: set) -> bool:
+    """Not if it would put money back into General Savings (which a goals_v2 build
+    never shows), and not the one-time move or a deleted goal's returned money."""
+    for leg in legs:
+        if leg.get("goal_id") in general:
+            return False
+        if leg.get("kind") in (gv.KIND_REPLANT_SEED, gv.KIND_REPLANT_RETURN):
+            return False
+    return True
+
+
+def _history_v2(user_id: str, rows: list) -> list:
+    """Recent Activity for goals_v2: General Savings' own rows (rollover, starting
+    balance, money returned to it) are left out, every entry says whether it can be
+    deleted, and transfers collapse to one entry as before."""
+    general = _general_ids(user_id)
+    by_group: dict = {}
+    for r in rows:
+        if r.get("transfer_group"):
+            by_group.setdefault(r["transfer_group"], []).append(r)
+    out = []
+    for entry in _collapse_transfers(rows):
+        group = entry.get("transfer_group")
+        if not group and entry.get("goal_id") in general:
+            continue
+        legs = by_group.get(group, [entry]) if group else [entry]
+        out.append({**entry, "deletable": _entry_deletable_v2(legs, general)})
+    return out
+
+
+def _history_row_deletable_v2(user_id: str, txn_id: int) -> bool:
+    row = (supabase.table("savings_transactions").select("*").eq("id", txn_id)
+           .eq("user_id", user_id).execute().data)
+    if not row:
+        return True
+    legs = row
+    if row[0].get("transfer_group"):
+        legs = (supabase.table("savings_transactions").select("*")
+                .eq("transfer_group", row[0]["transfer_group"]).eq("user_id", user_id).execute().data) or row
+    return _entry_deletable_v2(legs, _general_ids(user_id))
+
+
+# ── Routes (goals_v2 builds only) ────────────────────────────────────────────
+
+@app.get("/savings/goal/budget-context/")
+def get_goal_budget_context(today: Optional[datetime.date] = None,
+                            exclude_goal_id: Optional[int] = None,
+                            features: set = Depends(_client_features),
+                            user_id: str = Depends(get_current_user_id)):
+    """What the goal form needs to put a new minimum in context: this month's Goals
+    budget, and the monthly amounts already committed to goals and debts. Read-only.
+    The form shows the share and the gentle warning; it never blocks saving."""
+    local_today = _df_today(today)
+    nums = _month_budget_numbers(user_id, _month_name(local_today), features, today)
+    goals = supabase.table("savings_goals").select("*").eq("user_id", user_id).execute().data or []
+    goal_minimums = sum(df._num(g.get("monthly_minimum")) for g in goals
+                        if gv.takes_minimum(g) and g.get("id") != exclude_goal_id)
+    debts = supabase.table("debts").select("min_payment, status").eq("user_id", user_id).execute().data or []
+    debt_minimums = sum(df._num(d.get("min_payment")) for d in debts if d.get("status") != "paid_off")
+    return {
+        "has_income": df._num(nums["total_income"]) > 0,
+        "goals_budget": df.money(nums["budgets"]["goals"]),
+        "goal_minimums": df.money(goal_minimums),
+        "debt_minimums": df.money(debt_minimums),
+    }
+
+
+@app.post("/savings/goal/{id}/minimum")
+def log_goal_minimum(id: int, body: Optional[GoalToday] = None,
+                     features: set = Depends(_client_features),
+                     user_id: str = Depends(get_current_user_id)):
+    """The minimum toggle, off → on: one source='income' deposit of the stored minimum
+    for THIS month (capped at what is left to save), so it counts against this month's
+    Goals split and shows in the history."""
+    today = _df_today(body.today if body else None)
+    goal = _goal_for_money(user_id, id, features, allow_recon=False)
+    if not gv.takes_minimum(goal):
+        raise HTTPException(status_code=409, detail=NO_MINIMUM_DETAIL)
+    _assert_month_open(user_id, _month_name(today))
+    grows = _goal_rows(user_id, id)
+    if gv.minimum_row_this_month(grows, today) is not None:
+        raise HTTPException(status_code=409, detail=MINIMUM_ALREADY_DETAIL)
+    if goal.get("monthly_minimum") is None:
+        goal["monthly_minimum"] = _goal_minimum_now(user_id, goal, today)
+        if goal["monthly_minimum"] is None:
+            raise HTTPException(status_code=409, detail=NO_MINIMUM_DETAIL)
+        supabase.table("savings_goals").update({"monthly_minimum": goal["monthly_minimum"]}) \
+            .eq("id", id).eq("user_id", user_id).is_("monthly_minimum", None).execute()
+    amount = _minimum_amount(goal, grows)
+    if amount <= 0:
+        raise HTTPException(status_code=409, detail=GOAL_FULL_DETAIL)
+    grows.append(_insert_minimum(user_id, goal, amount, today))
+    if goal.get("auto_minimum"):
+        _mark_auto_handled(user_id, id, today)
+    return {"message": "Monthly amount added.", "goal": _decorate_goal_v2(goal, grows, today)}
+
+
+@app.post("/savings/goal/{id}/minimum/undo")
+def undo_goal_minimum(id: int, body: Optional[GoalToday] = None,
+                      features: set = Depends(_client_features),
+                      user_id: str = Depends(get_current_user_id)):
+    """The toggle, on → off: DELETES this month's minimum row (never a reversal row).
+    With the automatic minimum on, the month is marked handled so the next read does
+    not add it back."""
+    today = _df_today(body.today if body else None)
+    goal = _goal_for_money(user_id, id, features, allow_recon=False)
+    _assert_month_open(user_id, _month_name(today))
+    grows = _goal_rows(user_id, id)
+    row = gv.minimum_row_this_month(grows, today)
+    if row is None:
+        raise HTTPException(status_code=409, detail=NO_MINIMUM_TO_UNDO_DETAIL)
+    removed = (supabase.table("savings_transactions").delete()
+               .eq("id", row["id"]).eq("user_id", user_id).execute().data)
+    if not removed:
+        raise HTTPException(status_code=409, detail=NO_MINIMUM_TO_UNDO_DETAIL)
+    if goal.get("auto_minimum"):
+        _mark_auto_handled(user_id, id, today)
+    grows = [r for r in grows if r.get("id") != row["id"]]
+    return {"message": "Monthly amount taken back.", "goal": _decorate_goal_v2(goal, grows, today)}
+
+
+@app.post("/savings/goal/{id}/extra")
+def add_goal_extra_payment(id: int, body: GoalExtraPayment,
+                           features: set = Depends(_client_features),
+                           user_id: str = Depends(get_current_user_id)):
+    """An extra payment (it replaces "Add money" for goals_v2). Never changes the
+    stored minimum; it only moves "on pace for" earlier. `source` is the money-source
+    answer: 'income' counts against this month's Goals split, 'opening' does not."""
+    amount = df.money(body.amount)
+    if not amount > 0:
+        raise HTTPException(status_code=400, detail=AMOUNT_POSITIVE_DETAIL)
+    if body.source not in MONEY_SOURCES:
+        raise HTTPException(status_code=400, detail=MONEY_SOURCE_DETAIL)
+    today = _df_today(body.today)
+    goal = _goal_for_money(user_id, id, features, allow_recon=True)
+    _assert_month_open(user_id, _month_name(today))
+    inserted = supabase.table("savings_transactions").insert({
+        "user_id": user_id, "title": goal["title"], "amount": amount, "type": "deposit",
+        "goal_id": id, "source": body.source, "day": today.day, "month": _month_name(today),
+    }).execute().data
+    return {"message": "Extra payment added.", "data": inserted}
+
+
+@app.post("/savings/replant/")
+def plant_from_replant(body: ReplantPlant,
+                       features: set = Depends(_client_features),
+                       user_id: str = Depends(get_current_user_id)):
+    """Move money from Ready to Replant into an active, unlocked goal. A transfer: two
+    source='transfer' legs sharing a transfer_group, so it counts against no month's
+    budget and the history collapses it to one entry."""
+    amount = df.money(body.amount)
+    if not amount > 0:
+        raise HTTPException(status_code=400, detail=AMOUNT_POSITIVE_DETAIL)
+    today = _df_today(body.today)
+    # Ensured, not just read: the one-time move must have landed before its money can
+    # be planted (the Goals tab normally loads first, which does the same).
+    replant = _ensure_replant(user_id, today)
+    if replant is None:
+        raise HTTPException(status_code=409, detail=REPLANT_TOO_MUCH_DETAIL)
+    dest = _goal_for_money(user_id, body.to_goal_id, features, allow_recon=False)
+    _assert_month_open(user_id, _month_name(today))
+    if amount > _goal_balance(user_id, replant["id"]) + 0.005:
+        raise HTTPException(status_code=409, detail=REPLANT_TOO_MUCH_DETAIL)
+    group = str(uuid.uuid4())
+    base = {"user_id": user_id, "amount": amount, "source": "transfer", "transfer_group": group,
+            "day": today.day, "month": _month_name(today)}
+    # One insert, both legs: they land together or not at all.
+    supabase.table("savings_transactions").insert([
+        {**base, "title": f"{REPLANT_PLANT_PREFIX}{dest['title']}", "type": "withdrawal", "goal_id": replant["id"]},
+        {**base, "title": dest["title"], "type": "deposit", "goal_id": dest["id"]},
+    ]).execute()
+    return {"message": "Planted."}
 
 
 # ─── End-of-month rollover ────────────────────────────────────────────────────
@@ -2447,13 +3060,18 @@ class _Entitlements:
             # eligible either: they take no new money, so they can neither use up the
             # free goal nor be the active one, nor be locked. Only `limits` callers
             # ever reach this query.
-            rows = supabase.table("savings_goals") \
-                .select("id, created_at, is_general, is_reconciliation, completed, goal_type") \
+            #
+            # Ready to Replant (goals_v2) is a container, excluded like General
+            # Savings. select('*') rather than adding `is_replant` to a column list: a
+            # named column that the database does not have yet (backend deployed before
+            # migration 0013) would 400 this query for every `limits` build.
+            rows = supabase.table("savings_goals").select("*") \
                 .eq("user_id", self.user_id).execute().data
             self._eligible = sorted(
                 (r for r in rows
                  if not r.get("is_general")
                  and not r.get("is_reconciliation")
+                 and not r.get("is_replant")
                  and not r.get("completed")
                  and not _is_user_debt_goal(r)),
                 key=_goal_age_key,
@@ -3882,8 +4500,14 @@ def get_home_progress(today: Optional[datetime.date] = None,
     # uses, so "{goal} is {pct}% there" matches the tab.
     active = _with_allocated([g for g in goals if not g.get("completed")], user_id)
     goals = active + [g for g in goals if g.get("completed")]
+    goals_v2 = GOALS_V2_FEATURE in features
+    # `source` and `month` are needed only for the goals_v2 "kept under budget" stat,
+    # so only that build's query names them.
+    columns = "id, goal_id, amount, type, created_at"
+    if goals_v2:
+        columns += ", source, month"
     savings_txns = (supabase.table("savings_transactions")
-                    .select("id, goal_id, amount, type, created_at")
+                    .select(columns)
                     .eq("user_id", user_id).execute().data or [])
     if LIMITS_FEATURE in features:
         # Retired user debt goals are not goals to this build, whether or not they
@@ -3898,5 +4522,5 @@ def get_home_progress(today: Optional[datetime.date] = None,
 
     return {
         "debts": df.home_progress_debts(garden, debt_txns, local_today),
-        "goals": hp.home_progress_goals(goals, savings_txns, local_today),
+        "goals": hp.home_progress_goals(goals, savings_txns, local_today, goals_v2=goals_v2),
     }

@@ -8,7 +8,9 @@
  * ✅ Back chevron returns to previous screen
  *
  * Optional props (all backward compatible — omitted, behaviour is unchanged):
- *   initialCategory  'needs' | 'wants' — preselects the category (the home's +)
+ *   initialCategory  'needs' | 'wants' — fixes the category (the home's + buttons):
+ *                    the Needs/Wants picker is hidden and the title reads "Log Need" /
+ *                    "Log Want". Omitted (tracking nudge, news links), the picker shows.
  *   onSaved          called after a successful save (app/logExpense.tsx returns home)
  */
 import React, { useState, useRef, useEffect } from 'react';
@@ -139,8 +141,11 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
 
     // Form state
     const [amount, setAmount]     = useState('');
-    const startCategory = initialCategory === 'wants' ? 'wants' : 'needs';
-    const [category, setCategory] = useState(startCategory);
+    const lockedCategory = initialCategory === 'needs' || initialCategory === 'wants' ? initialCategory : null;
+    const [category, setCategory] = useState(lockedCategory ?? 'needs');
+    const screenTitle = lockedCategory === 'needs' ? t('expense.screenTitleNeed')
+        : lockedCategory === 'wants' ? t('expense.screenTitleWant')
+        : t('expense.screenTitle');
     // Every category starts on 'Other' — present in both SUBCATS lists.
     const [subcat, setSubcat]     = useState('Other');
     const [title, setTitle]       = useState('');
@@ -218,7 +223,7 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                         <IconChevronLeft size={18} color={theme.ink} />
                     </Pressable>
                     <View style={{ flex: 1 }}>
-                        <Text style={[styles.screenTitle, { color: theme.ink }]}>{t('expense.screenTitle')}</Text>
+                        <Text style={[styles.screenTitle, { color: theme.ink }]}>{screenTitle}</Text>
                         <Text style={[styles.screenSubtitle, { color: theme.ink3 }]}>{t('expense.screenSubtitle')}</Text>
                     </View>
                 </View>
@@ -245,7 +250,7 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                 />
 
                 {/* ── Amount card ─────────────────────────────────────── */}
-                <View style={{ borderRadius: 18, borderWidth: 1.5, borderColor: theme.ink, backgroundColor: theme.brand, marginBottom: 12, ...stickerShadow('#0F3D2E') }}>
+                <View style={{ borderRadius: 18, borderWidth: 1.5, borderColor: theme.ink, backgroundColor: theme.brand, marginBottom: lockedCategory ? 22 : 12, ...stickerShadow('#0F3D2E') }}>
                 <LinearGradient
                     colors={[theme.brand, theme.brand2]}
                     start={{ x: 0.1, y: 0 }}
@@ -283,7 +288,8 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                 </LinearGradient>
                 </View>
 
-                {/* ── Category ────────────────────────────────────────── */}
+                {/* ── Category — only when the + button didn't fix it ─── */}
+                {!lockedCategory && (
                 <View style={styles.catGrid}>
                     {cats.map(c => {
                         const active = category === c.key;
@@ -326,6 +332,7 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                         );
                     })}
                 </View>
+                )}
 
                 {/* ── Sub-category chips ───────────────────────────────── */}
                 <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('expense.subcategoryLabel')}</Text>
@@ -397,7 +404,8 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                     ]}
                 >
                     <Text style={styles.submitText}>
-                        {submitted ? t('expense.submitted') : t('expense.submit')}
+                        {submitted ? t('expense.submitted')
+                            : category === 'wants' ? t('expense.submitWant') : t('expense.submitNeed')}
                     </Text>
                     <IconCheck size={16} color="#fff" />
                 </Pressable>

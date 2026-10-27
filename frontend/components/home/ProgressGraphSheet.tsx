@@ -34,7 +34,9 @@ import Sheet from '../ui/Sheet';
 import type { HomeProgress, Milestone, SeriesPoint } from '../../lib/homeProgress';
 import { homeType } from './homeType';
 
-export type GraphKind = 'debts' | 'goals';
+/** 'kept' — the goals_v2 "kept under budget" graph: each month's own leftover, not a
+ *  running total, plotted on the same axes with no milestones. */
+export type GraphKind = 'debts' | 'goals' | 'kept';
 
 const SHEET_HEIGHT = 0.8;
 const MONTH_W = 56;
@@ -59,8 +61,14 @@ export default function ProgressGraphSheet({ kind, progress, onClose }: Props) {
     const { t } = useTranslation('dashboard');
     const { formatMoney, currency } = useLocale();
     const { theme } = useTheme();
-    const block = kind === 'debts' ? progress.debts : kind === 'goals' ? progress.goals : null;
-    const series = useMemo(() => block?.series ?? [], [block]);
+    const block = kind === 'debts' ? progress.debts : kind === 'goals' || kind === 'kept' ? progress.goals : null;
+    const series = useMemo<SeriesPoint[]>(() => {
+        if (kind === 'kept') {
+            // The graph plots `cumulative`; for this one it is the month's own amount.
+            return (progress.goals?.kept_under_budget_series ?? []).map(p => ({ month: p.month, cumulative: p.amount }));
+        }
+        return (block as { series?: SeriesPoint[] } | null)?.series ?? [];
+    }, [block, kind, progress.goals]);
     const lastYear = series.length ? series[series.length - 1].month.slice(0, 4) : '';
     const [year, setYear] = useState(lastYear);
 
@@ -72,9 +80,18 @@ export default function ProgressGraphSheet({ kind, progress, onClose }: Props) {
     const symbol = CURRENCIES[currency].symbol;
     const title = kind === 'goals'
         ? t('graph.goalsTitle', { symbol, year })
-        : t('graph.debtsTitle', { symbol, year });
+        : kind === 'kept'
+            ? t('graph.keptTitle', { symbol, year })
+            : t('graph.debtsTitle', { symbol, year });
+    const thisYear = String(new Date().getFullYear());
 
-    const stats = !block ? [] : kind === 'debts' && progress.debts ? [
+    const stats = !block ? [] : kind === 'kept' && progress.goals ? [
+        { label: t('graph.total'), value: formatMoney(progress.goals.kept_under_budget) },
+        {
+            label: t('graph.thisYear'),
+            value: formatMoney(series.filter(p => p.month.startsWith(thisYear)).reduce((sum, p) => sum + p.cumulative, 0)),
+        },
+    ] : kind === 'debts' && progress.debts ? [
         { label: t('graph.total'), value: formatMoney(progress.debts.total_paid) },
         { label: t('graph.thisYear'), value: formatMoney(progress.debts.paid_this_year) },
         { label: t('graph.debtsPaidOff'), value: String(progress.debts.paid_count) },
@@ -106,8 +123,8 @@ export default function ProgressGraphSheet({ kind, progress, onClose }: Props) {
                 <Graph
                     key={kind}
                     series={series}
-                    milestones={block.milestones}
-                    color={kind === 'goals' ? theme.goals : theme.brand}
+                    milestones={kind === 'kept' ? [] : block.milestones}
+                    color={kind === 'goals' ? theme.goals : kind === 'kept' ? theme.success : theme.brand}
                     merged={(count: number) => kind === 'goals'
                         ? t('graph.mergedGoals', { count })
                         : t('graph.mergedDebts', { count })}

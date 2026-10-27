@@ -62,7 +62,10 @@
     "rollover": "Rollover — {{month}}",
     "rolloverRecovery": "Rollover recovery — {{month}}",
     "spentAfterClose": "Spent after close — {{month}}",
-    "transferToGoal": "Transfer from General Savings to {{goal}}"
+    "transferToGoal": "Transfer from General Savings to {{goal}}",
+    "Ready to Replant": "Ready to Replant",
+    "Moved to Ready to Replant": "Moved to Ready to Replant",
+    "plantedInto": "Planted from Ready to Replant into {{goal}}"
   },
   "serverError": {
     "monthClosed": "{{month}} is closed. Reopen it before making changes.",
@@ -75,7 +78,21 @@
     "alreadyCompleted": "Goal is already completed.",
     "debtGoalRetired": "Debt goals no longer take new money. Remove this goal to move what it holds to General Savings.",
     "debtHasClosedMonthPayments": "This debt has payments in a closed month, so deleting it would change that month. You can mark it paid off instead.",
-    "extraNotThisCycle": "Only an extra payment from the current billing cycle can be deleted."
+    "extraNotThisCycle": "Only an extra payment from the current billing cycle can be deleted.",
+    "replantManaged": "Ready to Replant is managed automatically.",
+    "targetInPast": "Pick a target month from this month onward.",
+    "savedReachesTarget": "You've already saved your whole target, so this goal is already done.",
+    "savedNegative": "The amount saved up can't be below zero.",
+    "savedSource": "Tell us where the money you've saved up comes from.",
+    "goalNoMoney": "This goal can't take new money.",
+    "noMinimum": "This goal doesn't have a monthly amount.",
+    "minimumAlready": "This month's amount is already in.",
+    "noMinimumToUndo": "There's no monthly amount to take back this month.",
+    "goalFull": "This goal already holds its whole target.",
+    "amountPositive": "Enter an amount greater than zero.",
+    "moneySource": "Choose where the money comes from.",
+    "replantTooMuch": "That's more than Ready to Replant is holding.",
+    "historyUndeletable": "This entry can't be removed."
   },
   "source": {
     "Paycheck": "Paycheck",

@@ -42,6 +42,7 @@ npm run verify-goal-rate  # unit tests for the goal card's $/week pace (lib/goal
 npm run verify-review-prompt  # unit tests for the rating-prompt throttle (lib/reviewPrompt.ts)
 npm run verify-announcements  # unit tests for the news modal's language pick + link guard
 npm run verify-plan-pricing   # unit tests for the paywall's derived prices + discount (lib/planPricing.ts)
+npm run verify-goal-plan      # unit tests for the goal form's default date + monthly minimum (lib/goalPlan.ts)
 ```
 
 #### Dev build on a physical iPhone

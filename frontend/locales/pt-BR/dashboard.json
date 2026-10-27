@@ -99,7 +99,9 @@
     "paidTowardDebt": "pago em dívidas",
     "savedTowardGoals": "guardado em metas",
     "firstPayment": "Seu primeiro pagamento começa esta linha",
-    "firstDeposit": "Seu primeiro depósito começa esta linha"
+    "firstDeposit": "Seu primeiro depósito começa esta linha",
+    "keptSinceJoined": "{{amount}} poupados dentro do orçamento desde que você chegou",
+    "keptUnderBudget": "Poupado no orçamento"
   },
   "graph": {
     "debtsTitle": "{{symbol}} pagos em dívidas - {{year}}",
@@ -112,7 +114,8 @@
     "mergedDebts": "{{count}} dívida quitada",
     "mergedDebts_plural": "{{count}} dívidas quitadas",
     "mergedGoals": "{{count}} meta concluída",
-    "mergedGoals_plural": "{{count}} metas concluídas"
+    "mergedGoals_plural": "{{count}} metas concluídas",
+    "keptTitle": "{{symbol}} poupados no orçamento - {{year}}"
   },
   "verse": {
     "proverbs-21-20": {

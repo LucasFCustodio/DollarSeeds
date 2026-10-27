@@ -1,11 +1,14 @@
 {
   "expense": {
     "screenTitle": "Novo gasto",
+    "screenTitleNeed": "Registrar necessidade",
+    "screenTitleWant": "Registrar desejo",
     "screenSubtitle": "Plante onde faz diferença",
     "subcategoryLabel": "SUBCATEGORIA",
     "titleLabel": "TÍTULO",
     "titlePlaceholder": "Compras do mercado",
-    "submit": "Plantar gasto",
+    "submitNeed": "Plantar necessidade",
+    "submitWant": "Plantar desejo",
     "submitted": "Plantado!"
   },
   "income": {
