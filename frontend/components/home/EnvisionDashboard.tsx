@@ -47,6 +47,10 @@ const ART = require('../../assets/images/home/envision-dashboard-bg.png');
 const ROW_PAD_X = 16;
 const ROW_PAD_Y = 10;
 const GOAL_ROW_H = 90;
+/** The "kept under budget" line (count view) and its small graph (amount view) share
+ *  one fixed height, so the card still never jumps when it flips. */
+const KEPT_H = 40;
+const KEPT_SPARK_H = 20;
 
 /** Pot rim width: 36 pt for up to 6 debts, shrinking evenly to 26 pt at 8. More
  *  than 8 switch to segments. */
@@ -123,6 +127,9 @@ export default function EnvisionDashboard({
                 </>
             ) : null}
             <GoalsRow view={view} goals={goals} onOpenCompleted={onOpenCompletedGoals} onAddGoal={onAddGoal} onOpenGraph={() => setGraph('goals')} />
+            {goals && goals.kept_under_budget > 0.005 ? (
+                <KeptRow view={view} goals={goals} onOpenGraph={() => setGraph('kept')} />
+            ) : null}
         </View>
     );
 
@@ -361,6 +368,38 @@ function AmountRow({ height, total, caption, series, color, firstLine, onPress }
     );
 }
 
+/** goals_v2 "kept under budget": the month-end leftovers since the user joined. Count
+ *  view — one small line under the ring. Amount view — its own small graph of each
+ *  month's amount, opening the full one. Hidden by the caller when the total is 0. */
+function KeptRow({ view, goals, onOpenGraph }: { view: View2; goals: GoalProgress; onOpenGraph: () => void }) {
+    const { theme } = useTheme();
+    const { t } = useTranslation('dashboard');
+    const { formatMoney } = useLocale();
+    const [sparkW, setSparkW] = useState(0);
+    const line = t('progress.keptSinceJoined', { amount: formatMoney(goals.kept_under_budget) });
+    if (view === 'count') {
+        return (
+            <Row height={KEPT_H} onPress={onOpenGraph}>
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
+                    style={[homeType.verySmall, { color: theme.ink2 }]}>{line}</Text>
+            </Row>
+        );
+    }
+    const values = goals.kept_under_budget_series.map(p => p.amount).slice(-12);
+    return (
+        <Row height={KEPT_H} onPress={onOpenGraph}>
+            <View style={styles.amountLine}>
+                <Text numberOfLines={1} style={[homeType.verySmall, styles.keptCaption, { color: theme.ink2 }]}>
+                    {t('progress.keptUnderBudget')}
+                </Text>
+                <View style={styles.flex} onLayout={e => setSparkW(Math.floor(e.nativeEvent.layout.width))}>
+                    <Sparkline values={values} color={theme.success} width={sparkW} height={KEPT_SPARK_H} />
+                </View>
+            </View>
+        </Row>
+    );
+}
+
 /** 56 pt ring: borderStrong track, goals progress with a round cap, "{done}/{total}". */
 function Ring({ completed, total }: { completed: number; total: number }) {
     const { theme } = useTheme();
@@ -406,6 +445,7 @@ const styles = StyleSheet.create({
     amountLine: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     amountText: { flexShrink: 0, maxWidth: '45%' },
     firstLine: { marginBottom: 6 },
+    keptCaption: { flexShrink: 0, maxWidth: '45%' },
     emptyLine: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     plus: { width: PLUS, height: PLUS, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
 });

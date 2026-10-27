@@ -354,3 +354,71 @@ def test_route_paid_toward_debt_after_the_toggles_delete_based_undo(client, supa
     assert debts["total_paid"] == 25.0
     assert debts["series"] == [{"month": "2026-09", "cumulative": 25.0}]
     assert [t["kind"] for t in supabase_db.rows("debt_transactions")] == ["payment_extra"]
+
+
+# ── kept under budget (goals_v2) ─────────────────────────────────────────────
+
+KEPT_TODAY = datetime.date(2026, 10, 27)
+KEPT_GOALS = [{"id": 1, "is_general": True}, {"id": 2, "is_reconciliation": True},
+              {"id": 3, "title": "Trip"}, {"id": 4, "is_replant": True}]
+
+
+def roll(amount, month, created, goal_id=1, source="rollover", type="deposit", id=1):
+    return {"id": id, "goal_id": goal_id, "amount": amount, "type": type, "source": source,
+            "month": month, "created_at": created}
+
+
+def test_kept_under_budget_counts_month_end_leftovers_only():
+    txns = [
+        roll(120.0, "July", "2026-08-01T09:00:00+00:00"),
+        roll(80.0, "September", "2026-10-02T09:00:00+00:00"),
+        # Everything else that ever went into General Savings: not kept under budget.
+        roll(500.0, "May", "2026-05-01T09:00:00+00:00", source="opening"),
+        roll(40.0, "June", "2026-06-01T09:00:00+00:00", source="transfer"),
+        roll(25.0, "June", "2026-06-02T09:00:00+00:00", source="transfer"),   # "Returned from deleted goal"
+        # Rollover rows that are not General Savings deposits.
+        roll(30.0, "August", "2026-09-01T09:00:00+00:00", goal_id=2),           # Reconciliation recovery
+        roll(15.0, "August", "2026-09-01T09:00:00+00:00", type="withdrawal"),
+        roll(60.0, "August", "2026-09-01T09:00:00+00:00", goal_id=4),
+    ]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, KEPT_TODAY)
+    assert kept["total"] == 200.0
+    # Monthly, not cumulative: each month its own amount, 0 where there was none,
+    # through today's month.
+    assert kept["series"] == [
+        {"month": "2026-07", "amount": 120.0},
+        {"month": "2026-08", "amount": 0.0},
+        {"month": "2026-09", "amount": 80.0},
+        {"month": "2026-10", "amount": 0.0},
+    ]
+
+
+def test_kept_under_budget_dates_a_rollover_by_the_month_it_is_for():
+    # December closed out on January 3rd is LAST December.
+    txns = [roll(90.0, "December", "2027-01-03T09:00:00+00:00")]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2027, 2, 10))
+    assert kept["series"] == [{"month": "2026-12", "amount": 90.0},
+                              {"month": "2027-01", "amount": 0.0},
+                              {"month": "2027-02", "amount": 0.0}]
+
+
+def test_kept_under_budget_is_zero_with_no_rollover():
+    assert hp.kept_under_budget(KEPT_GOALS, [roll(500.0, "May", "2026-05-01T09:00:00+00:00", source="opening")],
+                                KEPT_TODAY) == {"total": 0.0, "series": []}
+
+
+def test_goals_v2_saved_toward_goals_leaves_out_general_savings_and_replant():
+    txns = [
+        {"id": 1, "goal_id": 1, "amount": 500.0, "type": "deposit", "created_at": "2026-05-01T09:00:00+00:00"},
+        {"id": 2, "goal_id": 4, "amount": 300.0, "type": "deposit", "created_at": "2026-06-01T09:00:00+00:00"},
+        {"id": 3, "goal_id": 3, "amount": 200.0, "type": "deposit", "created_at": "2026-07-01T09:00:00+00:00"},
+        {"id": 4, "goal_id": None, "amount": 30.0, "type": "deposit", "created_at": "2026-04-01T09:00:00+00:00"},
+    ]
+    goals = [{**g, "allocated_amount": 0.0} for g in KEPT_GOALS]
+    old = hp.home_progress_goals(goals, txns, KEPT_TODAY)
+    new = hp.home_progress_goals(goals, txns, KEPT_TODAY, goals_v2=True)
+    assert old["total_saved"] == 1030.0 and "kept_under_budget" not in old
+    assert new["total_saved"] == 200.0
+    assert new["series"][0] == {"month": "2026-07", "cumulative": 200.0}
+    # Ready to Replant is never a goal, for any client.
+    assert old["total_count"] == new["total_count"] == 1

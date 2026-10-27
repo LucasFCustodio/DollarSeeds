@@ -36,7 +36,8 @@
 | `day` | integer | |
 | `month` | text | Month name |
 | `created_at` | timestamptz | Default NOW() |
-| `source` | text | CHECK-constrained to `"income"` \| `"transfer"` \| `"rollover"` \| `"opening"`. **Only `income` counts toward the Goals budget** — every budget path allowlists it. `transfer` = moved between goals, `rollover` = month-end leftover, `opening` = savings the user had before joining (one row max per user, written by `POST /savings/starting-balance/`). Migration for `opening`: [backend/migrations/0003_opening_source.sql](../../backend/migrations/0003_opening_source.sql). |
+| `source` | text | CHECK-constrained to `"income"` \| `"transfer"` \| `"rollover"` \| `"opening"`. **Only `income` counts toward the Goals budget** — every budget path allowlists it. `transfer` = moved between goals, `rollover` = month-end leftover, `opening` = money the user already had. In General Savings that is the starting balance (one row max, written by `POST /savings/starting-balance/`, whose "already set" check is scoped to the General Savings goal); a `goals_v2` build also writes `opening` deposits into ordinary goals for "From money I'd already saved". Migration for `opening`: [backend/migrations/0003_opening_source.sql](../../backend/migrations/0003_opening_source.sql). |
+| `kind` | text | Nullable, migration [0013](../../backend/migrations/0013_goals_v2.sql). NULL = an ordinary row (every pre-0013 row and every row an old build writes). `minimum` = a goal's monthly minimum (source `income`; the toggle deletes it, never reverses it). `replant_seed` = the two legs of the one-time General Savings → Ready to Replant move. `replant_return` = what a deleted goal sent to Ready to Replant. CHECK added `NOT VALID`. |
 | `transfer_group` | uuid | Nullable. Set only by `POST /savings/transfer/`, which writes **two** legs (a General Savings withdrawal + a destination-goal deposit) that share one `transfer_group`. `GET /savings/history/` collapses the pair into a single "Transfer from General Savings to X" entry (the withdrawal leg, flagged `is_transfer`), and deleting that entry deletes **both** legs. NULL for all non-transfer rows. Migration: [backend/migrations/0002_transfer_group.sql](../../backend/migrations/0002_transfer_group.sql). |
 
 Balance = `SUM(amount WHERE type='deposit') - SUM(amount WHERE type='withdrawal')`, computed in `GET /savings/balance/`. Persists across months (not reset monthly).
@@ -57,6 +58,11 @@ A goal deposit is normally booked to the current `month`, but the Goals funding-
 | `completed_amount` | numeric | Nullable. What the goal held the moment it was completed — see below |
 | `completed_at` | timestamptz | Nullable. When it was completed |
 | `is_general` | bool | Default false; exactly one General Savings pool per user |
+| `monthly_minimum` | numeric | 0013. Whole-dollar monthly minimum (Goals v2 below). NULL = not computed yet; the first `goals_v2` read computes and stores it |
+| `auto_minimum` | bool | 0013. "Add my monthly amount automatically". NULL = off |
+| `auto_minimum_month` | date | 0013. First day of the last month whose automatic minimum was handled (added, or declined by toggling it off). NULL = never |
+| `is_replant` | bool | 0013. The user's one Ready to Replant container (partial unique index). NULL = an ordinary goal |
+| `replant_seed_amount` | numeric | 0013. On the Ready to Replant row only: the General Savings balance moved into it once. NULL elsewhere |
 | `goal_type` | text | `"saving"` (default) or `"debt"`. The Reconciliation goal is `"debt"`. User-created debt goals are **retired** for `limits` builds — see below. Old builds still create and fund them, unchanged. |
 | `created_at` | timestamp | |
 
@@ -110,6 +116,70 @@ No schema supports any of that: it is a query in `_Entitlements._eligible_goals`
 is why the rule needed no migration, no promotion logic and no backfill. `goal_type`,
 `is_general`, `is_reconciliation` and `completed` are the only columns it reads. See
 [SUBSCRIPTION_REWORK.md](../../SUBSCRIPTION_REWORK.md) §5.
+
+### Goals v2 — the `goals_v2` marker
+
+[GOALS_REWORK.md](../../GOALS_REWORK.md). Gated on `X-Client-Features: goals_v2`
+(`GOALS_V2_FEATURE` in `main.py`); the app sends it from `lib/axiosConfig.ts`. **A
+request without it gets today's code and today's bytes** — General Savings,
+`/savings/transfer/`, `/savings/starting-balance/`, delete-to-General-Savings and the
+old `/home/progress/` numbers. The 0013 columns are stripped from every row those
+builds receive (`_legacy_rows`), and Ready to Replant is left out of their goal list.
+`tests/test_backcompat_goals_v2.py` compares four generations (no header, `premium`,
+`premium, social`, store 1.1.0 `premium, social, limits`) byte-for-byte against goldens
+captured from `main`. Every rule is a pure function in
+[backend/goals_v2.py](../../backend/goals_v2.py), tested in `tests/test_goals_v2.py`.
+
+**Monthly minimum.** `ceil((target − saved) / months left)` in whole dollars, months
+left = this month → target month inclusive (from next month when this month's minimum
+is already logged), at least 1. Stored at creation and recomputed only by a PATCH of
+the target amount or date — never by a payment, a skipped month or "on pace for".
+Not for General Savings, Reconciliation, Ready to Replant, completed or debt goals.
+The form previews the same formula client-side (`lib/goalPlan.ts`, `verify-goal-plan`).
+
+**"This month's minimum"** is a `kind='minimum'` deposit whose `month` names the
+current month **and** whose `created_at` falls in it (±1 day for UTC) — `month` alone
+has no year. The toggle (`POST /savings/goal/{id}/minimum`, `…/minimum/undo`) writes
+one such `income` deposit, capped at what is left to save, and the undo deletes it.
+Both refuse a closed month and a locked goal.
+
+**On pace for** (computed, never stored) = start month + `ceil(remaining / minimum)` − 1,
+start = this month, or next month once it is logged. Served on each goal as
+`on_pace: {month, year, months_early}` with `minimum_logged`, `minimum_amount`,
+`ready_to_complete`, `auto_minimum`, `is_replant` — additive keys, `goals_v2` only.
+
+**Automatic minimum.** Added lazily by `GET /savings/goal/` once the month has any
+income (never on the 1st before the paycheck), claimed through a conditional update of
+`auto_minimum_month` so it lands once; an undo while auto is on marks the month handled,
+so it is not re-added.
+
+**Extra payment** (`POST /savings/goal/{id}/extra`, replaces "Add money"): an
+`income` or `opening` deposit; never changes the minimum.
+
+**Ready to Replant.** A `savings_goals` row with `is_replant`, not a renamed General
+Savings. Excluded from the free-tier cap, never listed, counted, completed or deleted as
+a goal. Filled two ways:
+
+- **Once per user**, the first time a `goals_v2` build loads the goals: the General
+  Savings balance moves in as a `replant_seed` transfer pair. The row is created with
+  the amount on it (one per user, unique index), then both legs go in one insert
+  (unique index on `kind='replant_seed'`), retried by later reads until it lands.
+  Rollover keeps writing to General Savings afterwards and never reaches Replant.
+- **Deleting a goal** (`goals_v2`): this month's `income` deposits are dropped (the
+  month is refunded, as before); everything else it holds, net of withdrawals, goes to
+  Replant. Money that came from Replant goes back by deleting those transfer pairs.
+
+`POST /savings/replant/` plants an amount into an active, unlocked goal as a transfer
+pair (no budget effect; one history entry).
+
+**History** for `goals_v2` leaves out General Savings' own rows and marks each entry
+`deletable`; an entry touching General Savings, or a `replant_seed` /
+`replant_return` row, is refused by `DELETE /savings/transaction/{id}` with 409.
+
+**Home.** `GET /home/progress/` for `goals_v2`: "saved toward goals" counts listed
+goals only (completed amounts + what in-progress goals hold), and the goals block adds
+`kept_under_budget` (Σ `rollover` deposits into General Savings) and
+`kept_under_budget_series` (`[{month, amount}]`, monthly, not cumulative).
 
 ### `subscriptions`
 

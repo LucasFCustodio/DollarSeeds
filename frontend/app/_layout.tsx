@@ -17,7 +17,6 @@ import { OnboardingProvider } from '../context/OnboardingContext';
 import { SubscriptionProvider } from '../context/SubscriptionContext';
 import { AnnouncementsProvider } from '../context/AnnouncementsContext';
 import OnboardingTour from '../components/onboarding/OnboardingTour';
-import StartingBalanceGate from '../components/onboarding/StartingBalanceGate';
 import PaywallSheet from '../components/premium/PaywallSheet';
 import UpdateGate from '../components/premium/UpdateGate';
 import NewsModal from '../components/news/NewsModal';
@@ -125,7 +124,9 @@ function RootLayoutNav() {
                 <Stack.Screen name="logIncome" options={{ headerShown: false }} />
             </Stack>
             <OnboardingTour />
-            <StartingBalanceGate />
+            {/* StartingBalanceGate is out of this build's flow (GOALS_REWORK.md §5a): it
+                booked into General Savings, which goals_v2 never shows. The onboarding
+                replaces it later; the component file stays until then. */}
             {/* One paywall instance for the whole app — it opens from both CTAs, a
                 locked series card, a locked lesson row, and a 403 from the player. */}
             <PaywallSheet />

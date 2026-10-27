@@ -37,16 +37,22 @@ axios.defaults.timeout = 15000;
  *             budget_type_locked. So the backend may enforce the free-tier limits on
  *             this build, sort GET /savings/goal/ oldest first with a `locked` flag,
  *             and add the allowance fields to GET /me/entitlements/.
+ *   goals_v2 — has the Goals rework (GOALS_REWORK.md): the monthly-minimum toggle,
+ *             "Add my extra payment", "on pace for", Ready to Replant, the "kept under
+ *             budget" stat, and no General Savings anywhere. So the backend may add
+ *             those keys, move General Savings into Ready to Replant once, send a
+ *             deleted goal's leftover money there instead, and leave General Savings'
+ *             own rows out of the history.
  *
- * Three tokens, not one, because three unpatchable generations are already in the
- * wild: the original App Store binary (no header at all), the premium build
- * (`premium` only) and the social build (`premium, social`). Each keeps getting exactly
- * the response it was written against — none of them has any lock UI, so none of them
- * is ever subject to the limits. ADD a token when a new capability lands; never
+ * Separate tokens, not one, because unpatchable generations are already in the wild:
+ * the original App Store binary (no header at all), the premium build (`premium`
+ * only), the social build (`premium, social`) and store build 1.1.0 (`premium, social,
+ * limits`). Each keeps getting exactly the response it was written against. ADD a
+ * token when a new capability lands; never
  * repurpose an existing one, and never remove one — the backend reads absence as "this
  * build cannot handle it".
  */
-const CLIENT_FEATURES = 'premium, social, limits';
+const CLIENT_FEATURES = 'premium, social, limits, goals_v2';
 
 /** The DollarSeeds API. Screens each declare their own `BASE` constant; this is the
  *  host they all point at. */

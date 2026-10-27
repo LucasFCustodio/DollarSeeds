@@ -58,6 +58,11 @@ export function serverTitle(title: string, t: T, monthLabel: (m: string) => stri
     if (transfer) {
         return t('serverTitle.transferToGoal', { goal: transfer[1], defaultValue: title });
     }
+    // goals_v2: Ready to Replant → goal (the goal name is user text, as above).
+    const planted = /^Planted from Ready to Replant into (.+)$/.exec(title);
+    if (planted) {
+        return t('serverTitle.plantedInto', { goal: planted[1], defaultValue: title });
+    }
 
     // Exact-match titles. Keyed by the English string itself, which is safe here
     // because these are fixed literals in main.py, not user input.
@@ -66,6 +71,8 @@ export function serverTitle(title: string, t: T, monthLabel: (m: string) => stri
         case 'Reconciliation':            return t('serverTitle.Reconciliation', { defaultValue: title });
         case 'Starting balance':          return t('serverTitle.Starting balance', { defaultValue: title });
         case 'Returned from deleted goal':return t('serverTitle.Returned from deleted goal', { defaultValue: title });
+        case 'Ready to Replant':          return t('serverTitle.Ready to Replant', { defaultValue: title });
+        case 'Moved to Ready to Replant': return t('serverTitle.Moved to Ready to Replant', { defaultValue: title });
         // Composed by the frontend (piggyBank funding) but stored the same way, so a
         // row written by an OLD binary still lands here.
         case 'Deposit':                   return t('serverTitle.Deposit', { defaultValue: title });
@@ -111,6 +118,35 @@ export function serverError(detail: string, t: T, monthLabel: (m: string) => str
             return t('serverError.debtHasClosedMonthPayments', { defaultValue: detail });
         case 'Only an extra payment from the current billing cycle can be deleted.':
             return t('serverError.extraNotThisCycle', { defaultValue: detail });
+        // goals_v2 (backend/main.py, the "Goals v2" block).
+        case "Ready to Replant is managed automatically.":
+            return t('serverError.replantManaged', { defaultValue: detail });
+        case "Pick a target month from this month onward.":
+            return t('serverError.targetInPast', { defaultValue: detail });
+        case "You've already saved your whole target, so this goal is already done.":
+            return t('serverError.savedReachesTarget', { defaultValue: detail });
+        case "The amount saved up can't be below zero.":
+            return t('serverError.savedNegative', { defaultValue: detail });
+        case "Tell us where the money you've saved up comes from.":
+            return t('serverError.savedSource', { defaultValue: detail });
+        case "This goal can't take new money.":
+            return t('serverError.goalNoMoney', { defaultValue: detail });
+        case "This goal doesn't have a monthly amount.":
+            return t('serverError.noMinimum', { defaultValue: detail });
+        case "This month's amount is already in.":
+            return t('serverError.minimumAlready', { defaultValue: detail });
+        case "There's no monthly amount to take back this month.":
+            return t('serverError.noMinimumToUndo', { defaultValue: detail });
+        case "This goal already holds its whole target.":
+            return t('serverError.goalFull', { defaultValue: detail });
+        case "Enter an amount greater than zero.":
+            return t('serverError.amountPositive', { defaultValue: detail });
+        case "Choose where the money comes from.":
+            return t('serverError.moneySource', { defaultValue: detail });
+        case "That's more than Ready to Replant is holding.":
+            return t('serverError.replantTooMuch', { defaultValue: detail });
+        case "This entry can't be removed.":
+            return t('serverError.historyUndeletable', { defaultValue: detail });
         default:
             return detail;
     }

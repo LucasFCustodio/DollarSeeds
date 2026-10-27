@@ -51,15 +51,28 @@ export interface DebtProgress {
     milestones: Milestone[];
 }
 
+/** One month's own amount (not cumulative). */
+export interface MonthlyPoint {
+    /** YYYY-MM */
+    month: string;
+    amount: number;
+}
+
 export interface GoalProgress {
     completed_count: number;
     total_count: number;
     /** The in-progress goal closest to its target; null when none is in progress. */
     nearest: { id: number; title: string; pct: number } | null;
+    /** goals_v2: completed goals' completed amounts + what in-progress goals hold.
+     *  General Savings and Ready to Replant are not in it. */
     total_saved: number;
     saved_this_year: number;
     series: SeriesPoint[];
     milestones: Milestone[];
+    /** goals_v2: the month-end leftovers alone ("kept under budget"). 0 = hide it. */
+    kept_under_budget: number;
+    /** goals_v2: each month's leftover, first one → this month, no gaps. */
+    kept_under_budget_series: MonthlyPoint[];
 }
 
 export interface HomeProgress {
@@ -95,6 +108,9 @@ export async function fetchHomeProgress(): Promise<HomeProgress> {
             saved_this_year: n(g.saved_this_year),
             series: series(g.series),
             milestones: g.milestones ?? [],
+            // Absent from a backend that predates goals_v2: 0 hides the stat.
+            kept_under_budget: n(g.kept_under_budget),
+            kept_under_budget_series: (g.kept_under_budget_series ?? []).map(p => ({ month: p.month, amount: n(p.amount) })),
         },
     };
 }

@@ -55,24 +55,19 @@
   },
   "newGoal": {
     "button": "Plant a new goal",
-    "titleSaving": "New savings goal",
     "nameLabelSaving": "GOAL NAME",
     "namePlaceholderSaving": "Emergency fund, New laptop…",
     "amountLabelSaving": "TARGET AMOUNT",
     "monthLabel": "TARGET MONTH",
-    "yearLabel": "TARGET YEAR",
-    "save": "Save Goal"
+    "yearLabel": "TARGET YEAR"
   },
   "editGoal": {
     "titleSaving": "Edit goal",
     "save": "Save changes"
   },
   "alert": {
-    "missingInfoTitle": "Missing info",
-    "missingInfoBody": "Please enter a goal name and a valid target amount.",
     "editValidation": "Enter a name and a target amount greater than zero.",
     "removeGoalTitle": "Remove this goal?",
-    "removeBody": "\"{{title}}\" will be removed. Money you put in during earlier months goes back to General Savings, and anything you added this month is returned to this month's Goals budget.",
     "remove": "Remove",
     "completeGoalTitle": "Move this goal to completed?",
     "completeMoved": "{{amount}} will come out of your savings and \"{{title}}\" moves to Completed.",
@@ -81,6 +76,67 @@
     "completeFailedTitle": "Couldn't complete goal",
     "monthClosedTitle": "Month closed",
     "cannotDelete": "Cannot delete from closed month. Reopen {{month}} to edit",
-    "cannotComplete": "Cannot complete a goal in a closed month. Reopen {{month}} to edit"
+    "cannotComplete": "Cannot complete a goal in a closed month. Reopen {{month}} to edit",
+    "removeBodyReplant": "\"{{title}}\" will be removed. Anything you added from this month's budget goes back to it, and the rest of what it holds moves to Ready to Replant."
+  },
+  "source": {
+    "label": "WHERE IS THIS MONEY COMING FROM?",
+    "budget": "From this month's budget",
+    "saved": "From money I'd already saved"
+  },
+  "form": {
+    "title": "Plant a new goal",
+    "savedLabel": "AMOUNT SAVED UP (OPTIONAL)",
+    "savedLabelRequired": "AMOUNT SAVED UP",
+    "alreadyDone": "You've already saved the whole target, so this goal is done before it starts! 🎉",
+    "perMonth": "That's <bold>{{amount}}/month</bold>",
+    "share": "About {{pct}}% of this month's Goals budget.",
+    "overBudget": "Heads up: together with your other goal and debt minimums, this is more than this month's Goals budget. You can still save it.",
+    "autoLabel": "Add my monthly amount automatically",
+    "autoHint": "Every first day of the month, have DollarSeeds add the minimum payment to the goal automatically. No real transaction is made.",
+    "submit": "Plant my goal",
+    "errName": "Give your goal a name.",
+    "errTarget": "Enter a target amount greater than zero.",
+    "errSavedRequired": "Enter how much you've saved up so far. 0 is fine!",
+    "errSaved": "The amount saved up needs to be 0 or more.",
+    "errSource": "Let us know where this money is coming from.",
+    "errDate": "Pick a target month and year.",
+    "errPast": "Pick a target month from this month onward."
+  },
+  "pace": {
+    "early": "On pace for <bold>{{month}}</bold>: {{count}} month early",
+    "early_plural": "On pace for <bold>{{month}}</bold>: {{count}} months early",
+    "behind": "On pace for <bold>{{month}}</bold>: {{count}} month behind",
+    "behind_plural": "On pace for <bold>{{month}}</bold>: {{count}} months behind",
+    "onTrack": "On pace for <bold>{{month}}</bold>: right on time"
+  },
+  "minimum": {
+    "log": "Add my {{amount}} for {{month}}",
+    "logged": "{{amount}} added for {{month}}",
+    "auto": "Added automatically",
+    "a11y": "Monthly amount for {{name}}",
+    "errFailed": "We couldn't update this month's amount. Please try again."
+  },
+  "extra": {
+    "button": "Add my extra payment",
+    "title": "Add an extra payment",
+    "amountLabel": "AMOUNT",
+    "hint": "Extra payments get you there sooner. Your monthly amount stays the same.",
+    "submit": "Add my extra payment",
+    "cancel": "Not now",
+    "errAmount": "Enter an amount greater than zero.",
+    "errFailed": "That didn't go through. Please try again."
+  },
+  "replant": {
+    "title": "Ready to Replant",
+    "explain": "Money from goals you removed. Plant it in another goal whenever you're ready.",
+    "open": "Plant it in a goal",
+    "noGoals": "Plant a new goal, then you can move this money into it.",
+    "sheetTitle": "Plant it in a goal",
+    "holding": "{{amount}} ready to replant",
+    "whichGoal": "WHICH GOAL",
+    "submit": "Plant it here",
+    "errTooMuch": "You have {{amount}} ready to replant. Try that amount or less.",
+    "errGoal": "Choose the goal to plant it in."
   }
 }

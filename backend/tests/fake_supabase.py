@@ -32,13 +32,21 @@ from typing import Any, Optional
 # created through the API would silently vanish from the list. Only applied when the
 # key is ABSENT: an explicit None stays None, exactly as inserting NULL does.
 COLUMN_DEFAULTS: dict[str, dict[str, Any]] = {
+    # The 0013 (goals_v2) columns are nullable with no DEFAULT, so they are
+    # present-and-NULL, as select('*') returns them once the migration is applied.
     "savings_goals": {
         "completed": False,
         "is_general": False,
         "is_reconciliation": False,
         "goal_type": "saving",
+        "monthly_minimum": None,
+        "auto_minimum": None,
+        "auto_minimum_month": None,
+        "is_replant": None,
+        "replant_seed_amount": None,
     },
-    "savings_transactions": {"source": "income", "goal_id": None, "transfer_group": None},
+    "savings_transactions": {"source": "income", "goal_id": None, "transfer_group": None,
+                             "kind": None},
     "income": {"tithe_enabled": False, "tithe_rate": 0.10, "budget_type": "balanced"},
     "user_settings": {
         "tithe_enabled": False,
@@ -115,6 +123,15 @@ UNIQUE_KEYS: dict[str, tuple[str, ...]] = {
     "subscriptions": ("store", "environment", "store_txn_id"),
     "subscription_events": ("event_id",),
     "app_config": ("key",),
+}
+
+# PARTIAL unique indexes: (columns, predicate). Migration 0013's two — one Ready to
+# Replant per user, and one pair of one-time-move legs per user — are what make the
+# goals_v2 first load idempotent under concurrency, so the fake has to refuse the
+# duplicate just as Postgres does or those tests prove nothing.
+PARTIAL_UNIQUE_KEYS: dict[str, list] = {
+    "savings_goals": [(("user_id",), lambda r: r.get("is_replant") is True)],
+    "savings_transactions": [(("user_id", "type"), lambda r: r.get("kind") == "replant_seed")],
 }
 
 # Which columns an upsert matches on. Previously hardcoded to (user_id, month) for
@@ -330,16 +347,28 @@ class _Query:
 
         if self.op == "insert":
             items = self.payload if isinstance(self.payload, list) else [self.payload]
-            created = []
+            # One INSERT statement is atomic in Postgres: a multi-row insert that
+            # violates a constraint on ANY row writes NONE of them. So every row is
+            # checked (against the table and against the batch) before any is stored.
+            pending = []
             for item in items:
                 row = dict(item)
                 for col, default in COLUMN_DEFAULTS.get(self.table, {}).items():
                     row.setdefault(col, default)
                 key = UNIQUE_KEYS.get(self.table)
                 if key and any(
-                    all(existing.get(k) == row.get(k) for k in key) for existing in rows
+                    all(existing.get(k) == row.get(k) for k in key) for existing in rows + pending
                 ):
                     raise UniqueViolation(self.table, key)
+                for cols, applies in PARTIAL_UNIQUE_KEYS.get(self.table, []):
+                    if applies(row) and any(
+                        applies(existing) and all(existing.get(k) == row.get(k) for k in cols)
+                        for existing in rows + pending
+                    ):
+                        raise UniqueViolation(self.table, cols)
+                pending.append(row)
+            created = []
+            for row in pending:
                 row.setdefault("id", self.db.next_id(self.table))
                 row.setdefault("created_at", self.db.next_timestamp())
                 rows.append(row)
