@@ -110,6 +110,8 @@ COLUMN_DEFAULTS: dict[str, dict[str, Any]] = {
         "cycle_start_balance": None,
         "checkin_due_since": None,
         "late_fee_pending_for": None,
+        # Migration 0014: nullable, no DEFAULT.
+        "apr_missing": None,
     },
     "debt_transactions": {},
     "debt_freedom_settings": {"monthly_extra": None},

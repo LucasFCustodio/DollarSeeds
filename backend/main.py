@@ -1,7 +1,7 @@
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 import os
 import re
@@ -256,6 +256,9 @@ GOALS_V2_FEATURE = "goals_v2"
 GOAL_V2_COLUMNS = frozenset({"monthly_minimum", "auto_minimum", "auto_minimum_month",
                              "is_replant", "replant_seed_amount"})
 TXN_V2_COLUMNS = frozenset({"kind"})
+# Migration 0014 (the onboarding's APR-less first debt). Same rule: a build without
+# goals_v2 never receives it.
+DEBT_V2_COLUMNS = frozenset({"apr_missing"})
 
 
 def _legacy_rows(rows: list, columns: frozenset, features: set) -> list:
@@ -4101,6 +4104,92 @@ def create_debt(debt: DebtCreate, user_id: str = Depends(get_current_user_id)):
     return _df_one(user_id, created[0]["id"], _df_server_today())
 
 
+# ── The onboarding's first debt (ONBOARDING_REWORK.md §6a) ───────────────────
+# A NEW route, so no build in the wild calls it and no marker is read. It lets the
+# onboarding plant ONE debt for a user who is not premium — the taste of Debt Freedom
+# before the paywall. Everything after that stays premium: the debt is then shown
+# read-only (the `read_only` allowance, which already means "not entitled, has a
+# debt"), and every write route keeps _assert_debt_freedom_writable.
+
+class FirstDebtCreate(BaseModel):
+    name: str
+    debt_type: Optional[str] = None
+    amount_owed: float
+    min_payment: float
+    due_day: int
+    # Optional: "You'll find it on your statement. You can add it later." Absent →
+    # apr = 0 on the row (the column is NOT NULL) and apr_missing = true (0014).
+    apr: Optional[float] = None
+    today: Optional[datetime.date] = None
+
+
+def _has_any_debt(user_id: str) -> bool:
+    return bool(supabase.table("debts").select("id").eq("user_id", user_id).limit(1).execute().data)
+
+
+def _insert_debt(row: dict) -> list:
+    """Insert a debt row. When it carries apr_missing and PostgREST does not know the
+    column yet (backend deployed before migration 0014), retry without it: the debt
+    is still created with apr = 0, it just has no warning."""
+    try:
+        return supabase.table("debts").insert(row).execute().data
+    except Exception as e:
+        if "apr_missing" not in row or "apr_missing" not in str(e):
+            raise
+        print(f"debts.apr_missing not available yet, creating without it: {e}")
+        return supabase.table("debts").insert(
+            {k: v for k, v in row.items() if k != "apr_missing"}).execute().data
+
+
+@app.post("/debt-freedom/first-debt/")
+def create_first_debt(debt: FirstDebtCreate, user_id: str = Depends(get_current_user_id)):
+    """Create a debt for a user who is NOT premium, only if they have no row in
+    `debts` (any status). Otherwise 403 `debt_freedom_locked`, exactly as the normal
+    create would answer — so it is one free debt, never a way around the paywall. An
+    entitled user is simply creating a debt.
+
+    `debts` keeps every debt a free user ever had: they cannot delete one (DELETE is a
+    premium write), and a paid-off debt stays a row. Account deletion is the only way
+    to empty it, and that deletes the account too."""
+    locked = _entitlements(user_id, {LIMITS_FEATURE}).debt_freedom_locked
+    if locked and _has_any_debt(user_id):
+        raise PremiumRequired("debt_freedom_locked")
+    apr_missing = debt.apr is None
+    fields = _df_clean({
+        "name": debt.name,
+        "debt_type": debt.debt_type,
+        "original_balance": debt.amount_owed,
+        "current_balance": debt.amount_owed,
+        "min_payment": debt.min_payment,
+        "apr": 0.0 if apr_missing else debt.apr,
+        "due_day": debt.due_day,
+    })
+    row = {
+        **fields,
+        "user_id": user_id,
+        "species": df.DEFAULT_SPECIES,
+        "species_locked": False,
+        "status": df.STATUS_ACTIVE,
+        "cycle_start_balance": fields["current_balance"],
+    }
+    if apr_missing:
+        row["apr_missing"] = True
+    created = _insert_debt(row)
+    if not created:
+        raise HTTPException(status_code=500, detail="Could not create the debt.")
+    new_id = created[0]["id"]
+    if locked:
+        # Two overlapping first-debt calls can both pass the check above. The one
+        # whose row is not the oldest takes its row back out and is refused, so a free
+        # user still ends with one debt.
+        ids = sorted(r["id"] for r in (supabase.table("debts").select("id")
+                                       .eq("user_id", user_id).execute().data or []))
+        if ids and ids[0] != new_id:
+            supabase.table("debts").delete().eq("id", new_id).eq("user_id", user_id).execute()
+            raise PremiumRequired("debt_freedom_locked")
+    return _df_one(user_id, new_id, _df_today(debt.today))
+
+
 # Declared BEFORE /debt-freedom/{id}, so "settings" is never parsed as a debt id.
 @app.get("/debt-freedom/settings")
 def get_debt_freedom_settings(user_id: str = Depends(get_current_user_id)):
@@ -4202,6 +4291,11 @@ def update_debt(id: int, update: DebtUpdate, user_id: str = Depends(get_current_
         fields["interest_checked_through"] = df.anchor_for_new_due_day(current, fields["due_day"], today)
         if current.get("cycle_start_balance") is None:
             fields["cycle_start_balance"] = new_balance if new_balance is not None else old_balance
+
+    if "apr" in fields and current.get("apr_missing"):
+        # The user has given the real rate (0014). Only a row that carries the flag is
+        # written, so this is a no-op before the migration.
+        fields["apr_missing"] = False
 
     fields["updated_at"] = _df_now()
     supabase.table("debts").update(fields).eq("id", id).eq("user_id", user_id).execute()
@@ -4470,12 +4564,19 @@ def get_home_summary(month: str,
              .eq("completed", False).execute().data or [])
 
     garden, txns = _df_garden(user_id, local_today)
+    debts = df.home_debt_summary(garden, txns, local_today)
+    if debts and debts.get("focus") and GOALS_V2_FEATURE not in features:
+        # `focus.debt` is the whole decorated row, so select('*') would hand migration
+        # 0014's column to builds that predate it. They get the row they always got.
+        focus = debts["focus"]
+        debts["focus"] = {**focus, "debt": {k: v for k, v in focus["debt"].items()
+                                            if k not in DEBT_V2_COLUMNS}}
 
     return {
         "last_logged_at": last,
         "days_since_last_log": days_since_log(last, local_today),
         "over_budget": over_budget_splits(nums["budgets"], nums["expenses"]),
-        "debts": df.home_debt_summary(garden, txns, local_today),
+        "debts": debts,
         "goals_near_completion": goals_near_completion(_with_allocated(goals, user_id)),
     }
 
@@ -4523,4 +4624,121 @@ def get_home_progress(today: Optional[datetime.date] = None,
     return {
         "debts": df.home_progress_debts(garden, debt_txns, local_today),
         "goals": hp.home_progress_goals(goals, savings_txns, local_today, goals_v2=goals_v2),
+    }
+
+
+# ══ Onboarding preview ═══════════════════════════════════════════════════════
+# ONBOARDING_REWORK.md §3. Before sign-up the onboarding shows the user their month
+# split, their goal's monthly minimum and "on pace for" date, and their debt's payoff
+# date. That maths already lives here (the split), in goals_v2.py and in
+# debt_freedom.py, so the phone asks instead of keeping a second copy.
+#
+# PUBLIC and STATELESS: no token (there is no account yet), no database read or
+# write, no user data in or out. It only runs the existing pure functions on the
+# numbers it is given. Inputs are numbers within tight bounds — no free text — and
+# unknown fields are refused, so it cannot be used to store or reflect anything.
+# A new route: no build in the wild calls it.
+
+
+PREVIEW_MAX_AMOUNT = 100_000_000      # $100M: past any real paycheck, goal or debt
+PREVIEW_MAX_YEARS_AHEAD = 50
+
+
+class _PreviewModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PreviewGoal(_PreviewModel):
+    target_amount: float = Field(gt=0, le=PREVIEW_MAX_AMOUNT)
+    saved_amount: float = Field(default=0, ge=0, le=PREVIEW_MAX_AMOUNT)
+    target_month: str
+    target_year: int
+
+
+class PreviewDebt(_PreviewModel):
+    amount_owed: float = Field(gt=0, le=PREVIEW_MAX_AMOUNT)
+    min_payment: float = Field(ge=0, le=PREVIEW_MAX_AMOUNT)
+    # Same bounds as _df_clean. Absent = the user skipped it: projected at 0%,
+    # labelled "before interest".
+    apr: Optional[float] = Field(default=None, ge=0, le=1000)
+
+
+class OnboardingPreview(_PreviewModel):
+    income: float = Field(ge=0, le=PREVIEW_MAX_AMOUNT)
+    # A fraction, as user_settings.tithe_rate stores it (0.10 = 10%). Absent = no tithe.
+    tithe_rate: Optional[float] = Field(default=None, gt=0, le=1)
+    goal: Optional[PreviewGoal] = None
+    debt: Optional[PreviewDebt] = None
+    today: Optional[datetime.date] = None
+
+
+def _preview_split(income: float, tithe_rate: Optional[float]) -> dict:
+    """The month split on the default Balanced type, through the same _month_tithe the
+    dashboard uses for an open month (live settings, no frozen state)."""
+    settings = {"tithe_enabled": tithe_rate is not None,
+                "tithe_rate": tithe_rate if tithe_rate is not None else DEFAULT_TITHE_RATE}
+    tithe = _month_tithe(income, [], settings, None)
+    bt = BUDGET_TYPES[DEFAULT_BUDGET_TYPE]
+    budgetable = tithe["budgetable"]
+    return {
+        "income": df.money(income),
+        "tithe": {"enabled": tithe["enabled"], "rate": tithe["rate"], "amount": df.money(tithe["amount"])},
+        "budgetable": df.money(budgetable),
+        "budget_type": DEFAULT_BUDGET_TYPE,
+        "needs": df.money(budgetable * bt["needs"]),
+        "wants": df.money(budgetable * bt["wants"]),
+        "goals": df.money(budgetable * bt["savings"]),
+    }
+
+
+def _preview_goal(goal: PreviewGoal, goals_budget: float, today: datetime.date) -> dict:
+    """The new goal's stored minimum and "on pace for", exactly as POST /savings/goal/
+    would compute them at creation (nothing logged this month yet)."""
+    idx = gv.target_index({"target_month": goal.target_month, "target_year": goal.target_year})
+    minimum = gv.monthly_minimum(goal.target_amount, goal.saved_amount, today, idx)
+    pace = gv.on_pace(goal.target_amount, goal.saved_amount, minimum, today, idx, False)
+    return {
+        "minimum": minimum,
+        "share": round(minimum / goals_budget, 4) if goals_budget > 0 else None,
+        "on_pace": pace,
+    }
+
+
+def _preview_debt(debt: PreviewDebt, today: datetime.date) -> dict:
+    """The debt's payoff at its minimum: the same df.simulate the garden runs, for a
+    garden of one debt with no monthly extra. `covers_interest` is false when the
+    minimum does not beat the first projected month's interest — the plan stalls and
+    there is no date to show."""
+    apr = debt.apr if debt.apr is not None else 0.0
+    row = {"id": 0, "current_balance": debt.amount_owed, "min_payment": debt.min_payment,
+           "apr": apr, "status": df.STATUS_ACTIVE}
+    sim = df.simulate([row], today, 0.0)
+    first = df.add_months(today, 1)
+    interest = df.money(df.daily_interest(debt.amount_owed, apr, df.days_in_month(first.year, first.month)))
+    return {
+        "payoff_month": sim["months"].get(0),
+        "covers_interest": debt.min_payment > interest,
+        "monthly_interest": interest,
+        "before_interest": debt.apr is None,
+    }
+
+
+@app.post("/onboarding/preview/")
+def onboarding_preview(body: OnboardingPreview):
+    today = _df_today(body.today)
+    if body.goal is not None:
+        g = body.goal
+        if g.target_month not in MONTHS:
+            raise HTTPException(status_code=400, detail="Unknown target_month.")
+        if not (today.year <= g.target_year <= today.year + PREVIEW_MAX_YEARS_AHEAD):
+            raise HTTPException(status_code=400, detail="target_year is out of range.")
+        if gv.target_before_this_month(g.target_month, g.target_year, today):
+            raise HTTPException(status_code=400, detail="The target date can't be before this month.")
+        if g.saved_amount >= g.target_amount:
+            raise HTTPException(status_code=400, detail="saved_amount must be below target_amount.")
+    split = _preview_split(body.income, body.tithe_rate)
+    return {
+        "split": split,
+        "goal": None if body.goal is None else _preview_goal(body.goal, split["goals"], today),
+        "debt": None if body.debt is None else _preview_debt(body.debt, today),
     }

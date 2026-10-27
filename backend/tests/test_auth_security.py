@@ -65,6 +65,7 @@ PROTECTED_ROUTES = [
     ("GET",    "/announcements/",                 {},                                   None),
     ("GET",    "/debt-freedom/",                  {},                                   None),
     ("POST",   "/debt-freedom/",                  {},                                   {"name": "Visa", "original_balance": 1000, "current_balance": 800, "min_payment": 50, "apr": 24.99, "due_day": 14}),
+    ("POST",   "/debt-freedom/first-debt/",       {},                                   {"name": "Visa", "amount_owed": 800, "min_payment": 50, "due_day": 14}),
     ("GET",    "/debt-freedom/settings",          {},                                   None),
     ("GET",    "/debt-freedom/payments",          {"month": "July"},                    None),
     ("PUT",    "/debt-freedom/settings",          {},                                   {"monthly_extra": 50}),
@@ -112,9 +113,13 @@ def test_every_protected_route_is_in_the_table():
     #                              Authorized by a shared secret instead; see
     #                              test_webhook_* below, which prove a missing, wrong,
     #                              or server-side-unset secret all fail closed.
+    #   POST /onboarding/preview/ — the onboarding's numbers BEFORE sign-up. Stateless:
+    #                              no database read or write, no user data; see
+    #                              tests/test_onboarding.py, which proves it.
     public = {("GET", "/"), ("GET", "/docs"), ("GET", "/docs/oauth2-redirect"),
               ("GET", "/redoc"), ("GET", "/openapi.json"),
-              ("GET", "/config/"), ("POST", "/webhooks/revenuecat")}
+              ("GET", "/config/"), ("POST", "/webhooks/revenuecat"),
+              ("POST", "/onboarding/preview/")}
     covered = {(m, p) for m, p, _, _ in PROTECTED_ROUTES}
 
     # Match table entries (concrete URLs) to route templates by path shape.

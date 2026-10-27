@@ -1,0 +1,51 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 0014 — debts.apr_missing: a debt planted without its interest rate
+--
+-- WHY. The new onboarding (ONBOARDING_REWORK.md §6a) lets a user plant their first
+-- debt before they know its APR ("Optional. You'll find it on your statement").
+-- `debts.apr` is NOT NULL and stays that way — loosening it would let NULL reach
+-- every reader of the column, including the interest maths in debt_freedom.py. So a
+-- debt created without an APR stores `apr = 0` and sets this flag instead. While it
+-- is true the app shows a gentle "add your interest rate" warning on the debt and
+-- labels its payoff dates "before interest". Any later PATCH that sends an APR sets
+-- it back to false.
+--
+-- Written only by POST /debt-freedom/first-debt/ (new route) and cleared only by
+-- PATCH /debt-freedom/{id}. No store build has ever called a Debt Freedom route, and
+-- the home endpoints strip the column from what a build without `goals_v2` receives,
+-- so store 1.1.0 never sees it.
+--
+-- Purely ADDITIVE: one NULLABLE boolean, no DEFAULT, so the add is metadata-only —
+-- no table rewrite, no existing row touched or revalidated, no constraint.
+--
+-- debts
+--   apr_missing  boolean  TRUE = created without an APR; `apr` holds 0 as a stand-in.
+--                         NULL (every pre-migration row) or FALSE = the APR on the
+--                         row is the user's real rate, exactly as before.
+--
+-- Deploy order does not matter. Before this runs, the backend reads the flag with
+-- .get() off select('*') (absent = not missing), the PATCH only clears a flag the row
+-- actually carries, and first-debt retries its insert without the column if
+-- PostgREST rejects it — the debt is then created with apr = 0 and no warning.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+alter table public.debts
+  add column if not exists apr_missing boolean null;
+
+-- Verify after applying:
+--   select column_name, data_type, is_nullable, column_default
+--     from information_schema.columns
+--    where table_schema = 'public' and table_name = 'debts' and column_name = 'apr_missing';
+--   -- expect 1 row: boolean, is_nullable = YES, column_default NULL
+--
+--   -- Pre-existing rows are unchanged: the new column is NULL on every row, and apr
+--   -- is still NOT NULL.
+--   select count(*) filter (where apr_missing is not null) as touched, count(*) as debts
+--     from public.debts;
+--   -- expect touched = 0
+--   select is_nullable from information_schema.columns
+--    where table_schema = 'public' and table_name = 'debts' and column_name = 'apr';
+--   -- expect NO
+--
+-- Applied to project … on <date>.
+-- ─────────────────────────────────────────────────────────────────────────────
