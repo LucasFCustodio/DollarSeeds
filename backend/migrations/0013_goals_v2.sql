@@ -101,7 +101,7 @@
 --     from public.savings_transactions;
 --   -- expect touched_goals = 0 and touched_txns = 0
 --
--- Applied to project … on <date>.
+-- Applied to project vbvsblpyeylnemrecyqv on 2026-10-27.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 alter table public.savings_goals
