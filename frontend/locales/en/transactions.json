@@ -7,7 +7,8 @@
     "subcategoryLabel": "SUB-CATEGORY",
     "titleLabel": "TITLE",
     "titlePlaceholder": "Trader Joe's haul",
-    "submit": "Plant Expense",
+    "submitNeed": "Plant Need",
+    "submitWant": "Plant Want",
     "submitted": "Planted!"
   },
   "income": {

@@ -404,7 +404,8 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                     ]}
                 >
                     <Text style={styles.submitText}>
-                        {submitted ? t('expense.submitted') : t('expense.submit')}
+                        {submitted ? t('expense.submitted')
+                            : category === 'wants' ? t('expense.submitWant') : t('expense.submitNeed')}
                     </Text>
                     <IconCheck size={16} color="#fff" />
                 </Pressable>
