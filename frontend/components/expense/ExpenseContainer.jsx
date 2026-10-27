@@ -53,69 +53,71 @@ const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseed
 // SUBCATS and CAT_API now live in constants/txCategories.ts, which documents why the
 // values stay English in every language: they are written to the database.
 
-// ─── Month picker ─────────────────────────────────────────────────────────────
+// ─── Month dropdown ───────────────────────────────────────────────────────────
+// Tap to open a list of the twelve months; it expands in place (pushing the form
+// down) rather than floating, so it can't be clipped by the ScrollView on Android.
 const ITEM_H = 46;
+const MENU_ROW_H = 40;
 
-function MonthPicker({ value, onChange, theme }) {
-    const scrollRef = useRef(null);
+function MonthDropdown({ value, onChange, theme, label }) {
+    const [open, setOpen] = useState(false);
+    const listRef = useRef(null);
     const selectedIdx = MONTHS.indexOf(value);
 
-    // Scroll to the current month on first render (no animation)
+    // Open with the selected month in view (one row of context above it).
     useEffect(() => {
-        if (scrollRef.current && selectedIdx >= 0) {
-            scrollRef.current.scrollTo({
-                y: selectedIdx * ITEM_H,
-                animated: false,
-            });
+        if (open && selectedIdx > 0) {
+            listRef.current?.scrollTo({ y: (selectedIdx - 1) * MENU_ROW_H, animated: false });
         }
-    }, []);
-
-    const onScrollEnd = (e) => {
-        const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_H);
-        const clamped = Math.max(0, Math.min(MONTHS.length - 1, idx));
-        onChange(MONTHS[clamped]);
-    };
+    }, [open, selectedIdx]);
 
     return (
-        <View style={[
-            styles.pickerWrap,
-            { backgroundColor: theme.surface, borderColor: theme.border },
-        ]}>
-            <ScrollView
-                ref={scrollRef}
-                snapToInterval={ITEM_H}
-                decelerationRate="fast"
-                showsVerticalScrollIndicator={false}
-                onMomentumScrollEnd={onScrollEnd}
-                style={{ backgroundColor: 'transparent' }}
+        <View style={{ marginBottom: 22 }}>
+            <Pressable
+                onPress={() => setOpen(o => !o)}
+                style={({ pressed }) => [
+                    styles.dropdownTrigger,
+                    { backgroundColor: theme.surface, borderColor: open ? theme.brand : theme.border },
+                    pressed && { opacity: 0.85 },
+                ]}
             >
-                {MONTHS.map((item) => {
-                    const active = item === value;
-                    return (
-                        <Pressable
-                            key={item}
-                            onPress={() => {
-                                const idx = MONTHS.indexOf(item);
-                                scrollRef.current?.scrollTo({
-                                    y: idx * ITEM_H,
-                                    animated: true,
-                                });
-                                onChange(item);
-                            }}
-                            style={styles.pickerItem}
-                        >
-                            <Text style={[
-                                styles.pickerItemText,
-                                active
-                                    ? { color: theme.brand, fontFamily: 'Geist-SemiBold', fontSize: ft(15, 1.2) }
-                                    : { color: theme.ink3, fontFamily: 'Geist-Regular', fontSize: ft(13, 1.2) },
-                            ]}>
-                                {item}
-                            </Text>
-                        </Pressable>
-                    );
-                })}
-            </ScrollView>
+                <Text style={[styles.dropdownText, { color: theme.ink }]} numberOfLines={1}>
+                    {label(value)}
+                </Text>
+                <Svg width={12} height={12} viewBox="0 0 24 24" style={open && { transform: [{ rotate: '180deg' }] }}>
+                    <Path d="M6 9l6 6 6-6" stroke={theme.ink3} strokeWidth={2.4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+            </Pressable>
+
+            {open && (
+                <View style={[styles.dropdownMenu, { backgroundColor: theme.surface, borderColor: theme.border, ...shadow(3) }]}>
+                    <ScrollView ref={listRef} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                        {MONTHS.map(item => {
+                            const active = item === value;
+                            return (
+                                <Pressable
+                                    key={item}
+                                    onPress={() => { onChange(item); setOpen(false); }}
+                                    style={({ pressed }) => [
+                                        styles.dropdownRow,
+                                        active && { backgroundColor: theme.brandSoft },
+                                        pressed && { backgroundColor: theme.surfaceSoft },
+                                    ]}
+                                >
+                                    <Text style={[
+                                        styles.dropdownRowText,
+                                        active
+                                            ? { color: theme.brand, fontFamily: 'Geist-SemiBold' }
+                                            : { color: theme.ink2, fontFamily: 'Geist-Regular' },
+                                    ]}>
+                                        {label(item)}
+                                    </Text>
+                                </Pressable>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            )}
         </View>
     );
 }
@@ -125,7 +127,7 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
     const router = useRouter();
     const { user } = useAuth();
     const { theme } = useTheme();
-    const { parseAmount, dayMonth, currency, monthLabel, subcatLabel } = useLocale();
+    const { parseAmount, currency, monthLabel, subcatLabel } = useLocale();
     const { t } = useTranslation('transactions');
     // Category names live in `common` because the dashboard and details screens need
     // the same three labels — hence a second bound `t`.
@@ -139,15 +141,13 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
     const [amount, setAmount]     = useState('');
     const startCategory = initialCategory === 'wants' ? 'wants' : 'needs';
     const [category, setCategory] = useState(startCategory);
-    // Needs keeps its long-standing 'Groceries' default; a Wants preset starts on its first chip.
-    const [subcat, setSubcat]     = useState(startCategory === 'wants' ? SUBCATS.wants[0] : 'Groceries');
+    // Every category starts on 'Other' — present in both SUBCATS lists.
+    const [subcat, setSubcat]     = useState('Other');
     const [title, setTitle]       = useState('');
+    const [titleError, setTitleError] = useState(false);
     const [month, setMonth]       = useState(MONTHS[today.getMonth()]);
     const [day, setDay]           = useState(String(today.getDate()));
     const [submitted, setSubmitted] = useState(false);
-
-    // Live date string shown in the amount card
-    const dateStr = `${dayMonth(MONTHS.includes(month) ? month : MONTHS[today.getMonth()], day || today.getDate())}, ${today.getFullYear()}`;
 
     // `key` is what drives CAT_API and therefore the stored value; `label` is display
     // only and comes from the common:category catalogue.
@@ -161,12 +161,14 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
     const submitExpense = async () => {
         const parsed = parseAmount(amount) ?? NaN;
         const parsedDay = parseInt(day, 10);
+        // Title is required here; the backend still accepts it empty for older app builds.
+        if (!title.trim()) { setTitleError(true); return; }
         if (!amount || isNaN(parsed) || parsed <= 0) return;
         if (!month || !MONTHS.includes(month)) return;
         if (!day || isNaN(parsedDay) || parsedDay < 1 || parsedDay > 31) return;
         try {
             await axios.post(`${BASE}/expenses/`, {
-                title: title.trim() || subcat,
+                title: title.trim(),
                 sub_category: subcat,
                 amount: parsed,
                 category: CAT_API[category],
@@ -180,7 +182,7 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
             setTitle('');
             setMonth(MONTHS[today.getMonth()]);
             setDay(String(today.getDate()));
-            setSubcat(SUBCATS[category][0]);
+            setSubcat('Other');
             setSubmitted(true);
             setTimeout(() => setSubmitted(false), 2000);
             onSaved?.();
@@ -224,8 +226,26 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
 
             <View style={{ paddingHorizontal: 20 }}>
 
+                {/* ── Title (required) ────────────────────────────────── */}
+                <Text style={[styles.sectionLabel, { color: titleError ? theme.danger : theme.ink3 }]}>{t('expense.titleLabel')}</Text>
+                <TextInput
+                    style={[
+                        styles.fieldInput,
+                        {
+                            backgroundColor: theme.surface,
+                            borderColor: titleError ? theme.danger : theme.border,
+                            color: theme.ink,
+                        },
+                    ]}
+                    placeholder={t('expense.titlePlaceholder')}
+                    placeholderTextColor={theme.ink3}
+                    value={title}
+                    onChangeText={v => { setTitle(v); if (titleError && v.trim()) setTitleError(false); }}
+                    maxLength={40}
+                />
+
                 {/* ── Amount card ─────────────────────────────────────── */}
-                <View style={{ borderRadius: 18, borderWidth: 1.5, borderColor: theme.ink, backgroundColor: theme.brand, marginBottom: 22, ...stickerShadow('#0F3D2E') }}>
+                <View style={{ borderRadius: 18, borderWidth: 1.5, borderColor: theme.ink, backgroundColor: theme.brand, marginBottom: 12, ...stickerShadow('#0F3D2E') }}>
                 <LinearGradient
                     colors={[theme.brand, theme.brand2]}
                     start={{ x: 0.1, y: 0 }}
@@ -246,7 +266,6 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                     </View>
 
                     <View style={styles.amountInner}>
-                        <Text style={styles.amountEyebrow}>{t('expense.amountEyebrow')}</Text>
                         <View style={styles.amountRow}>
                             <Text style={styles.amountDollar}>{currencySymbol}</Text>
                             <TextInput
@@ -260,13 +279,11 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                                 selectionColor="rgba(255,255,255,0.6)"
                             />
                         </View>
-                        <Text style={styles.amountDate}>{dateStr}</Text>
                     </View>
                 </LinearGradient>
                 </View>
 
                 {/* ── Category ────────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('expense.categoryLabel')}</Text>
                 <View style={styles.catGrid}>
                     {cats.map(c => {
                         const active = category === c.key;
@@ -275,7 +292,7 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                                 key={c.key}
                                 onPress={() => {
                                     setCategory(c.key);
-                                    setSubcat(SUBCATS[c.key][0]);
+                                    setSubcat('Other');
                                 }}
                                 style={({ pressed }) => [
                                     styles.catCard,
@@ -292,7 +309,7 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                                     styles.catIconTile,
                                     { backgroundColor: active ? c.soft : theme.surfaceSoft },
                                 ]}>
-                                    <c.Icon size={26} accent={c.color} paper={active ? c.soft : theme.surfaceSoft} />
+                                    <c.Icon size={22} accent={c.color} paper={active ? c.soft : theme.surfaceSoft} />
                                 </View>
                                 <Text
                                     style={[
@@ -339,30 +356,11 @@ export default function ExpenseContainer({ embedded = false, initialCategory, on
                     })}
                 </View>
 
-                {/* ── Title ───────────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('expense.titleLabel')}</Text>
-                <TextInput
-                    style={[
-                        styles.fieldInput,
-                        {
-                            backgroundColor: theme.surface,
-                            borderColor: theme.border,
-                            color: theme.ink,
-                        },
-                    ]}
-                    placeholder={t('expense.titlePlaceholder')}
-                    placeholderTextColor={theme.ink3}
-                    value={title}
-                    onChangeText={setTitle}
-                    maxLength={40}
-                />
-
                 {/* ── Month & Day ──────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: theme.ink3 }]}>{t('date.label')}</Text>
                 <View style={styles.dateRow}>
                     <View style={{ flex: 2 }}>
                         <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>{t('date.month')}</Text>
-                        <MonthPicker value={month} onChange={setMonth} theme={theme} />
+                        <MonthDropdown value={month} onChange={setMonth} theme={theme} label={monthLabel} />
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={[styles.dateFieldLabel, { color: theme.ink3 }]}>{t('date.day')}</Text>
@@ -459,13 +457,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 1,
     },
-    amountEyebrow: {
-        color: 'rgba(255,255,255,0.75)',
-        fontFamily: 'JetBrainsMono-SemiBold',
-        fontSize: ft(11, 1.25),
-        letterSpacing: 1.8,
-        marginBottom: 6,
-    },
     amountRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -491,13 +482,6 @@ const styles = StyleSheet.create({
             android: { includeFontPadding: false },
         }),
     },
-    amountDate: {
-        fontFamily: 'JetBrainsMono-Regular',
-        fontSize: ft(11, 1.18),
-        color: 'rgba(255,255,255,0.7)',
-        marginTop: 8,
-        letterSpacing: 0.4,
-    },
 
     // Category grid
     sectionLabel: {
@@ -516,18 +500,18 @@ const styles = StyleSheet.create({
         flex: 1,
         borderRadius: 16,
         borderWidth: 1.5,
-        paddingVertical: 14,
+        paddingVertical: 8,
         paddingHorizontal: 8,
         alignItems: 'center',
-        gap: 6,
+        gap: 3,
     },
     catCardActive: {
         transform: [{ translateY: -2 }],
     },
     catIconTile: {
-        width: 42,
-        height: 42,
-        borderRadius: 12,
+        width: 32,
+        height: 32,
+        borderRadius: 10,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -579,20 +563,36 @@ const styles = StyleSheet.create({
         marginBottom: 6,
     },
 
-    // Month picker — single visible row, matches fieldInput height
-    pickerWrap: {
+    // Month dropdown — trigger matches fieldInput height
+    dropdownTrigger: {
         height: ITEM_H,
         borderRadius: 12,
         borderWidth: 1,
-        overflow: 'hidden',
-        marginBottom: 22,
-    },
-    pickerItem: {
-        height: ITEM_H,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8,
+    },
+    dropdownText: {
+        flex: 1,
+        fontFamily: 'Geist-SemiBold',
+        fontSize: ft(14, 1.18),
+    },
+    dropdownMenu: {
+        marginTop: 6,
+        maxHeight: MENU_ROW_H * 5,
+        borderRadius: 12,
+        borderWidth: 1,
+        overflow: 'hidden',
+    },
+    dropdownRow: {
+        height: MENU_ROW_H,
+        paddingHorizontal: 16,
         justifyContent: 'center',
     },
-    pickerItemText: {
+    dropdownRowText: {
+        fontSize: ft(14, 1.18),
         letterSpacing: -0.1,
     },
 

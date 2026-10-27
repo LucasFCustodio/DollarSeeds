@@ -97,12 +97,15 @@
     },
     "wants": {
       "Dining": "Restaurantes",
+      "Groceries": "Mercado",
+      "Subscriptions": "Assinaturas",
+      "Shopping": "Compras",
+      "Gifts": "Presentes",
+      "Trips": "Viagens",
+      "Other": "Outro",
       "Coffee": "Café",
       "Streaming": "Streaming",
-      "Shopping": "Compras",
-      "Travel": "Viagens",
-      "Gifts": "Presentes",
-      "Other": "Outro"
+      "Travel": "Viagens"
     }
   },
   "budgetType": {

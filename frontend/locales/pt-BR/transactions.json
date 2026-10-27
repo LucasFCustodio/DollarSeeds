@@ -2,10 +2,8 @@
   "expense": {
     "screenTitle": "Novo gasto",
     "screenSubtitle": "Plante onde faz diferença",
-    "amountEyebrow": "VALOR",
-    "categoryLabel": "CATEGORIA",
     "subcategoryLabel": "SUBCATEGORIA",
-    "titleLabel": "TÍTULO (OPCIONAL)",
+    "titleLabel": "TÍTULO",
     "titlePlaceholder": "Compras do mercado",
     "submit": "Plantar gasto",
     "submitted": "Plantado!"

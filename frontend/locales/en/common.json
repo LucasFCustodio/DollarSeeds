@@ -97,12 +97,15 @@
     },
     "wants": {
       "Dining": "Dining",
+      "Groceries": "Groceries",
+      "Subscriptions": "Subscriptions",
+      "Shopping": "Shopping",
+      "Gifts": "Gifts",
+      "Trips": "Trips",
+      "Other": "Other",
       "Coffee": "Coffee",
       "Streaming": "Streaming",
-      "Shopping": "Shopping",
-      "Travel": "Travel",
-      "Gifts": "Gifts",
-      "Other": "Other"
+      "Travel": "Travel"
     }
   },
   "budgetType": {

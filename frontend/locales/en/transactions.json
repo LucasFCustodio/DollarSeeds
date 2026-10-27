@@ -2,10 +2,8 @@
   "expense": {
     "screenTitle": "New Expense",
     "screenSubtitle": "Plant where it counts",
-    "amountEyebrow": "AMOUNT",
-    "categoryLabel": "CATEGORY",
     "subcategoryLabel": "SUB-CATEGORY",
-    "titleLabel": "TITLE (OPTIONAL)",
+    "titleLabel": "TITLE",
     "titlePlaceholder": "Trader Joe's haul",
     "submit": "Plant Expense",
     "submitted": "Planted!"

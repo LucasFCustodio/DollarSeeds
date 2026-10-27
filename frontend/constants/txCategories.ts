@@ -21,7 +21,9 @@
 
 export const SUBCATS = {
     needs: ['Rent', 'Groceries', 'Utilities', 'Transit', 'Insurance', 'Healthcare', 'Other'],
-    wants: ['Dining', 'Coffee', 'Streaming', 'Shopping', 'Travel', 'Gifts', 'Other'],
+    // Retired wants values ('Coffee', 'Streaming', 'Travel') still sit on older rows,
+    // so their labels stay in the common:subcategory.wants catalogue.
+    wants: ['Dining', 'Groceries', 'Subscriptions', 'Shopping', 'Gifts', 'Trips', 'Other'], // i18n-canonical
 } as const;
 
 export const SOURCES = ['Paycheck', 'Side gig', 'Gift', 'Refund', 'Bonus', 'Other'] as const;
@@ -38,14 +40,15 @@ export const CAT_API: Record<SubcatDomain, string> = { needs: 'Needs', wants: 'W
 /**
  * Which domain an already-stored `sub_category` belongs to. Needed by transaction
  * lists, which render a stored sub-category without the picker context that
- * produced it. Returns null for 'Other' — genuinely ambiguous — and for anything
- * unrecognised, so callers fall through to the raw stored English.
+ * produced it. Returns null for values in both lists ('Other', 'Groceries') —
+ * genuinely ambiguous — and for anything unrecognised, so callers fall through to
+ * the raw stored English.
  */
 export function subcatDomain(sub: string): SubcatDomain | null {
-    if (sub === 'Other') return null;
-    if ((SUBCATS.needs as readonly string[]).includes(sub)) return 'needs';
-    if ((SUBCATS.wants as readonly string[]).includes(sub)) return 'wants';
-    return null;
+    const inNeeds = (SUBCATS.needs as readonly string[]).includes(sub);
+    const inWants = (SUBCATS.wants as readonly string[]).includes(sub);
+    if (inNeeds === inWants) return null;
+    return inNeeds ? 'needs' : 'wants';
 }
 
 /**
