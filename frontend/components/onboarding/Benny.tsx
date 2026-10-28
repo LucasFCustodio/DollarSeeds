@@ -9,9 +9,9 @@
  * A screen shows at most two of: the bubble, a heading, a subtitle (ONBOARDING_FIXES.md
  * §1). Without a heading the bubble carries the screen, so its text is `large`.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Fonts, shadow, useTheme } from '../../context/ThemeContext';
 import { ft, tv } from '../../constants/responsive';
 
@@ -52,6 +52,16 @@ export function BennyImage({ pose, size = SIZE }: { pose: Pose; size?: number })
 
 export default function Benny({ pose, text, large = false }: { pose: Pose; text: string; large?: boolean }) {
     const { theme } = useTheme();
+    // The text fades in when it changes. An opacity animation on the SAME view — not a
+    // remount with a Reanimated `entering` layout animation, which on iOS let the
+    // screen's ScrollView measure its content before the bubble's text had its height,
+    // so the bottom of every long screen (the split's note) hid behind the button.
+    const opacity = useSharedValue(1);
+    useEffect(() => {
+        opacity.value = 0;
+        opacity.value = withTiming(1, { duration: 220 });
+    }, [text, opacity]);
+    const fade = useAnimatedStyle(() => ({ opacity: opacity.value }));
     return (
         <View style={styles.row}>
             <BennyImage pose={pose} />
@@ -61,7 +71,7 @@ export default function Benny({ pose, text, large = false }: { pose: Pose; text:
             >
                 {/* The tail, pointing back at Benny. */}
                 <View style={[styles.tail, { backgroundColor: theme.surface, borderColor: theme.border }]} />
-                <Animated.Text key={text} entering={FadeIn.duration(220)} style={[large ? styles.textLarge : styles.text, { color: theme.ink }]}>
+                <Animated.Text style={[large ? styles.textLarge : styles.text, { color: theme.ink }, fade]}>
                     {text}
                 </Animated.Text>
             </View>
