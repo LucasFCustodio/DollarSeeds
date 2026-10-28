@@ -116,6 +116,7 @@
   "minimum": {
     "log": "Add {{amount}}\nfor {{month}}",
     "logged": "{{amount}} added\nfor {{month}}",
+    "loggedAuto": "{{amount}} added",
     "auto": "Added automatically",
     "a11y": "Monthly amount for {{name}}",
     "errFailed": "We couldn't update this month's amount. Please try again."

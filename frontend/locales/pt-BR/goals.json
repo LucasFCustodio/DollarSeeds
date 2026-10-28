@@ -116,7 +116,8 @@
   "minimum": {
     "log": "Guardar {{amount}}\nde {{month}}",
     "logged": "{{amount}} guardados\nem {{month}}",
-    "auto": "Adicionado automaticamente",
+    "loggedAuto": "{{amount}} guardados",
+    "auto": "Automático",
     "a11y": "Valor mensal de {{name}}",
     "errFailed": "Não conseguimos atualizar o valor deste mês. Tente de novo."
   },
