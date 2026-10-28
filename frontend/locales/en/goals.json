@@ -48,10 +48,20 @@
   },
   "card": {
     "goalAchieved": "Goal achieved! 🎉",
-    "paceSaving": "Save {{amount}}/week · {{months}}mo left",
     "ofTargetSaving": " of {{target}}",
     "completeGoalA11y": "Move goal to completed",
-    "completedMetaSaving": "{{amount}} saved of {{target}} · {{month}} {{year}}"
+    "completedMetaSaving": "{{amount}} saved of {{target}} · {{month}} {{year}}",
+    "paceLine": "On track for <bold>{{month}}</bold>: {{status}} · Save {{amount}}/month",
+    "saveOnly": "Save {{amount}}/month",
+    "status": {
+      "onTime": "right on time",
+      "early": "{{count}} month early",
+      "early_plural": "{{count}} months early",
+      "behind": "{{count}} month behind",
+      "behind_plural": "{{count}} months behind"
+    },
+    "completeMyGoal": "Complete my goal",
+    "extraShort": "+ Extra"
   },
   "newGoal": {
     "button": "Plant a new goal",
@@ -103,16 +113,9 @@
     "errDate": "Pick a target month and year.",
     "errPast": "Pick a target month from this month onward."
   },
-  "pace": {
-    "early": "On pace for <bold>{{month}}</bold>: {{count}} month early",
-    "early_plural": "On pace for <bold>{{month}}</bold>: {{count}} months early",
-    "behind": "On pace for <bold>{{month}}</bold>: {{count}} month behind",
-    "behind_plural": "On pace for <bold>{{month}}</bold>: {{count}} months behind",
-    "onTrack": "On pace for <bold>{{month}}</bold>: right on time"
-  },
   "minimum": {
-    "log": "Add my {{amount}} for {{month}}",
-    "logged": "{{amount}} added for {{month}}",
+    "log": "Add {{amount}}\nfor {{month}}",
+    "logged": "{{amount}} added\nfor {{month}}",
     "auto": "Added automatically",
     "a11y": "Monthly amount for {{name}}",
     "errFailed": "We couldn't update this month's amount. Please try again."

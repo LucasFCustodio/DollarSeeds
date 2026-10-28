@@ -51,13 +51,12 @@ import { useAuth } from '../../context/AuthContext';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { premiumErrorCode, usePremiumUpsell } from '../../lib/premiumErrors';
 import { useLocale } from '../../context/LocaleContext';
-import { MONTHS, monthEndDate } from '../../constants/months';
+import { MONTHS } from '../../constants/months';
 import { CURRENCIES } from '../../constants/currencies';
 import { useTheme, shadow } from '../../context/ThemeContext';
 import { ft, tv } from '../../constants/responsive';
 import { useAnalytics } from '../../lib/analytics';
 import { maybeRequestReview } from '../../lib/storeReview';
-import { weeklyGoalRate } from '../../lib/goalRate';
 import { isBeforeThisMonth } from '../../lib/goalPlan';
 import { localDateISO } from '../../lib/debtFreedom';
 import type { GoalV2Fields } from '../../lib/goals';
@@ -116,20 +115,6 @@ type Goal = GoalV2Fields & {
     // Reconciliation goal.
     locked?: boolean;
 };
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const getDeadline = (m: string, y: number) => monthEndDate(m, y);
-
-const getMonthsLeft = (m: string, y: number) =>
-    Math.max(0, Math.ceil((getDeadline(m, y).getTime() - Date.now()) / (30 * 86_400_000)));
-
-// The $/week pace is THE PLAN — target over the created→deadline window — so it holds
-// steady as the goal is funded and moves only when the target or the deadline moves.
-// `allocated_amount` is deliberately not an input; see lib/goalRate.ts for why, and
-// `npm run verify-goal-rate` for the cases that pin it down.
-const getWeeklyRate = (target: number, m: string, y: number, createdAt: string) =>
-    weeklyGoalRate(target, createdAt, getDeadline(m, y));
-
 
 // ─── General Savings ──────────────────────────────────────────────────────────
 // This build sends goals_v2 and shows no General Savings anywhere (GOALS_REWORK.md
@@ -734,51 +719,74 @@ export default function PiggyBankScreen() {
         </Card>
     );
 
+    // One active goal card (prompts/GOAL_CARD_REDESIGN.md), top to bottom:
+    //   name · complete / edit / delete
+    //   "On track for March: right on time · Save $104/month"
+    //   saved, of target
+    //   progress
+    //   [Add $90 for October  ◯] [+ Extra]   — or, once fully funded, "Complete my goal"
+    // Every number is the server's: the stored minimum, the toggle's amount (capped to
+    // what is left to save), and the pace.
     const renderGoalCard = (g: Goal) => {
         if (g.locked) return renderLockedGoalCard(g);
-        const accent     = theme.goals;
-        const accentSoft = theme.goalsSoft;
         const target = g.target_amount ?? 0;
         const pct = target > 0 ? Math.min(100, (g.allocated_amount / target) * 100) : 0;
-        const monthsLeft = g.target_month && g.target_year
-            ? getMonthsLeft(g.target_month, g.target_year)
-            : 0;
-        const weekly = g.target_month && g.target_year
-            ? getWeeklyRate(target, g.target_month, g.target_year, g.created_at)
-            : 0;
-        const achieved = target > 0 && g.allocated_amount >= target;
-        const barColor = achieved ? theme.success : accent;
+        const funded = target > 0 && g.allocated_amount >= target;
+        const minimum = g.monthly_minimum ?? null;
+        const hasToggle = (g.minimum_amount ?? 0) > 0 || !!g.minimum_logged;
+        const pace = g.on_pace;
+        const bold = <Text style={styles.goalLineStrong} />;
+
+        let line: React.ReactNode = null;
+        if (funded) {
+            line = t('card.goalAchieved');
+        } else if (pace && minimum !== null) {
+            const status = pace.months_early > 0
+                ? t('card.status.early', { count: pace.months_early })
+                : pace.months_early < 0
+                    ? t('card.status.behind', { count: -pace.months_early })
+                    : t('card.status.onTime');
+            line = (
+                <Trans
+                    i18nKey="goals:card.paceLine"
+                    values={{ month: monthLabel(pace.month), status, amount: fmtMoney(minimum) }}
+                    components={{ bold }}
+                />
+            );
+        } else if (minimum !== null && minimum > 0) {
+            line = t('card.saveOnly', { amount: fmtMoney(minimum) });
+        }
 
         return (
             <Card key={g.id} theme={theme} depth={5} padding={16} style={{ marginBottom: 12 }}>
-                {/* Header row */}
-                <View style={styles.goalHeader}>
-                    <View style={[styles.goalIconTile, { backgroundColor: accentSoft }]}>
-                        <IconSavingsGoalMascot size={22} accent={achieved ? theme.success : accent} paper={accentSoft} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.goalTitle, { color: theme.ink }]}>{serverTitle(g.title)}</Text>
-                        {achieved ? (
-                            <Text style={[styles.goalMeta, { color: theme.success }]}>
-                                {t('card.goalAchieved')}
-                            </Text>
-                        ) : (
-                            <Text style={[styles.goalMeta, { color: theme.ink3 }]}>
-                                {t('card.paceSaving', { amount: fmtMoney(weekly), months: monthsLeft })}
-                            </Text>
-                        )}
-                    </View>
+                {/* 1. Name, then complete / edit / delete */}
+                <View style={styles.goalTopRow}>
+                    <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.goalName, { color: theme.ink }]}>
+                        {serverTitle(g.title)}
+                    </Text>
                     <View style={styles.goalActions}>
-                        <Pressable onPress={() => openEditGoal(g)} hitSlop={10}>
+                        {/* Any time, so a goal can still be completed early. */}
+                        <Pressable onPress={() => completeGoal(g)} hitSlop={10}
+                            accessibilityRole="button" accessibilityLabel={t('card.completeGoalA11y')}>
+                            <IconCheck size={16} color={theme.ink3} />
+                        </Pressable>
+                        <Pressable onPress={() => openEditGoal(g)} hitSlop={10}
+                            accessibilityRole="button" accessibilityLabel={t('editGoal.titleSaving')}>
                             <IconGearMascot size={14} color={theme.ink3} />
                         </Pressable>
-                        <Pressable onPress={() => deleteGoal(g)} hitSlop={10}>
+                        <Pressable onPress={() => deleteGoal(g)} hitSlop={10}
+                            accessibilityRole="button" accessibilityLabel={t('alert.removeGoalTitle')}>
                             <IconTrash size={14} color={theme.ink3} />
                         </Pressable>
                     </View>
                 </View>
 
-                {/* Saved / target + one-tap completion */}
+                {/* 2. Pace and the monthly amount, in one line that may wrap */}
+                {line ? (
+                    <Text style={[styles.goalLine, { color: funded ? theme.success : theme.ink2 }]}>{line}</Text>
+                ) : null}
+
+                {/* 3. Saved, of target */}
                 <View style={styles.goalAmtRow}>
                     <Text style={[styles.goalSaved, { color: theme.ink }]}>
                         {fmtMoney(g.allocated_amount)}
@@ -786,68 +794,44 @@ export default function PiggyBankScreen() {
                     <Text style={[styles.goalOf, { color: theme.ink3 }]}>
                         {t('card.ofTargetSaving', { target: fmtMoney(target) })}
                     </Text>
-                    <View style={{ flex: 1 }} />
-                    <Pressable
-                        onPress={() => completeGoal(g)}
-                        hitSlop={8}
-                        accessibilityLabel={t('card.completeGoalA11y')}
-                        style={({ pressed }) => [
-                            styles.completeBtn,
-                            { backgroundColor: accentSoft, borderColor: accent },
-                            pressed && { opacity: 0.7 },
-                        ]}
-                    >
-                        <IconArrow dir="right" size={16} color={accent} />
-                    </Pressable>
                 </View>
 
-                <AnimatedProgressBar
-                    value={pct}
-                    color={barColor}
-                    bg={theme.borderSoft}
-                    height={7}
-                />
+                {/* 4. Progress, in the Goals emerald */}
+                <AnimatedProgressBar value={pct} color={theme.goals} bg={theme.borderSoft} height={7} />
 
-                {/* goals_v2: where this pace lands against the date the user chose. The
-                    server computes it; the target date itself never moves. */}
-                {!achieved && g.on_pace ? (
-                    <Text style={[styles.paceLine, { color: theme.ink2 }]}>
-                        <Trans
-                            i18nKey={g.on_pace.months_early > 0 ? 'goals:pace.early'
-                                : g.on_pace.months_early < 0 ? 'goals:pace.behind' : 'goals:pace.onTrack'}
-                            values={{
-                                month: monthLabel(g.on_pace.month),
-                                year: g.on_pace.year,
-                                count: Math.abs(g.on_pace.months_early),
-                            }}
-                            // Only early/behind are plural; "on time" has no count.
-                            count={g.on_pace.months_early !== 0 ? Math.abs(g.on_pace.months_early) : undefined}
-                            components={{ bold: <Text style={{ fontFamily: 'Geist-SemiBold', color: theme.ink }} /> }}
-                        />
-                    </Text>
-                ) : null}
-
-                {/* The monthly habit: this month's minimum, and an extra payment. */}
-                {(!achieved && (g.minimum_amount ?? 0) > 0) || g.minimum_logged ? (
+                {/* 5. This month's amount and an extra payment — or, once the goal holds
+                    its whole target, the one thing left to do. */}
+                {funded ? (
+                    <Pressable
+                        onPress={() => completeGoal(g)}
+                        accessibilityRole="button"
+                        style={({ pressed }) => [styles.completeGoalBtn, { backgroundColor: theme.goals }, pressed && { opacity: 0.85 }]}
+                    >
+                        <IconCheck size={15} color={theme.onBrand} />
+                        <Text style={[styles.completeGoalText, { color: theme.onBrand }]}>{t('card.completeMyGoal')}</Text>
+                    </Pressable>
+                ) : (
                     <View style={styles.habitRow}>
-                        <GoalMinToggle
-                            title={serverTitle(g.title)}
-                            logged={!!g.minimum_logged}
-                            amount={g.minimum_amount ?? 0}
-                            auto={!!g.auto_minimum}
-                            pendingValue={pendingMinFor(g.id)}
-                            onChange={() => toggleMin(g.id, !!g.minimum_logged)}
-                        />
+                        {hasToggle ? (
+                            <GoalMinToggle
+                                title={serverTitle(g.title)}
+                                logged={!!g.minimum_logged}
+                                amount={g.minimum_amount ?? 0}
+                                auto={!!g.auto_minimum}
+                                pendingValue={pendingMinFor(g.id)}
+                                onChange={() => toggleMin(g.id, !!g.minimum_logged)}
+                            />
+                        ) : null}
+                        <Pressable
+                            onPress={() => setExtraGoal(g)}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('extra.button')}
+                            style={({ pressed }) => [styles.extraHalf, { borderColor: theme.brand }, pressed && { opacity: 0.7 }]}
+                        >
+                            <Text numberOfLines={1} style={[styles.extraBtnText, { color: theme.brand }]}>{t('card.extraShort')}</Text>
+                        </Pressable>
                     </View>
-                ) : null}
-                <Pressable
-                    onPress={() => setExtraGoal(g)}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.extraBtn, { borderColor: theme.border }, pressed && { opacity: 0.7 }]}
-                >
-                    <IconPlus size={14} color={theme.brand} />
-                    <Text style={[styles.extraBtnText, { color: theme.brand }]}>{t('extra.button')}</Text>
-                </Pressable>
+                )}
             </Card>
         );
     };
@@ -1682,14 +1666,55 @@ const styles = StyleSheet.create({
         fontSize: ft(14, 1.28),
         letterSpacing: -0.1,
     },
-    paceLine: {
+    goalTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    goalName: {
+        flex: 1,
+        fontFamily: 'Geist-Bold',
+        fontSize: ft(16, 1.28),
+        letterSpacing: -0.2,
+    },
+    goalLine: {
         fontFamily: 'Geist-Regular',
         fontSize: ft(12, 1.18),
-        marginTop: 10,
+        lineHeight: ft(17, 1.18),
+        marginTop: 4,
+        marginBottom: 10,
+    },
+    goalLineStrong: {
+        fontFamily: 'Geist-SemiBold',
     },
     habitRow: {
         flexDirection: 'row',
-        marginTop: 12,
+        gap: 10,
+        marginTop: 14,
+    },
+    // "+ Extra": the same height and outline as the minimum toggle beside it, and the
+    // same width, so the two read as a pair.
+    extraHalf: {
+        flex: 1,
+        minHeight: 46,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+        borderRadius: 10,
+        borderWidth: 1.5,
+    },
+    completeGoalBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 7,
+        minHeight: 46,
+        marginTop: 14,
+        borderRadius: 10,
+    },
+    completeGoalText: {
+        fontFamily: 'Geist-SemiBold',
+        fontSize: ft(14, 1.2),
     },
     extraBtn: {
         flexDirection: 'row',

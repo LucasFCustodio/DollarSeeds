@@ -35,7 +35,10 @@ function GoalMinToggle({ title, logged, amount, auto, pendingValue, onChange }: 
     return (
         <View style={[styles.base, { borderColor: theme.brand, backgroundColor: on ? theme.brandSoft : theme.surface }]}>
             <View style={styles.text} importantForAccessibility="no">
-                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}
+                {/* Half the card wide on the goal card, so the label is two lines; the
+                    catalogue string holds the break ("Add $90" / "for October"), and it
+                    only shrinks for a long amount. */}
+                <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75}
                     style={[styles.label, { color: theme.brand, fontFamily: Fonts.sansSemiBold }]}>
                     {on
                         ? t('minimum.logged', { amount: formatMoney(amount), month })
@@ -45,8 +48,10 @@ function GoalMinToggle({ title, logged, amount, auto, pendingValue, onChange }: 
                     <Text style={[styles.sub, { color: theme.ink3, fontFamily: Fonts.sans }]}>{t('minimum.auto')}</Text>
                 ) : null}
             </View>
-            <MinSwitch on={on} pending={pending} onChange={onChange}
-                a11yLabel={t('minimum.a11y', { name: title })} />
+            <View style={styles.switch}>
+                <MinSwitch on={on} pending={pending} onChange={onChange}
+                    a11yLabel={t('minimum.a11y', { name: title })} />
+            </View>
         </View>
     );
 }
@@ -57,9 +62,12 @@ const styles = StyleSheet.create({
     base: {
         flex: 1,
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-        minHeight: 46, paddingVertical: 4, paddingLeft: 14, paddingRight: 8, borderRadius: 10, borderWidth: 1.5,
+        minHeight: 46, paddingVertical: 4, paddingLeft: 10, paddingRight: 6, borderRadius: 10, borderWidth: 1.5,
     },
     text: { flexShrink: 1 },
-    label: { fontSize: ft(14, 1.2) },
+    label: { fontSize: ft(13, 1.2), lineHeight: ft(16, 1.2) },
+    // A touch smaller than the debts' switch, with the space it frees given back to the
+    // label (a transform alone would keep the full-size layout box).
+    switch: { transform: [{ scale: 0.85 }], marginHorizontal: -4 },
     sub: { fontSize: ft(11, 1.18), marginTop: 1 },
 });
