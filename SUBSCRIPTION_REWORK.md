@@ -2,7 +2,7 @@
 
 *Context file for the subscription/pricing rework. Read alongside
 [.claude/docs/data_model.md](.claude/docs/data_model.md) and
-[.claude/docs/lessons_page.md](.claude/docs/lessons_page.md). Last updated: 2026-10-26.*
+[.claude/docs/lessons_page.md](.claude/docs/lessons_page.md). Last updated: 2026-10-28.*
 
 ---
 
@@ -12,11 +12,11 @@
 |---|---|---|
 | 0 | App Store Connect products + RevenueCat wiring | **DONE — verified end to end** |
 | 1 | Backend: capability token, entitlements resolver, gates | **DONE — merged, deployed, verified against production 2026-09-28** |
-| 2a | Frontend: paywall (products, prices, trial, purchase) | **Unblocked — can start now** |
-| 2b | Frontend: gating UI (locked goals, grayed states, budget lock) | **Unblocked — Phase 1 has landed** |
-| 3 | Release | **No flag to flip. The limits go live per install — see Phase 3** |
+| 2a | Frontend: paywall (products, prices, trial, purchase) | **DONE — full-screen paywall merged 2026-10-07.** Since then: an optional headline override used only by the onboarding, and a fourth benefit row ("A Future of Achievements", unlimited goals), merged to `main` 2026-10-28 |
+| 2b | Frontend: gating UI (locked goals, grayed states, budget lock) | **DONE — merged to `main`** |
+| 3 | Release | **Ships with 1.2.0** (`app.json` bumped 2026-10-28). No flag to flip — the limits go live per install, see Phase 3. Still to do: attach both Premium products to the 1.2.0 submission so they are reviewed with the build; after 1.2.0 is live, raise `min_supported_version` to `1.2.0` |
 | 4 | Contract: retire old products | Much later |
-| DF | Debt Freedom (Debts tab) as premium: `debt_freedom` allowance, `debt_freedom_locked` on every write (whatever the headers), tutorial / read-only garden / home teaser, flag on for store builds | **Built on `debt-freedom-premium-branch`, not merged.** Migrations 0010–0012 are applied in production |
+| DF | Debt Freedom (Debts tab) as premium: `debt_freedom` allowance, `debt_freedom_locked` on every write (whatever the headers), tutorial / read-only garden / home teaser, flag on for store builds | **DONE — merged to `main` and deployed.** Migrations 0010–0012 applied in production. The onboarding (merged 2026-10-28) adds one free debt per account via `POST /debt-freedom/first-debt/` (only while the user has never had a debt row) and migration 0014 (`apr_missing`), applied 2026-10-27; free users with a debt see it read-only |
 
 All blocking decisions are settled. Remaining questions in §13 are non-blocking.
 
