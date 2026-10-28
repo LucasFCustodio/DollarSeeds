@@ -62,8 +62,8 @@ import {
 import type { PlanOption } from '../../lib/purchases';
 import Svg, { Defs, LinearGradient, Rect, Stop, type SvgProps } from 'react-native-svg';
 
-/** The three benefit rows, in order. Copy lives at premium:paywall.benefit.<key>. */
-const BENEFITS = ['debt', 'budget', 'wisdom'] as const;
+/** The four benefit rows, in order. Copy lives at premium:paywall.benefit.<key>. */
+const BENEFITS = ['debt', 'goals', 'budget', 'wisdom'] as const;
 
 type Art = FC<SvgProps>;
 
@@ -73,6 +73,7 @@ type Art = FC<SvgProps>;
  */
 const BENEFIT_ART: Record<(typeof BENEFITS)[number], Art> = {
     debt: require('../../assets/premium/benefit-debt.svg').default as Art,
+    goals: require('../../assets/premium/benefit-goals.svg').default as Art,
     budget: require('../../assets/premium/benefit-budget.svg').default as Art,
     wisdom: require('../../assets/premium/benefit-lessons.svg').default as Art,
 };
