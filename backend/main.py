@@ -2933,9 +2933,19 @@ def _entitlement_via_revenuecat(user_id: str) -> bool:
         raise _EntitlementLookupUnavailable() from e
 
     entitlement = ((body.get("subscriber") or {}).get("entitlements") or {}) \
-        .get(PREMIUM_ENTITLEMENT_ID) or {}
-    expires = _parse_ts(entitlement.get("expires_date"))
-    active = bool(expires and expires > datetime.datetime.now(datetime.timezone.utc))
+        .get(PREMIUM_ENTITLEMENT_ID)
+    if not isinstance(entitlement, dict):
+        # Absent entirely: never purchased, or the grant has been fully removed.
+        active = False
+    elif entitlement.get("expires_date") is None:
+        # Present with no expiry is how RevenueCat represents a lifetime or
+        # promotional grant. Reading that as expired locked out exactly the users
+        # who paid the most. Keyed on the raw null, not on a failed parse: an
+        # unreadable date stays "no access" rather than becoming forever.
+        active = True
+    else:
+        expires = _parse_ts(entitlement["expires_date"])
+        active = bool(expires and expires > datetime.datetime.now(datetime.timezone.utc))
 
     # Deliberately no write-through. The subscriber REST payload has a different shape
     # from a webhook event, and parsing it into a row would mean a second, rarely
