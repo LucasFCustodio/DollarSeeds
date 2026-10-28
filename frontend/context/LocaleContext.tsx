@@ -15,7 +15,7 @@
  * ──────────────────────────────────────────────────────────────────────────────
  *
  * Preferences are DEVICE-GLOBAL, not per-user (unlike the keys in
- * constants/onboarding.ts). `/auth` and `UpdateGate` render before any user exists,
+ * lib/onboardingStore.ts). `/auth` and `UpdateGate` render before any user exists,
  * and they have to be readable.
  */
 import React, {

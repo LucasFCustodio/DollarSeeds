@@ -1,0 +1,174 @@
+/**
+ * Before the progress bar (screens 1–2) and Group 1 · Your Heart (screens 3–6).
+ */
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../context/ThemeContext';
+import { useLocale } from '../../context/LocaleContext';
+import { FEELINGS, NAME_MAX, REASONS, stepAnswered, type Reason, type TitheChoice } from '../../lib/onboardingFlow';
+import CardIcon from './cardIcons';
+import { Field, PrimaryButton, TapCard, TextLink } from './controls';
+import StepLayout, { type StepProps } from './StepLayout';
+
+export function WelcomeStep({ next, onHaveAccount, mode }: StepProps & { onHaveAccount: () => void }) {
+    const { t } = useTranslation('onboarding');
+    return (
+        <StepLayout
+            pose="waving"
+            bubble={t('welcome.bubble')}
+            footer={<>
+                <PrimaryButton label={t('welcome.button')} onPress={next} />
+                {/* Signed in, there is no other account to go to. */}
+                {mode === 'new' ? <TextLink label={t('welcome.haveAccount')} onPress={onHaveAccount} /> : null}
+            </>}
+        />
+    );
+}
+
+export function PromiseStep({ next }: StepProps) {
+    const { t } = useTranslation('onboarding');
+    return (
+        <StepLayout
+            pose="listening"
+            bubble={t('promise.bubble')}
+            title={t('promise.title')}
+            subtitle={t('promise.subtitle')}
+            footer={<PrimaryButton label={t('promise.button')} onPress={next} />}
+        />
+    );
+}
+
+export function NameStep({ a, set, next }: StepProps) {
+    const { t } = useTranslation('onboarding');
+    const [value, setValue] = useState(a.name ?? '');
+    const valid = value.trim().length > 0;
+    const go = () => { if (!valid) return; set({ name: value.trim() }); next(); };
+    return (
+        <StepLayout
+            pose="curious"
+            bubble={valid && a.name === value.trim() ? t('name.reaction', { name: value.trim() }) : t('name.question')}
+            footer={<PrimaryButton label={t('name.button')} onPress={go} disabled={!valid} />}
+        >
+            <Field
+                accessibilityLabel={t('name.question')}
+                value={value}
+                onChangeText={setValue}
+                validate={v => (v.trim() ? null : t('name.errEmpty'))}
+                placeholder={t('name.placeholder')}
+                autoFocus={!a.name}
+                textContentType="givenName"
+                autoComplete="name-given"
+                autoCapitalize="words"
+                maxLength={NAME_MAX}
+                returnKeyType="done"
+                onSubmitEditing={go}
+            />
+        </StepLayout>
+    );
+}
+
+export function ReasonsStep({ a, set, next, name }: StepProps) {
+    const { t } = useTranslation('onboarding');
+    const { theme } = useTheme();
+    const picked = a.reasons ?? [];
+    const [last, setLast] = useState<Reason | null>(null);
+    const toggle = (r: Reason) => {
+        const on = picked.includes(r);
+        const nextPicked = on ? picked.filter(x => x !== r) : REASONS.filter(x => x === r || picked.includes(x));
+        set({ reasons: nextPicked });
+        setLast(on ? null : r);
+    };
+    const reaction = picked.length === 0 ? null
+        : last ? t(`reasons.reaction.${last}`)
+        : picked.length > 1 ? t('reasons.reaction.many') : t(`reasons.reaction.${picked[0]}`);
+    return (
+        <StepLayout
+            pose="curious"
+            bubble={reaction ?? t('reasons.question', { name })}
+            title={reaction ? t('reasons.question', { name }) : undefined}
+            subtitle={t('reasons.subtitle')}
+            footer={<PrimaryButton label={t('reasons.button')} onPress={next} disabled={!stepAnswered('reasons', a)} />}
+        >
+            {REASONS.map(r => (
+                <TapCard
+                    key={r}
+                    multi
+                    label={t(`reasons.options.${r}`)}
+                    icon={<CardIcon name={r} color={theme.brand} soft={theme.goalsSoft} />}
+                    selected={picked.includes(r)}
+                    onPress={() => toggle(r)}
+                />
+            ))}
+        </StepLayout>
+    );
+}
+
+export function FeelingStep({ a, set, next }: StepProps) {
+    const { t } = useTranslation('onboarding');
+    const { theme } = useTheme();
+    return (
+        <StepLayout
+            pose="gentle"
+            bubble={a.feeling ? t(`feeling.reaction.${a.feeling}`) : t('feeling.question')}
+            title={a.feeling ? t('feeling.question') : undefined}
+            subtitle={t('feeling.subtitle')}
+            footer={<PrimaryButton label={t('chrome.continue')} onPress={next} disabled={!a.feeling} />}
+        >
+            {FEELINGS.map(f => (
+                <TapCard
+                    key={f}
+                    label={t(`feeling.options.${f}`)}
+                    icon={<CardIcon name={f} color={theme.brand} soft={theme.harvestSoft} />}
+                    selected={a.feeling === f}
+                    onPress={() => set({ feeling: f })}
+                />
+            ))}
+        </StepLayout>
+    );
+}
+
+const TITHE_CHOICES: TitheChoice[] = ['ten', 'custom', 'none'];
+
+export function TitheStep({ a, set, next }: StepProps) {
+    const { t } = useTranslation('onboarding');
+    const { theme } = useTheme();
+    const { parseAmount, formatNumber } = useLocale();
+    const choice = a.tithe?.choice;
+    const [pct, setPct] = useState(a.tithe?.ratePct != null ? formatNumber(a.tithe.ratePct, Number.isInteger(a.tithe.ratePct) ? 0 : 2) : '');
+    const pick = (c: TitheChoice) => set({ tithe: c === 'custom' ? { choice: c, ratePct: parseAmount(pct) ?? undefined } : { choice: c } });
+    const pctError = (v: string) => {
+        const n = parseAmount(v);
+        return n !== null && n > 0 && n <= 100 ? null : t('tithe.customError');
+    };
+    return (
+        <StepLayout
+            pose="bible"
+            bubble={choice ? t(`tithe.reaction.${choice}`) : t('tithe.question')}
+            title={choice ? t('tithe.question') : undefined}
+            subtitle={t('tithe.subtitle')}
+            footer={<PrimaryButton label={t('tithe.button')} onPress={next} disabled={!stepAnswered('tithe', a)} />}
+        >
+            {TITHE_CHOICES.map(c => (
+                <TapCard
+                    key={c}
+                    label={t(`tithe.options.${c}`)}
+                    icon={<CardIcon name={c} color={theme.brand} soft={theme.brandSoft} />}
+                    selected={choice === c}
+                    onPress={() => pick(c)}
+                />
+            ))}
+            {choice === 'custom' ? (
+                <Field
+                    label={t('tithe.customLabel')}
+                    value={pct}
+                    onChangeText={v => { setPct(v); set({ tithe: { choice: 'custom', ratePct: parseAmount(v) ?? undefined } }); }}
+                    validate={pctError}
+                    keyboardType="decimal-pad"
+                    placeholder="10"
+                    maxLength={6}
+                    autoFocus={!a.tithe?.ratePct}
+                />
+            ) : null}
+        </StepLayout>
+    );
+}

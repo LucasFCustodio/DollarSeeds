@@ -644,10 +644,11 @@ export default function SettingsScreen() {
         }
     }
 
-    // Dev-only: clear the completed flag and restart the tour from the Dashboard.
-    function handleReplayOnboarding() {
-        replayOnboarding();
-        router.replace('/(tabs)' as any);
+    // Dev-only: run the onboarding again in signed-in mode. The account's completed
+    // flag stays; the root layout routes to /onboarding while `replaying` is set.
+    async function handleReplayOnboarding() {
+        await replayOnboarding();
+        router.replace('/onboarding' as any);
     }
 
     // Sends the typed confirmation to the backend, which is the authoritative

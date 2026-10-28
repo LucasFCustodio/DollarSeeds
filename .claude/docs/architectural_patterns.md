@@ -6,8 +6,9 @@ Auth state lives in a single React Context. Every screen reads from it via `useA
 
 - Context defined in [frontend/context/AuthContext.tsx](../../frontend/context/AuthContext.tsx) — exposes `{ user, session, initialized }`
 - Supabase session is restored from AsyncStorage on app open via `getSession()`, then kept live with `onAuthStateChange()`
-- Root layout [frontend/app/_layout.tsx](../../frontend/app/_layout.tsx) — "bouncer" redirects unauthenticated users to `/auth` before rendering tabs
-- Auth screen [frontend/app/auth.tsx](../../frontend/app/auth.tsx) — handles email/password login, signup, and Google OAuth
+- Root layout [frontend/app/_layout.tsx](../../frontend/app/_layout.tsx) — "bouncer": a logged-out user goes to `/onboarding` (only `/auth` and `/onboarding` are reachable); a signed-in account that has not done the onboarding, or the dev replay, goes to `/onboarding` in signed-in mode; a signed-in user is never moved *off* `/onboarding` (the flow leaves by itself). See Onboarding below
+- Auth screen [frontend/app/auth.tsx](../../frontend/app/auth.tsx) — email/password login and signup, Google, Apple; a "New here?" link back to the onboarding. The flows themselves are in [frontend/lib/authActions.ts](../../frontend/lib/authActions.ts), shared with the onboarding's sign-up screen
+- **PostHog identity**: `identify(user.id)` on every session; `reset()` only on a real `SIGNED_OUT`. A launch with no session must not reset, or the onboarding's anonymous pre-sign-up events would be orphaned instead of linked to the new account
 
 **Convention**: never import `supabase` directly in screens for auth checks — always use `useAuth()`.
 
@@ -94,6 +95,58 @@ Both expense and income forms follow the same structure.
 - Logging is on the home: the + buttons open `app/logExpense.tsx` / `app/logIncome.tsx`. There is no Transactions tab. Bank-connected logging is a placeholder in [lib/bankTransactions.ts](../../frontend/lib/bankTransactions.ts) — wiring Plaid only touches that file
 
 ---
+
+## Onboarding
+
+[ONBOARDING_REWORK.md](../../ONBOARDING_REWORK.md). A conversation with Benny (the coin mascot,
+`assets/images/mascot/`) that replaces the old 4-step tour. Route:
+[frontend/app/onboarding.tsx](../../frontend/app/onboarding.tsx) (orchestration only); screens in
+[frontend/components/onboarding/](../../frontend/components/onboarding/).
+
+| File | Role |
+|------|------|
+| [lib/onboardingFlow.ts](../../frontend/lib/onboardingFlow.ts) | Pure: the step list, debt-before-goal ordering (screen 4), signed-in skips, progress, back, `resumeStep` |
+| [lib/onboardingWrites.ts](../../frontend/lib/onboardingWrites.ts) | Pure: the ordered, retry-safe writes (name → tithe → income → expense → debt → goal) |
+| [lib/onboardingApi.ts](../../frontend/lib/onboardingApi.ts) | The preview call, signed-in facts, and the six writes through the existing routes |
+| [lib/onboardingStore.ts](../../frontend/lib/onboardingStore.ts) | AsyncStorage: saved answers (device-level), completion cache, home hint flag |
+| [context/OnboardingContext.tsx](../../frontend/context/OnboardingContext.tsx) | `status` (needed / done) and the dev `replay` |
+| `npm run verify-onboarding` | Unit tests for the two pure modules |
+
+- **Two modes.** `new` (logged out): answers wait on the phone; sign-up (screen 19) creates the
+  account, then the plan is written. `signed_in`: any account without the completion flag (every
+  pre-rework account, once — no release-date cutoff) or the dev replay; steps whose data the
+  account already has are skipped and each answer is written as it is given.
+- **Completion lives on the account**: `user_metadata.onboarding_v2_completed_at` via
+  `supabase.auth.updateUser` (no migration), cached in AsyncStorage
+  (`onboarding_v2_completed_<userId>`). A cache with no metadata (the write failed offline)
+  pushes it up on the next launch. The name is `user_metadata.first_name`.
+- **Saved answers** (`onboarding_v2_state`, device-level): answers, current step, each write's
+  state, the starting mode. Saved after every change, so a kill resumes on the same step
+  (`resumeStep`: the saved step, or the first earlier unanswered one, or the next that still
+  applies). Cleared when the flow ends.
+- **Retry-safe writes.** Each item is saved `started` before its request and `done` after. A
+  resumed `started` item is first checked on the server (`exists`: same income amount/source this
+  month, same expense, a debt/goal of the same name) so a lost response never duplicates it. A
+  refusal no retry can change (`debt_freedom_locked` for a free account that already had a debt,
+  the free goal cap, a goal title already taken) is `skipped`. A failure shows Benny's "I couldn't
+  save your plan just yet" with Try again; nothing is lost.
+- **Email confirmation.** If sign-up returns no session (the project requires confirmation),
+  screen 19 asks the user to tap the link, then signs in with what they typed (memory only).
+  The answers stay on the phone throughout; signing in later through `/auth` also writes them.
+- **Numbers** come from `POST /onboarding/preview/` (data_model.md), or in signed-in mode with
+  this month's income already logged, from the account's own `/dashboard/{month}`. The goal step
+  renders `GoalForm` with `requireAll`, `onSubmitValues` (hand back, don't POST) and a
+  `budgetContext` from the preview.
+- **Paywall**: screen 20 calls `openPaywallWith({headline, subtitle})`; the root `PaywallSheet`
+  takes optional `headline` / `subtitle` props, unset everywhere else.
+- **The root layout's spinner gate is boot-only.** Once the navigator has rendered it is never
+  swapped back, because sign-up makes the onboarding flag `unknown` for a moment and unmounting
+  the flow then would cut its writes off.
+- **Home hint**: the last screen sets `home_plus_hint_<userId>` = `pending`;
+  [components/home/BennyHint.tsx](../../frontend/components/home/BennyHint.tsx) shows once.
+- **Analytics** (`lib/analytics.ts`): `onboarding_step_viewed` / `_completed` {step, group, mode},
+  the answers to screens 4, 5, 10, 11, 14 as category keys, `onboarding_completed` with
+  `$set: {onboarding_version: 'v2'}`. Never an amount.
 
 ## Navigation
 

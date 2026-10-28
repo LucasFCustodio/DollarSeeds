@@ -1,51 +1,258 @@
 {
   "chrome": {
-    "skip": "Pular",
-    "next": "Avançar",
-    "getStarted": "Começar",
-    "progress": "{{step}} de {{total}}"
+    "back": "Voltar",
+    "friend": "amigo",
+    "groups": {
+      "heart": "Seu Coração",
+      "month": "Seu Mês",
+      "harvest": "Sua Colheita",
+      "garden": "Seu Jardim"
+    },
+    "saving": "Plantando o seu plano…",
+    "saveError": "Hmm, ainda não consegui salvar o seu plano. Suas respostas estão guardadas comigo.",
+    "loadError": "Hmm, não consegui chegar ao jardim agora. Vamos tentar de novo.",
+    "tryAgain": "Tentar de novo",
+    "continue": "Vamos em frente"
   },
-  "steps": {
-    "dashboard": {
-      "eyebrow": "PAINEL",
-      "title": "Bem-vindo ao DollarSeeds",
-      "body": "Aqui você vê sua renda atual, quanto ainda pode gastar e quanto tem disponível em cada categoria de gasto"
+  "welcome": {
+    "bubble": "Oi! Eu sou o Benny. Ajudo as pessoas a fazer o dinheiro crescer do jeito de Deus, uma semente de cada vez.",
+    "button": "Vamos crescer!",
+    "haveAccount": "Já tenho uma conta"
+  },
+  "promise": {
+    "bubble": "Que bom que você está aqui.",
+    "title": "Quero muito conhecer você.",
+    "subtitle": "Algumas perguntas rápidas e eu monto um plano que é a sua cara: o seu mês, a sua meta, a sua dívida. Leva uns 3 minutos.",
+    "button": "Combinado"
+  },
+  "name": {
+    "question": "Antes de tudo, como posso te chamar?",
+    "placeholder": "Seu primeiro nome",
+    "button": "Sou eu",
+    "errEmpty": "Me diz um nome para eu te chamar.",
+    "reaction": "Que prazer te conhecer, {{name}}!"
+  },
+  "reasons": {
+    "question": "O que te trouxe ao DollarSeeds, {{name}}?",
+    "subtitle": "Escolha tudo o que combina com você. Vou montar o plano em cima disso.",
+    "button": "É por isso que estou aqui",
+    "options": {
+      "debt": "Quero sair das dívidas",
+      "overspending": "Sempre gasto mais do que devia",
+      "saving": "Estou juntando para algo",
+      "honor": "Quero honrar a Deus com o meu dinheiro",
+      "organized": "Só quero me organizar"
     },
-    "transactions": {
-      "eyebrow": "REGISTROS",
-      "title": "Registre pela tela inicial",
-      "body": "Toque no + ao lado do valor disponível para registrar renda, ou no + de Necessidades ou Desejos para registrar um gasto. Cada nova renda é dividida automaticamente entre todas as categorias"
-    },
-    "goals": {
-      "eyebrow": "METAS",
-      "title": "Acompanhe suas metas",
-      "body": "Crie uma meta de poupança. Coloque dinheiro nela a partir da renda deste mês ou da sua Poupança Geral (PG). ",
-      "subnote": "Use a PG sempre que não tiver uma meta específica. O que não for gasto entra na sua PG no fim do mês"
-    },
-    "lessons": {
-      "eyebrow": "SÉRIES",
-      "title": "Cresça em sabedoria",
-      "body": "Séries em vídeo fundamentadas nas Escrituras sobre dinheiro, generosidade e mordomia, apresentadas por profissionais bem-sucedidos.",
-      "subnote": "Novas séries serão adicionadas conforme o app e seu alcance crescerem"
+    "reaction": {
+      "debt": "Ficar livre das dívidas é um objetivo lindo. Vamos começar por elas.",
+      "overspending": "Isso é muito comum, e tem jeito. O seu mês vai mostrar direitinho para onde o dinheiro vai.",
+      "saving": "Adorei. Vamos dar uma data e um plano para isso.",
+      "honor": "Não existe motivo melhor. Tudo o que a gente planta começa aí.",
+      "organized": "A paz de espírito está chegando. Cada real vai ter o seu lugar.",
+      "many": "Entendi, tudo isso. Vou ter cada um em mente."
     }
   },
-  "startingBalance": {
-    "eyebrow": "SÓ MAIS UMA COISA",
-    "title": "Seu saldo inicial",
-    "body": "O DollarSeeds acompanha seu dinheiro mês a mês. Informe o quanto você já tinha guardado ANTES de {{month}} — tudo o que você já havia separado.",
-    "note": "Não inclua as rendas nem os gastos de {{month}}. Esses você registra normalmente com os botões + da tela inicial.",
-    "inputLabel": "Saldo inicial",
-    "add": "+ Adicionar",
-    "done": "Concluir",
-    "skip": "Deixar para depois",
-    "confirmTitle": "Está correto?",
-    "confirmBody": "Esse valor passa a ser o saldo da sua Poupança Geral. Você pode acrescentar a ele ou levá-lo para uma meta quando quiser.",
-    "no": "Não",
-    "yes": "Sim",
-    "retry": "Tentar de novo",
-    "error": {
-      "timeout": "Está demorando demais. Verifique sua conexão e tente novamente.",
-      "generic": "Não foi possível salvar seu saldo inicial. Tente novamente."
+  "feeling": {
+    "question": "Sinceramente, como você se sente com o dinheiro hoje?",
+    "subtitle": "Não existe resposta errada. Só me ajuda a saber como ajudar.",
+    "options": {
+      "stressed": "Estressado",
+      "overwhelmed": "Sobrecarregado",
+      "hopeful": "Esperançoso",
+      "good": "Bem, até"
+    },
+    "reaction": {
+      "stressed": "Você não está sozinho nisso. Vamos um passo de cada vez.",
+      "overwhelmed": "Vamos deixar isso menor juntos. Uma semente por vez já é muito.",
+      "hopeful": "A esperança é um ótimo lugar para plantar. Vamos fazer crescer.",
+      "good": "Que maravilha! Vamos continuar crescendo."
     }
+  },
+  "tithe": {
+    "question": "Você dá o dízimo?",
+    "subtitle": "Se sim, eu separo ele primeiro, antes de plantar qualquer outra coisa.",
+    "options": {
+      "ten": "Sim, 10%",
+      "custom": "Sim, outro valor",
+      "none": "Agora não"
+    },
+    "customLabel": "Qual porcentagem você dá?",
+    "customError": "Escolha uma porcentagem entre 1 e 100.",
+    "reaction": {
+      "ten": "Que lindo. O seu dízimo sai primeiro, antes de tudo.",
+      "custom": "Toda oferta conta. Vou separar ela primeiro.",
+      "none": "Tudo bem. Você pode ativar quando quiser nos Ajustes."
+    },
+    "button": "Vamos em frente"
+  },
+  "income": {
+    "question": "Quanto você vai ganhar este mês (já sem os impostos)?",
+    "subtitle": "Vou dar um lugar para cada real.",
+    "placeholder": "0",
+    "errAmount": "Só o valor, tipo 3.200.",
+    "button": "Planejar meu mês"
+  },
+  "split": {
+    "title": "Este é o seu mês, {{name}}.",
+    "bubble": "As Necessidades mantêm a casa de pé, os Desejos deixam a vida mais leve, e as Metas constroem o seu futuro e as grandes conquistas.",
+    "tithe": "Dízimo",
+    "titheRate": "{{pct}}% primeiro",
+    "needs": "Necessidades",
+    "wants": "Desejos",
+    "goals": "Metas",
+    "note": "Isso cobre {{month}}. A partir do mês que vem, registre cada salário no + ao lado da sua renda.",
+    "button": "Amei"
+  },
+  "expense": {
+    "question": "Vamos registrar uma coisa que você comprou este mês.",
+    "subtitle": "Toque no + de Necessidades ou de Desejos, onde ela se encaixar.",
+    "skip": "Ainda não gastei nada",
+    "reaction": "É isso! Faça assim sempre que gastar, e o seu plano fica fiel à realidade.",
+    "skipReaction": "Sem problema! Quando gastar, é só tocar no + que eu acompanho.",
+    "button": "Vamos em frente",
+    "sheet": {
+      "titleNeeds": "Registrar uma Necessidade",
+      "titleWants": "Registrar um Desejo",
+      "close": "Fechar",
+      "what": "O que foi?",
+      "whatPlaceholder": "Mercado",
+      "how": "Quanto custou?",
+      "errWhat": "Dê um nome curto para reconhecer depois.",
+      "errHow": "Só o valor, tipo 24,50.",
+      "button": "Registrar"
+    }
+  },
+  "debtAsk": {
+    "question": "Você tem alguma dívida que está tentando quitar?",
+    "subtitle": "Cartão, empréstimo, qualquer coisa que você deve. Aqui ninguém julga, estamos juntos nessa.",
+    "options": {
+      "yes": "Sim, tenho",
+      "free": "Não, estou sem dívidas",
+      "later": "Prefiro adicionar depois"
+    },
+    "reaction": {
+      "yes": "Obrigado por confiar isso a mim. Vamos plantar e ver ela encolher.",
+      "free": "Sem dívidas! Essa é uma colheita para comemorar.",
+      "later": "Claro. A aba Dívidas te mostra o caminho quando você quiser."
+    }
+  },
+  "debtType": {
+    "question": "Vamos plantar a primeira. Que tipo de dívida é?",
+    "options": {
+      "credit_card": "Cartão de crédito",
+      "car": "Financiamento do carro",
+      "student": "Financiamento estudantil",
+      "medical": "Conta médica",
+      "personal": "Empréstimo pessoal",
+      "other": "Outra"
+    },
+    "nameLabel": "Como você chama ela?",
+    "errName": "Dê um nome que você reconheça.",
+    "button": "É essa"
+  },
+  "debtDetails": {
+    "bubble": "Só alguns números. Você encontra todos na sua fatura.",
+    "owe": "Quanto você deve agora?",
+    "min": "Qual é o pagamento mínimo?",
+    "due": "Em que dia do mês ela vence?",
+    "duePlaceholder": "15",
+    "apr": "Qual é a taxa de juros anual?",
+    "aprHelper": "<bold>Opcional.</bold> Está na sua fatura. Você pode adicionar depois.",
+    "errOwe": "Só o valor que você deve, tipo 2.400.",
+    "errMin": "Só o valor, tipo 75.",
+    "errDue": "Um dia de 1 a 31.",
+    "errApr": "Uma taxa tipo 22,9, ou deixe em branco por enquanto.",
+    "button": "Plantar minha dívida"
+  },
+  "debtPreview": {
+    "bubble": "Olha só, já está crescendo.",
+    "title": "Pagando o mínimo, {{debt}} fica quitada em <bold>{{date}}</bold>.",
+    "titleBeforeInterest": "Pagando o mínimo, {{debt}} fica quitada em <bold>{{date}}</bold>, sem contar os juros.",
+    "stalled": "Hoje o seu mínimo mal cobre os juros. Vamos mudar isso juntos.",
+    "subtitle": "Cada real a mais te leva lá mais cedo. É para isso que serve o seu jardim.",
+    "button": "Quero ficar livre"
+  },
+  "goalPick": {
+    "question": "Para o que você adoraria juntar dinheiro?",
+    "subtitle": "Escolha uma para começar. Você pode adicionar outras quando quiser.",
+    "options": {
+      "emergency": "Reserva de emergência",
+      "phone": "Celular novo",
+      "vacation": "Viagem",
+      "car": "Carro",
+      "home": "Casa",
+      "wedding": "Casamento",
+      "gift": "Presente",
+      "other": "Outra coisa"
+    },
+    "reaction": "Hum, gostei. Vamos tornar isso real.",
+    "button": "Essa é a minha meta"
+  },
+  "goalDetails": {
+    "bubble": "Me conta um pouco mais, e eu calculo o valor por mês.",
+    "button": "Plantar minha meta"
+  },
+  "goalPreview": {
+    "bubble": "Você vai chegar lá!",
+    "title": "Sua meta {{goal}} vai estar pronta em <bold>{{date}}</bold>!",
+    "subtitle": "Só {{amount}} por mês. Marque na página de Metas a cada vez.",
+    "button": "Eu consigo"
+  },
+  "commitment": {
+    "bubble": "Vamos parar um momento.",
+    "title": "Só mais uma coisa, {{name}}.",
+    "subtitle": "Seja o que for que vier pela frente, você não vai caminhar sozinho.",
+    "hold": "Segure para dizer: “Quero administrar bem o que Deus me deu.”",
+    "held": "Amém. Estou aqui com você."
+  },
+  "plan": {
+    "bubble": "Tenho muito orgulho de você. Esse é um plano de verdade.",
+    "title": "Este é o seu plano, {{name}}.",
+    "month": "O seu mês",
+    "monthLine": "{{needs}} Necessidades · {{wants}} Desejos · {{goals}} Metas",
+    "titheLine": "{{amount}} de dízimo primeiro",
+    "debt": "A sua dívida",
+    "debtLine": "{{debt}} quitada em {{date}}",
+    "debtLineBeforeInterest": "{{debt}} quitada em {{date}}, sem contar os juros",
+    "debtStalled": "{{debt}} está plantada. Vamos vencer os juros juntos.",
+    "goal": "A sua meta",
+    "goalLine": "{{goal}} em {{date}}",
+    "button": "Salvar meu plano"
+  },
+  "signup": {
+    "bubble": "Quase lá!",
+    "title": "Vamos guardar o seu plano.",
+    "subtitle": "Crie a sua conta para ele estar aqui toda vez que você voltar.",
+    "google": "Continuar com o Google",
+    "or": "ou com e-mail",
+    "email": "E-mail",
+    "password": "Senha",
+    "showPassword": "Mostrar senha",
+    "hidePassword": "Ocultar senha",
+    "button": "Criar minha conta",
+    "errEmail": "Hmm, esse e-mail não parece estar certo.",
+    "errPassword": "Vamos usar pelo menos 6 caracteres.",
+    "errTaken": "Hmm, esse e-mail já tem uma conta. Tente entrar com ele.",
+    "errGeneric": "Hmm, não deu certo. Vamos tentar mais uma vez.",
+    "confirmTitle": "Olhe a sua caixa de entrada!",
+    "confirmBody": "Enviei um link para {{email}}. Toque nele e depois volte aqui.",
+    "confirmButton": "Já confirmei o meu e-mail",
+    "confirmNotYet": "Hmm, parece que o link ainda não foi tocado.",
+    "haveAccount": "Já tenho uma conta"
+  },
+  "premium": {
+    "debtHeadline": "A sua dívida está plantada.",
+    "planHeadline": "O seu plano está plantado.",
+    "subtitle": "Pronto para ajudar a crescer?"
+  },
+  "done": {
+    "bubble": "Conseguimos!",
+    "title": "Tudo pronto, {{name}}!",
+    "subtitle": "Volte amanhã e registre o que você gastar. Eu vou estar aqui.",
+    "button": "Ir para o início"
+  },
+  "homeHint": {
+    "text": "Gastou alguma coisa? Toque em um + para plantar no seu plano.",
+    "dismiss": "Entendi"
   }
 }

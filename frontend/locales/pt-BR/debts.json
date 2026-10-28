@@ -247,5 +247,9 @@
     "banner": "Suas dívidas estão salvas. Assine para continuar a cultivá-las.",
     "subscribe": "Assinar",
     "subscribeA11y": "Assinar o Premium"
+  },
+  "aprMissing": {
+    "warning": "Adicione sua taxa de juros para eu mostrar a data real de quitação",
+    "beforeInterest": "{{date}}, sem contar os juros"
   }
 }

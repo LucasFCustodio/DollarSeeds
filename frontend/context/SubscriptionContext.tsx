@@ -12,7 +12,7 @@
  * not a boot-time snapshot: flipping the kill switch off to roll back must stop the
  * app showing locks for content the backend has started serving freely.
  *
- * FAILURE POSTURE IS FAIL-OPEN, matching StartingBalanceGate's "never trap the user"
+ * FAILURE POSTURE IS FAIL-OPEN, matching the app's "a gate never traps the user"
  * rule. An unreachable /config/ means unrestricted, never a bricked app.
  *
  * ALLOWANCES. `/me/entitlements/` also returns the free-tier allowances (max_goals,
@@ -144,8 +144,19 @@ type SubscriptionContextType = Entitlement & {
     // rendered instance at the root instead of five copies and five pieces of state.
     paywallVisible: boolean;
     openPaywall: () => void;
+    /**
+     * The paywall with its headline (and a subtitle under it) replaced — the
+     * onboarding's "Your plan is planted. Ready to help it grow?". A separate function
+     * rather than an argument to openPaywall, which is passed straight to onPress
+     * handlers and would receive the press event. Cleared on close, so every other
+     * entry point keeps the default copy.
+     */
+    openPaywallWith: (copy: PaywallCopy) => void;
+    paywallCopy: PaywallCopy | null;
     closePaywall: () => void;
 };
+
+export type PaywallCopy = { headline: string; subtitle?: string };
 
 const SubscriptionContext = createContext<SubscriptionContextType>({
     ...NO_ENTITLEMENT,
@@ -162,6 +173,8 @@ const SubscriptionContext = createContext<SubscriptionContextType>({
     restore: async () => ({ status: 'unavailable' }),
     paywallVisible: false,
     openPaywall: () => {},
+    openPaywallWith: () => {},
+    paywallCopy: null,
     closePaywall: () => {},
 });
 
@@ -178,12 +191,14 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
     const [optionsLoading, setOptionsLoading] = useState(false);
     const [trialEligible, setTrialEligible] = useState<Record<string, boolean>>({});
     const [paywallVisible, setPaywallVisible] = useState(false);
+    const [paywallCopy, setPaywallCopy] = useState<PaywallCopy | null>(null);
 
     // Resolved when lib/purchases was first imported — a plain read, not a side effect.
     const canPurchase = purchasesAvailable();
 
-    const openPaywall = useCallback(() => setPaywallVisible(true), []);
-    const closePaywall = useCallback(() => setPaywallVisible(false), []);
+    const openPaywall = useCallback(() => { setPaywallCopy(null); setPaywallVisible(true); }, []);
+    const openPaywallWith = useCallback((copy: PaywallCopy) => { setPaywallCopy(copy); setPaywallVisible(true); }, []);
+    const closePaywall = useCallback(() => { setPaywallVisible(false); setPaywallCopy(null); }, []);
 
     // Which user we have already called Purchases.logIn for. Mirrors the
     // `autoCheckedFor` pattern in OnboardingContext and exists for a specific reason:
@@ -398,10 +413,12 @@ export const SubscriptionProvider = ({ children }: { children: React.ReactNode }
         restore,
         paywallVisible,
         openPaywall,
+        openPaywallWith,
+        paywallCopy,
         closePaywall,
     }), [entitlement, entitlementLoaded, entitlementSettled, config, canPurchase, options, optionsLoading,
          trialEligible, refresh, refreshEntitlement, buy, restore, paywallVisible,
-         openPaywall, closePaywall]);
+         openPaywall, openPaywallWith, paywallCopy, closePaywall]);
 
     return (
         <SubscriptionContext.Provider value={value}>

@@ -39,7 +39,7 @@ import type { Announcement } from '../lib/announcements';
 const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
 
 /**
- * Per-user, matching the `<prefix>_<userId>` convention in constants/onboarding.ts
+ * Per-user, matching the `<prefix>_<userId>` convention in lib/onboardingStore.ts
  * and constants/premium.ts. Device-global would be simpler but wrong on a shared
  * phone: the second account to sign in would never be shown an announcement the
  * first had already dismissed.

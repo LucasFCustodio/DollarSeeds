@@ -41,7 +41,26 @@ export type AnalyticsEvent =
     | 'paywall_dismissed'
     | 'purchase_started'
     | 'purchase_completed'
-    | 'restore_completed';
+    | 'restore_completed'
+    | 'onboarding_step_viewed'
+    | 'onboarding_step_completed'
+    | 'onboarding_completed';
+
+/** Every onboarding event carries where in the flow it happened. */
+export type OnboardingStepProps = { step: string; group: string; mode: 'new' | 'signed_in' };
+
+/**
+ * The answers to screens 4, 5, 10, 11 and 14, as CATEGORY KEYS only (never a name,
+ * never a figure): `reasons: 'debt,organized'`, `feeling: 'stressed'`, `debts: 'yes'`,
+ * `debt_type: 'credit_card'`, `goal_type: 'phone'`.
+ */
+export type OnboardingAnswerProps = {
+    reasons?: string;
+    feeling?: string;
+    debts?: string;
+    debt_type?: string;
+    goal_type?: string;
+};
 
 /**
  * useAnalytics — a thin, typed wrapper over usePostHog(). One method per event so the
@@ -115,5 +134,16 @@ export function useAnalytics() {
         purchaseStarted: (p: { product_id: string }) => capture('purchase_started', p),
         purchaseCompleted: (p: { product_id: string }) => capture('purchase_completed', p),
         restoreCompleted: () => capture('restore_completed'),
+
+        // ── Onboarding (steps and category keys only — never an amount) ──────────
+        // Before sign-up these go out under PostHog's anonymous id; AuthContext's
+        // identify() links them to the account on sign-up.
+        onboardingStepViewed: (p: OnboardingStepProps) => capture('onboarding_step_viewed', p),
+        onboardingStepCompleted: (p: OnboardingStepProps & OnboardingAnswerProps) =>
+            capture('onboarding_step_completed', p),
+        /** Also sets `onboarding_version = 'v2'` as a PERSON property, so activation can
+         *  be compared with the accounts that saw the old tour. */
+        onboardingCompleted: (p: { mode: 'new' | 'signed_in' }) =>
+            posthog?.capture('onboarding_completed', { ...p, $set: { onboarding_version: 'v2' } }),
     };
 }

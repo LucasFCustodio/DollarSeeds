@@ -8,6 +8,12 @@
  *   requireAll  — onboarding: every field must be answered explicitly. Amount saved up
  *                 must be typed (0 is a fine answer, blank is not) and the target month
  *                 and year start unpicked.
+ *   onSubmitValues — onboarding, before the account exists: the form validates exactly
+ *                 as always, then hands the values back instead of POSTing them (the
+ *                 onboarding writes them after sign-up). The submit button stays
+ *                 disabled until every field is valid.
+ *   budgetContext — the share/warning context, given instead of read from the server
+ *                 (before sign-up there is no account to read it from).
  *
  * Fields: name (≤ 30, unique — the server's 400 says so), target (> 0), amount saved
  * up (optional here, ≥ 0 and below the target; reaching it means the goal is already
@@ -44,12 +50,28 @@ export interface CreatedGoal {
     title: string;
 }
 
+/** What the form would POST, for a host that writes it later (onSubmitValues). */
+export interface GoalFormValues {
+    title: string;
+    targetAmount: number;
+    savedAmount: number;
+    savedSource: MoneySource | null;
+    targetMonth: string;
+    targetYear: number;
+    autoMinimum: boolean;
+}
+
 interface Props {
     /** Onboarding: every field must be filled in explicitly. */
     requireAll?: boolean;
     initialTitle?: string;
     initialAmount?: string;
-    onCreated: (goal: CreatedGoal) => void;
+    /** Every field prefilled (an onboarding step the user came back to). */
+    initialValues?: GoalFormValues;
+    onCreated?: (goal: CreatedGoal) => void;
+    onSubmitValues?: (values: GoalFormValues) => void;
+    budgetContext?: BudgetContext | null;
+    submitLabel?: string;
     /** Omit to hide the Cancel button (an onboarding step has its own navigation). */
     onCancel?: () => void;
     /** A premium refusal (goal_limit_reached), after the form has shown it in place. */
@@ -57,7 +79,8 @@ interface Props {
 }
 
 export default function GoalForm({
-    requireAll = false, initialTitle = '', initialAmount = '', onCreated, onCancel, onPremiumError,
+    requireAll = false, initialTitle = '', initialAmount = '', initialValues, onCreated, onSubmitValues,
+    budgetContext, submitLabel, onCancel, onPremiumError,
 }: Props) {
     const { t } = useTranslation('goals');
     const { t: tc } = useTranslation('common');
@@ -69,13 +92,15 @@ export default function GoalForm({
     const fallback = useMemo(() => defaultTargetDate(today), [today]);
     const thisYear = today.getFullYear();
 
-    const [title, setTitle] = useState(initialTitle);
-    const [target, setTarget] = useState(initialAmount);
-    const [saved, setSaved] = useState('');
-    const [source, setSource] = useState<MoneySource | null>(null);
-    const [month, setMonth] = useState<string | null>(requireAll ? null : fallback.month);
-    const [year, setYear] = useState<number | null>(requireAll ? null : fallback.year);
-    const [auto, setAuto] = useState(false);
+    const iv = initialValues;
+    const asInput = (v: number) => formatNumber(v, Number.isInteger(v) ? 0 : 2);
+    const [title, setTitle] = useState(iv?.title ?? initialTitle);
+    const [target, setTarget] = useState(iv ? asInput(iv.targetAmount) : initialAmount);
+    const [saved, setSaved] = useState(iv ? asInput(iv.savedAmount) : '');
+    const [source, setSource] = useState<MoneySource | null>(iv?.savedSource ?? null);
+    const [month, setMonth] = useState<string | null>(iv?.targetMonth ?? (requireAll ? null : fallback.month));
+    const [year, setYear] = useState<number | null>(iv?.targetYear ?? (requireAll ? null : fallback.year));
+    const [auto, setAuto] = useState(iv?.autoMinimum ?? false);
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const [ctx, setCtx] = useState<BudgetContext | null>(null);
@@ -83,13 +108,15 @@ export default function GoalForm({
     // The budget context is optional decoration: a failed read only drops the share
     // line and the warning, never the form.
     useEffect(() => {
+        if (budgetContext !== undefined) return;
         let live = true;
         fetchBudgetContext().then(c => { if (live) setCtx(c); }).catch(() => {});
         return () => { live = false; };
-    }, []);
+    }, [budgetContext]);
+    const context = budgetContext !== undefined ? budgetContext : ctx;
 
-    useEffect(() => { setTitle(initialTitle); }, [initialTitle]);
-    useEffect(() => { setTarget(initialAmount); }, [initialAmount]);
+    useEffect(() => { if (!iv) setTitle(initialTitle); }, [initialTitle]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { if (!iv) setTarget(initialAmount); }, [initialAmount]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const targetNum = target.trim() ? parseAmount(target) : null;
     const savedNum = saved.trim() ? parseAmount(saved) : 0;
@@ -97,7 +124,13 @@ export default function GoalForm({
     const minimum = month && year !== null && !alreadyDone
         ? monthlyMinimum(targetNum, savedNum, month, year, today)
         : null;
-    const fit = budgetFit(minimum, ctx);
+    const fit = budgetFit(minimum, context);
+
+    // The same checks submit() runs, as one boolean: the deferred (onboarding) form
+    // keeps its button disabled until they all pass.
+    const valid = !!title.trim() && targetNum !== null && targetNum > 0
+        && (!requireAll || !!saved.trim()) && savedNum !== null && savedNum >= 0 && !alreadyDone
+        && (savedNum === 0 || !!source) && !!month && year !== null && !isBeforeThisMonth(month, year, today);
 
     // A month before this one can't be picked in this year; picking an earlier year's
     // month never happens (the year list starts at this year).
@@ -119,6 +152,16 @@ export default function GoalForm({
         if (!month || year === null) return setError(t('form.errDate'));
         if (isBeforeThisMonth(month, year, today)) return setError(t('form.errPast'));
 
+        if (onSubmitValues) {
+            setError('');
+            onSubmitValues({
+                title: title.trim(), targetAmount: targetNum, savedAmount: savedNum,
+                savedSource: savedNum > 0 ? source : null, targetMonth: month, targetYear: year,
+                autoMinimum: auto,
+            });
+            return;
+        }
+
         setBusy(true);
         setError('');
         try {
@@ -137,7 +180,7 @@ export default function GoalForm({
             setTitle(''); setTarget(''); setSaved(''); setSource(null); setAuto(false);
             setMonth(requireAll ? null : fallback.month);
             setYear(requireAll ? null : fallback.year);
-            onCreated({ id: goal?.id, title: goal?.title ?? title.trim() });
+            onCreated?.({ id: goal?.id, title: goal?.title ?? title.trim() });
         } catch (e: any) {
             const code = premiumErrorCode(e);
             if (code) {
@@ -246,14 +289,19 @@ export default function GoalForm({
             <View style={styles.formBtnRow}>
                 <Pressable
                     onPress={submit}
-                    disabled={busy}
+                    disabled={busy || (!!onSubmitValues && !valid)}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: busy || (!!onSubmitValues && !valid) }}
                     style={({ pressed }) => [
-                        styles.submitBtn, { backgroundColor: theme.brand },
+                        styles.submitBtn,
+                        { backgroundColor: onSubmitValues && !valid ? theme.border : theme.brand },
                         (pressed || busy) && { opacity: 0.85 },
                     ]}
                 >
-                    <IconCheck size={15} color={theme.onBrand} />
-                    <Text style={styles.submitBtnText}>{t('form.submit')}</Text>
+                    <IconCheck size={15} color={onSubmitValues && !valid ? theme.ink3 : theme.onBrand} />
+                    <Text style={[styles.submitBtnText, onSubmitValues && !valid ? { color: theme.ink3 } : null]}>
+                        {submitLabel ?? t('form.submit')}
+                    </Text>
                 </Pressable>
                 {onCancel ? (
                     <Pressable

@@ -44,7 +44,10 @@ function GardenHeader({ debt, planEstPayoffMonth, mode, readOnly, onToggleMode, 
             sub = t('header.freeSince', { date: f.monthYear(debt.est_payoff_month) });
         } else {
             amount = t('header.left', { amount: f.money(debt.current_balance) });
-            sub = t('header.freeBy', { date: f.monthYear(debt.est_payoff_month) });
+            const date = f.monthYear(debt.est_payoff_month);
+            sub = t('header.freeBy', {
+                date: debt.apr_missing && debt.est_payoff_month ? t('aprMissing.beforeInterest', { date }) : date,
+            });
         }
     } else if (debt) {
         // Card view describes the whole plan rather than one plant.

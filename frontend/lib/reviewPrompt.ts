@@ -36,7 +36,7 @@ export const REVIEW_FIRST_SEEN_KEY = 'review_first_seen_at';
 
 /**
  * Both keys are DEVICE-global, not per-user, unlike the `<prefix>_<userId>` keys in
- * constants/onboarding.ts. Apple's own cap is per device+Apple ID and knows nothing
+ * lib/onboardingStore.ts. Apple's own cap is per device+Apple ID and knows nothing
  * about DollarSeeds accounts, so scoping ours per account would let two accounts on
  * one phone spend two of the same three annual slots.
  */

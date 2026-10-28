@@ -202,9 +202,18 @@ function DebtDetailScreen({ readOnly }: { readOnly: boolean }) {
                         {t('label.pctPaid', { pct: f.pct(d.pct_paid) })}
                         {!paidOff ? `  ·  ${t('detail.estPayoff')} ` : ''}
                         {!paidOff ? (
-                            <Text style={{ color: d.est_payoff_month ? theme.ink2 : theme.danger }}>{f.monthYear(d.est_payoff_month)}</Text>
+                            <Text style={{ color: d.est_payoff_month ? theme.ink2 : theme.danger }}>
+                                {d.apr_missing && d.est_payoff_month
+                                    ? t('aprMissing.beforeInterest', { date: f.monthYear(d.est_payoff_month) })
+                                    : f.monthYear(d.est_payoff_month)}
+                            </Text>
                         ) : null}
                     </Text>
+                    {!paidOff && d.apr_missing ? (
+                        <Text style={[styles.meta, { color: theme.harvestInk, fontFamily: Fonts.sans }]}>
+                            {t('aprMissing.warning')}
+                        </Text>
+                    ) : null}
                     {!paidOff && !readOnly && missedCount > 0 ? (
                         <View style={styles.checkin}>
                             <MissedMinsButton debt={d} onPress={() => setMissedOpen(true)} />
