@@ -158,7 +158,7 @@ export function DebtDetailsStep({ a, set, next }: StepProps) {
                 validate={v => { if (!v.trim()) return null; const n = num(v); return n !== null && n >= 0 && n <= 100 ? null : t('debtDetails.errApr'); }}
                 helper={
                     <Text style={[styles.helper, { color: theme.ink2 }]}>
-                        <Trans i18nKey="onboarding:debtDetails.aprHelper" components={{ bold: <Text style={styles.bold} /> }} />
+                        <Trans i18nKey="onboarding:debtDetails.aprHelper" components={{ bold: <Text key="bold" style={styles.bold} /> }} />
                     </Text>
                 } />
         </StepLayout>
@@ -207,7 +207,7 @@ export function DebtPreviewStep({ a, next, preview }: StepProps) {
                             <Trans
                                 i18nKey={p.before_interest ? 'onboarding:debtPreview.titleBeforeInterest' : 'onboarding:debtPreview.title'}
                                 values={{ debt, date: dates.fromKey(p.payoff_month) }}
-                                components={{ bold: <Text style={{ color: theme.brand }} /> }}
+                                components={{ bold: <Text key="bold" style={{ color: theme.brand }} /> }}
                             />
                         )}
                     </Text>
@@ -338,7 +338,7 @@ export function GoalPreviewStep({ a, next, preview }: StepProps) {
                         <Trans
                             i18nKey="onboarding:goalPreview.title"
                             values={{ goal: goal.title, date }}
-                            components={{ bold: <Text style={{ color: theme.brand }} /> }}
+                            components={{ bold: <Text key="bold" style={{ color: theme.brand }} /> }}
                         />
                     </Text>
                     <Text style={[styles.subtitle, { color: theme.ink2 }]}>

@@ -230,7 +230,7 @@ export default function SettingsScreen() {
                             <Text style={[styles.suggestText, { color: theme.ink }]}>
                                 <Trans
                                     i18nKey="settings:firmFoundation.debtRow"
-                                    components={{ bold: <Text style={{ fontFamily: 'Geist-SemiBold' }} /> }}
+                                    components={{ bold: <Text key="bold" style={{ fontFamily: 'Geist-SemiBold' }} /> }}
                                 />
                             </Text>
                         </View>
@@ -239,7 +239,7 @@ export default function SettingsScreen() {
                             <Text style={[styles.suggestText, { color: theme.ink }]}>
                                 <Trans
                                     i18nKey="settings:firmFoundation.emergencyRow"
-                                    components={{ bold: <Text style={{ fontFamily: 'Geist-SemiBold' }} /> }}
+                                    components={{ bold: <Text key="bold" style={{ fontFamily: 'Geist-SemiBold' }} /> }}
                                 />
                                 {suggestedEmergency != null ? t('settings:firmFoundation.emergencyHint', { amount: formatMoney(suggestedEmergency) }) : ''}
                             </Text>
