@@ -100,7 +100,7 @@
     "savedTowardGoals": "guardado em metas",
     "firstPayment": "Seu primeiro pagamento começa esta linha",
     "firstDeposit": "Seu primeiro depósito começa esta linha",
-    "keptSinceJoined": "{{amount}} poupados dentro do orçamento desde que você chegou",
+    "keptSinceJoined": "poupados dentro do orçamento desde que você chegou",
     "keptUnderBudget": "Poupado no orçamento"
   },
   "graph": {

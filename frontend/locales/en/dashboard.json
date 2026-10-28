@@ -100,7 +100,7 @@
     "savedTowardGoals": "saved toward goals",
     "firstPayment": "Your first payment starts this line",
     "firstDeposit": "Your first deposit starts this line",
-    "keptSinceJoined": "{{amount}} kept under budget since you joined",
+    "keptSinceJoined": "kept under budget since you joined",
     "keptUnderBudget": "Kept under budget"
   },
   "graph": {

@@ -78,10 +78,9 @@
       "none": "Not right now"
     },
     "customLabel": "What percent do you give?",
-    "customError": "Pick a percent between 1 and 100.",
     "reaction": {
       "ten": "Beautiful. Your tithe comes off the top, before anything else.",
-      "custom": "Every gift counts. I'll set it aside first.",
+      "custom": "That is an amazing act of faith!",
       "none": "That's okay. You can turn it on anytime in Settings."
     },
     "button": "Let's keep going",

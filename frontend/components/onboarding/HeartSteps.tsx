@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useLocale } from '../../context/LocaleContext';
 import { FEELINGS, NAME_MAX, REASONS, stepAnswered, type Reason, type TitheChoice } from '../../lib/onboardingFlow';
+import { titheRateIssue } from '../../lib/titheRule';
 import CardIcon from './cardIcons';
 import { Field, PrimaryButton, TapCard, TextLink } from './controls';
 import StepLayout, { type StepProps } from './StepLayout';
@@ -133,28 +134,31 @@ export function FeelingStep({ a, set, next }: StepProps) {
 const TITHE_CHOICES: TitheChoice[] = ['ten', 'custom', 'none'];
 
 export function TitheStep({ a, set, next }: StepProps) {
-    const { t } = useTranslation('onboarding');
+    const { t } = useTranslation(['onboarding', 'common']);
     const { theme } = useTheme();
-    const { parseAmount, formatNumber } = useLocale();
+    const { parseAmount } = useLocale();
     const choice = a.tithe?.choice;
-    const [pct, setPct] = useState(a.tithe?.ratePct != null ? formatNumber(a.tithe.ratePct, Number.isInteger(a.tithe.ratePct) ? 0 : 2) : '');
-    const pick = (c: TitheChoice) => set({ tithe: c === 'custom' ? { choice: c, ratePct: parseAmount(pct) ?? undefined } : { choice: c } });
+    const [pct, setPct] = useState(a.tithe?.ratePct != null ? String(a.tithe.ratePct) : '');
+    const parse = (v: string) => (v.trim() ? parseAmount(v) : null);
+    const pick = (c: TitheChoice) => set({ tithe: c === 'custom' ? { choice: c, ratePct: parse(pct) ?? undefined } : { choice: c } });
+    // A whole percentage from 10 to 100 (lib/titheRule.ts). Checked when the field
+    // loses focus; "Let's keep going" stays disabled until it holds.
     const pctError = (v: string) => {
-        const n = parseAmount(v);
-        return n !== null && n > 0 && n <= 100 ? null : t('tithe.customError');
+        const issue = titheRateIssue(parse(v));
+        return issue === null ? null : t(`common:titheRate.${issue === 'empty' ? 'whole' : issue}`);
     };
     return (
         <StepLayout
             pose="bible"
-            bubble={choice ? t(`tithe.reaction.${choice}`) : t('tithe.question')}
-            lead={choice ? t('tithe.short') : undefined}
-            subtitle={t('tithe.subtitle')}
-            footer={<PrimaryButton label={t('tithe.button')} onPress={next} disabled={!stepAnswered('tithe', a)} />}
+            bubble={choice ? t(`onboarding:tithe.reaction.${choice}`) : t('onboarding:tithe.question')}
+            lead={choice ? t('onboarding:tithe.short') : undefined}
+            subtitle={t('onboarding:tithe.subtitle')}
+            footer={<PrimaryButton label={t('onboarding:tithe.button')} onPress={next} disabled={!stepAnswered('tithe', a)} />}
         >
             {TITHE_CHOICES.map(c => (
                 <TapCard
                     key={c}
-                    label={t(`tithe.options.${c}`)}
+                    label={t(`onboarding:tithe.options.${c}`)}
                     icon={<CardIcon name={c} color={theme.brand} soft={theme.brandSoft} />}
                     selected={choice === c}
                     onPress={() => pick(c)}
@@ -162,13 +166,13 @@ export function TitheStep({ a, set, next }: StepProps) {
             ))}
             {choice === 'custom' ? (
                 <Field
-                    label={t('tithe.customLabel')}
+                    label={t('onboarding:tithe.customLabel')}
                     value={pct}
-                    onChangeText={v => { setPct(v); set({ tithe: { choice: 'custom', ratePct: parseAmount(v) ?? undefined } }); }}
+                    onChangeText={v => { setPct(v); set({ tithe: { choice: 'custom', ratePct: parse(v) ?? undefined } }); }}
                     validate={pctError}
-                    keyboardType="decimal-pad"
-                    placeholder="10"
-                    maxLength={6}
+                    keyboardType="number-pad"
+                    placeholder="12"
+                    maxLength={3}
                     autoFocus={!a.tithe?.ratePct}
                 />
             ) : null}

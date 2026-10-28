@@ -16,6 +16,7 @@
  */
 import {
     flowSteps, nextStep, prevStep, resumeStep, progressOf, canGoBack, stepAnswered, verseFor, titheRate,
+    titheRateIssue, TITHE_MIN_PCT, TITHE_MAX_PCT,
 } from '../lib/onboardingFlow.ts';
 import { WRITE_ORDER, runWrites, pendingWrites, allWritten } from '../lib/onboardingWrites.ts';
 
@@ -134,9 +135,24 @@ check('verse: overwhelmed', verseFor('overwhelmed'), 'philippians-4-6');
 check('verse: hopeful', verseFor('hopeful'), 'proverbs-21-5');
 check('verse: pretty good', verseFor('good'), 'luke-16-10');
 check('tithe 10%', titheRate({ choice: 'ten' }), 0.1);
-check('tithe 12.5%', titheRate({ choice: 'custom', ratePct: 12.5 }), 0.125);
+check('tithe 15%', titheRate({ choice: 'custom', ratePct: 15 }), 0.15);
 check('tithe none', titheRate({ choice: 'none' }), null);
 check('custom tithe needs a %', stepAnswered('tithe', { tithe: { choice: 'custom' } }), false);
+
+console.log('\nThe tithe rate rule: a whole percent from 10 to 100');
+check('the bounds', [TITHE_MIN_PCT, TITHE_MAX_PCT], [10, 100]);
+check('10% is fine', titheRateIssue(10), null);
+check('100% is fine', titheRateIssue(100), null);
+check('9% is too low', titheRateIssue(9), 'low');
+check('0% is too low', titheRateIssue(0), 'low');
+check('101% is too high', titheRateIssue(101), 'high');
+check('12.5% is not whole', titheRateIssue(12.5), 'whole');
+check('blank', titheRateIssue(null), 'empty');
+check('a custom 5% keeps the button disabled', stepAnswered('tithe', { tithe: { choice: 'custom', ratePct: 5 } }), false);
+check('a custom 150% keeps the button disabled', stepAnswered('tithe', { tithe: { choice: 'custom', ratePct: 150 } }), false);
+check('a custom 12.5% keeps the button disabled', stepAnswered('tithe', { tithe: { choice: 'custom', ratePct: 12.5 } }), false);
+check('a custom 12% enables it', stepAnswered('tithe', { tithe: { choice: 'custom', ratePct: 12 } }), true);
+check('an invalid custom rate is never written', titheRate({ choice: 'custom', ratePct: 5 }), null);
 check('a blank name is not an answer', stepAnswered('name', { name: '   ' }), false);
 check('"I haven\'t spent anything yet" is an answer', stepAnswered('expense', { expense: null }), true);
 

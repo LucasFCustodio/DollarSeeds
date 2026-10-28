@@ -34,6 +34,7 @@ import { useLocale } from '../context/LocaleContext';
 import { SUPPORTED_LANGUAGES } from '../lib/i18n';
 import { CURRENCIES, CURRENCY_CODES, type CurrencyCode } from '../constants/currencies';
 import { DEV_ACCOUNT_EMAIL } from '../constants/onboarding';
+import { titheRateIssue } from '../lib/titheRule';
 import { TERMS_URL, PRIVACY_URL } from '../constants/legal';
 import { APP_STORE_REVIEW_URL } from '../constants/review';
 import { MANAGE_SUBSCRIPTION_URL } from '../constants/premium';
@@ -85,6 +86,9 @@ export default function SettingsScreen() {
     const [ffPrompted, setFfPrompted] = useState(false);
     const [titheEnabled, setTitheEnabled] = useState(false);
     const [titheRate, setTitheRate] = useState(0.10);
+    // The rate as typed (whole percent), and the inline message when it can't be saved.
+    const [rateInput, setRateInput] = useState('10');
+    const [rateError, setRateError] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -110,7 +114,10 @@ export default function SettingsScreen() {
                     setBudgetType((data.budget_type as BudgetTypeKey) ?? DEFAULT_BUDGET_TYPE);
                     setFfPrompted(!!data.firm_foundation_goals_prompted);
                     setTitheEnabled(!!data.tithe_enabled);
-                    setTitheRate(typeof data.tithe_rate === 'number' ? data.tithe_rate : 0.10);
+                    const rate = typeof data.tithe_rate === 'number' ? data.tithe_rate : 0.10;
+                    setTitheRate(rate);
+                    setRateInput(String(Math.round(rate * 100)));
+                    setRateError('');
                 } catch (err) {
                     console.error('Settings fetch error:', err);
                 } finally {
@@ -343,6 +350,32 @@ export default function SettingsScreen() {
                                 thumbColor="#fff"
                             />
                         </View>
+
+                        {/* The rate, only while tithing is on: a whole percent from 10 to
+                            100 (lib/titheRule.ts), checked and saved when the field loses
+                            focus. Open months take the new rate; closed months keep the
+                            one they were frozen with (_month_tithe / month_status). */}
+                        {titheEnabled ? (
+                            <View style={[styles.rateRow, { borderTopColor: theme.borderSoft }]}>
+                                <Text style={[styles.rowTitle, styles.rateLabel, { color: theme.ink }]}>{t('settings:tithing.rateLabel')}</Text>
+                                <View style={[styles.rateField, { backgroundColor: theme.surfaceSoft, borderColor: rateError ? theme.danger : theme.border }]}>
+                                    <TextInput
+                                        value={rateInput}
+                                        onChangeText={handleRateChange}
+                                        onBlur={handleRateBlur}
+                                        keyboardType="number-pad"
+                                        maxLength={3}
+                                        editable={!saving}
+                                        accessibilityLabel={t('settings:tithing.rateA11y')}
+                                        style={[styles.rateInput, { color: theme.ink }]}
+                                    />
+                                    <Text style={[styles.ratePercent, { color: theme.ink2 }]}>%</Text>
+                                </View>
+                            </View>
+                        ) : null}
+                        {titheEnabled && rateError ? (
+                            <Text style={[styles.rateError, { color: theme.danger }]}>{rateError}</Text>
+                        ) : null}
 
                         <View style={[styles.explainBox, { backgroundColor: theme.surfaceSoft, borderTopColor: theme.borderSoft }]}>
                             <Text style={[styles.explainText, { color: theme.ink2 }]}>
@@ -677,6 +710,41 @@ export default function SettingsScreen() {
         }
     }
 
+    /** The message for a rate that can't be saved, or '' when it can. */
+    function rateMessage(input: string): string {
+        const pct = input.trim() ? Number(input.trim()) : null;
+        // Something pasted that isn't a number reads as "a whole number, please".
+        const issue = pct !== null && Number.isNaN(pct) ? 'whole' : titheRateIssue(pct);
+        return issue === null ? '' : t(`common:titheRate.${issue === 'empty' ? 'whole' : issue}`);
+    }
+
+    // Never validated per keystroke; an error already showing clears once it's fixed.
+    function handleRateChange(next: string) {
+        setRateInput(next);
+        if (rateError && !rateMessage(next)) setRateError('');
+    }
+
+    function handleRateBlur() {
+        if (!user?.id) return;
+        const message = rateMessage(rateInput);
+        setRateError(message);
+        if (message) return;                       // below 10% or above 100%: not saved
+        const pct = Number(rateInput.trim());
+        const rate = pct / 100;
+        setRateInput(String(pct));
+        if (Math.round(titheRate * 100) === pct) return;
+        const previous = titheRate;
+        setTitheRate(rate);
+        setSaving(true);
+        axios.patch(`${BASE}/settings/`, { user_id: user.id, tithe_rate: rate })
+            .catch(err => {
+                console.error('Settings update error:', err);
+                setTitheRate(previous);
+                setRateInput(String(Math.round(previous * 100)));
+            })
+            .finally(() => setSaving(false));
+    }
+
     function handleToggleTithe(value: boolean) {
         if (!user?.id) return;
         const previous = titheEnabled;
@@ -763,6 +831,12 @@ const styles = StyleSheet.create({
     rowSub: { fontFamily: 'Geist-Regular', fontSize: 12, marginTop: 2 },
 
     explainBox: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12 },
+    rateRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12 },
+    rateLabel: { flex: 1 },
+    rateField: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 10 },
+    rateInput: { minWidth: 40, paddingVertical: 8, fontFamily: 'Geist-SemiBold', fontSize: 16, textAlign: 'right' },
+    ratePercent: { fontFamily: 'Geist-SemiBold', fontSize: 16, marginLeft: 2 },
+    rateError: { fontFamily: 'Geist-Medium', fontSize: 12, lineHeight: 17, paddingHorizontal: 16, paddingBottom: 10 },
     explainText: { fontFamily: 'Geist-Regular', fontSize: 12, lineHeight: 18 },
 
     // About & legal

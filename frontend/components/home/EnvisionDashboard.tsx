@@ -13,6 +13,13 @@
  * flips. The debts row is taller than the goals row because its pots need room for
  * the tallest plant above them (see MiniPlant).
  *
+ * SPACING. Up to three sections — debts, goals, kept under budget — split by the same
+ * hairline, and a hairline only ever sits BETWEEN two sections shown. Every row's
+ * content fills its fixed height in both views (the graphs grow to the row; the
+ * ring sets the goals row's height), so nothing is centred in leftover space: the
+ * gap on each side of every hairline is the row padding plus the hairline's margin,
+ * the same everywhere.
+ *
  * The server computes every number (lib/homeProgress.ts); this file only lays them
  * out. With no debts or no goals a row shows its empty state in both views.
  *
@@ -46,11 +53,21 @@ const RADIUS = 18;
 const ART = require('../../assets/images/home/envision-dashboard-bg.png');
 const ROW_PAD_X = 16;
 const ROW_PAD_Y = 10;
-const GOAL_ROW_H = 90;
-/** The "kept under budget" line (count view) and its graph with its total (amount
- *  view, laid out like the goals row's) share one fixed height, so the card still never
- *  jumps when it flips. Room for the AmountRow's graph and its padding. */
-const KEPT_H = 44 + ROW_PAD_Y * 2;
+/** Hairline margin above and below; with ROW_PAD_Y on both sides, every gap is equal. */
+const DIVIDER_GAP = 4;
+
+const RING = 56;
+const RING_STROKE = 6;
+const PLUS = 32;
+/** The ring is the goals row's tallest content; the amount view's graph matches it. */
+const GOAL_ROW_H = RING + ROW_PAD_Y * 2;
+/** An empty row (+ and an invitation) is the same in both views, so it hugs its +. */
+const EMPTY_ROW_H = PLUS + ROW_PAD_Y * 2;
+/** Kept under budget, both views: a medium total over a very-small caption (Geist's
+ *  line heights at 18 and 11 are 23 + 14), with the graph (amount view) beside them at
+ *  the same height. */
+const KEPT_CONTENT_H = 23 + 14;
+const KEPT_H = KEPT_CONTENT_H + ROW_PAD_Y * 2;
 
 /** Pot rim width: 36 pt for up to 6 debts, shrinking evenly to 26 pt at 8. More
  *  than 8 switch to segments. */
@@ -68,10 +85,6 @@ const POT_AREA_H = Math.ceil(miniPlantHeight(POT_MAX));
 const DEBT_LINE_H = 24;
 const DEBT_ROW_H = ROW_PAD_Y * 2 + POT_AREA_H + 4 + DEBT_LINE_H;
 
-const RING = 56;
-const RING_STROKE = 6;
-const SPARK_H = 44;
-const PLUS = 32;
 
 type View2 = 'count' | 'amount';
 
@@ -123,12 +136,16 @@ export default function EnvisionDashboard({
             {showDebts ? (
                 <>
                     <DebtsRow view={view} debts={debts} onOpenDebts={onOpenDebts} onAddDebt={onAddDebt} onOpenGraph={() => setGraph('debts')} />
-                    <View style={[styles.hairline, { backgroundColor: theme.borderStrong }]} />
+                    <Divider />
                 </>
             ) : null}
             <GoalsRow view={view} goals={goals} onOpenCompleted={onOpenCompletedGoals} onAddGoal={onAddGoal} onOpenGraph={() => setGraph('goals')} />
+            {/* Kept under budget is hidden at $0, and its hairline with it. */}
             {goals && goals.kept_under_budget > 0.005 ? (
-                <KeptRow view={view} goals={goals} onOpenGraph={() => setGraph('kept')} />
+                <>
+                    <Divider />
+                    <KeptRow view={view} goals={goals} onOpenGraph={() => setGraph('kept')} />
+                </>
             ) : null}
         </View>
     );
@@ -172,6 +189,12 @@ export default function EnvisionDashboard({
 
 // ── rows ─────────────────────────────────────────────────────────────────────
 
+/** The thin line between two sections, with equal room above and below. */
+function Divider() {
+    const { theme } = useTheme();
+    return <View style={[styles.hairline, { backgroundColor: theme.borderStrong }]} />;
+}
+
 interface RowProps {
     height: number;
     onPress?: () => void;
@@ -204,7 +227,7 @@ function Row({ height, onPress, chevron = true, children }: RowProps) {
 function EmptyRow({ message, onPress }: { message: string; onPress: () => void }) {
     const { theme } = useTheme();
     return (
-        <Row height={GOAL_ROW_H} onPress={onPress} chevron={false}>
+        <Row height={EMPTY_ROW_H} onPress={onPress} chevron={false}>
             <View style={styles.emptyLine}>
                 <View style={[styles.plus, { backgroundColor: theme.brand }]}>
                     <IconPlus size={18} color={theme.onBrand} />
@@ -326,7 +349,8 @@ function GoalsRow({ view, goals, onOpenCompleted, onAddGoal, onOpenGraph }: {
     );
 }
 
-/** Headline total on the left, the last 12 months' cumulative line filling the rest.
+/** Headline total on the left, the last 12 months' cumulative line filling the rest
+ *  at the row's full content height (so the row has no empty space to centre in).
  *  Before any money is logged: a flat baseline and an invitation, and no graph to
  *  open, so the row isn't tappable. */
 function AmountRow({ height, total, caption, series, color, firstLine, onPress }: {
@@ -360,7 +384,7 @@ function AmountRow({ height, total, caption, series, color, firstLine, onPress }
                             <Sparkline values={[]} baseline color={theme.borderStrong} width={sparkW} height={8} />
                         </>
                     ) : (
-                        <Sparkline values={series.slice(-12)} color={color} width={sparkW} height={SPARK_H} />
+                        <Sparkline values={series.slice(-12)} color={color} width={sparkW} height={height - ROW_PAD_Y * 2} />
                     )}
                 </View>
             </View>
@@ -369,19 +393,23 @@ function AmountRow({ height, total, caption, series, color, firstLine, onPress }
 }
 
 /** goals_v2 "kept under budget": the month-end leftovers since the user joined. Count
- *  view — one small line under the ring. Amount view — the total and its graph of each
- *  month's amount, the same way the goals row shows "saved toward goals"; it opens the
- *  goals sheet at the full graph. Hidden by the caller when the total is 0. */
+ *  view — the total over "kept under budget since you joined". Amount view — the total
+ *  and its graph of each month's amount, the same way the goals row shows "saved toward
+ *  goals"; it opens the goals sheet at the full graph. Both the same height. Hidden by
+ *  the caller (with its hairline) when the total is 0. */
 function KeptRow({ view, goals, onOpenGraph }: { view: View2; goals: GoalProgress; onOpenGraph: () => void }) {
     const { theme } = useTheme();
     const { t } = useTranslation('dashboard');
     const { formatMoney } = useLocale();
-    const line = t('progress.keptSinceJoined', { amount: formatMoney(goals.kept_under_budget) });
     if (view === 'count') {
         return (
             <Row height={KEPT_H} onPress={onOpenGraph}>
-                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}
-                    style={[homeType.verySmall, { color: theme.ink2 }]}>{line}</Text>
+                <Text style={[homeType.medium, { color: theme.ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                    {formatMoney(goals.kept_under_budget)}
+                </Text>
+                <Text style={[homeType.verySmall, { color: theme.ink2 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                    {t('progress.keptSinceJoined')}
+                </Text>
             </Row>
         );
     }
@@ -429,7 +457,7 @@ const styles = StyleSheet.create({
     flex: { flex: 1 },
     row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: ROW_PAD_X, paddingVertical: ROW_PAD_Y, gap: 8 },
     rowBody: { flex: 1, justifyContent: 'center' },
-    hairline: { height: 1, marginHorizontal: ROW_PAD_X, marginVertical: 2 },
+    hairline: { height: 1, marginHorizontal: ROW_PAD_X, marginVertical: DIVIDER_GAP },
     dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingTop: 4, paddingBottom: 10 },
     dot: { width: 6, height: 6, borderRadius: 3 },
     potArea: { justifyContent: 'flex-end' },

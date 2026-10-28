@@ -194,8 +194,7 @@ export function stepAnswered(step: StepId, a: Answers): boolean {
         case 'feeling': return !!a.feeling;
         case 'tithe':
             if (!a.tithe) return false;
-            return a.tithe.choice !== 'custom'
-                || (typeof a.tithe.ratePct === 'number' && a.tithe.ratePct > 0 && a.tithe.ratePct <= 100);
+            return a.tithe.choice !== 'custom' || titheRateIssue(a.tithe.ratePct ?? null) === null;
         case 'income': return typeof a.income === 'number' && a.income > 0;
         case 'expense': return a.expense !== undefined;
         case 'debtAsk': return !!a.debtChoice;
@@ -244,6 +243,27 @@ export function verseFor(feeling: Feeling | undefined): string {
 export function titheRate(tithe: Answers['tithe']): number | null {
     if (!tithe || tithe.choice === 'none') return null;
     if (tithe.choice === 'ten') return 0.1;
-    const pct = tithe.ratePct ?? 0;
-    return pct > 0 ? Math.round(pct * 100) / 10000 : null;
+    const pct = tithe.ratePct ?? null;
+    return titheRateIssue(pct) === null ? pct! / 100 : null;
+}
+
+// ── The tithe rate rule ──────────────────────────────────────────────────────
+// A tithe rate is a WHOLE percentage from 10 to 100. Enforced in the app only
+// (Settings and the onboarding): PATCH /settings/ is an existing route, and making it
+// stricter would start failing old binaries (CLAUDE.md). Settings imports it through
+// lib/titheRule.ts; it lives here because this module must stay import-free for
+// `npm run verify-onboarding` to run it under plain node.
+
+export const TITHE_MIN_PCT = 10;
+export const TITHE_MAX_PCT = 100;
+
+/** Why a typed rate can't be saved, or null when it can. */
+export type TitheRateIssue = 'empty' | 'whole' | 'low' | 'high';
+
+export function titheRateIssue(pct: number | null): TitheRateIssue | null {
+    if (pct === null || !Number.isFinite(pct)) return 'empty';
+    if (!Number.isInteger(pct)) return 'whole';
+    if (pct < TITHE_MIN_PCT) return 'low';
+    if (pct > TITHE_MAX_PCT) return 'high';
+    return null;
 }

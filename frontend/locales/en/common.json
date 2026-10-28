@@ -142,5 +142,10 @@
   "legal": {
     "disclaimerFull": "DollarSeeds provides budgeting tools and educational content for general informational purposes only. It is not financial, investment, or tax advice. Consult a qualified professional before making financial decisions.",
     "disclaimerShort": "For education and budgeting only — not financial, investment, or tax advice."
+  },
+  "titheRate": {
+    "low": "A tithe starts at 10%. You can always give more.",
+    "high": "A tithe can go up to 100%.",
+    "whole": "Just a whole number, like 12."
   }
 }

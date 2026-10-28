@@ -14,7 +14,9 @@
   "tithing": {
     "title": "Dízimo",
     "subtitle": "Separe {{percent}}% como dízimo antes de orçar",
-    "explain": "Quando ativado, {{percent}}% de cada nova entrada é separado primeiro para o Dízimo, e o seu orçamento {{split}} é calculado sobre os {{remainder}}% restantes. Os meses anteriores mantêm a divisão original."
+    "explain": "Quando ativado, {{percent}}% de cada nova entrada é separado primeiro para o Dízimo, e o seu orçamento {{split}} é calculado sobre os {{remainder}}% restantes. Os meses anteriores mantêm a divisão original.",
+    "rateLabel": "Porcentagem do dízimo",
+    "rateA11y": "Porcentagem do dízimo"
   },
   "language": {
     "title": "Idioma",

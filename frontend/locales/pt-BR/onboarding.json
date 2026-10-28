@@ -78,10 +78,9 @@
       "none": "Agora não"
     },
     "customLabel": "Qual porcentagem você dá?",
-    "customError": "Escolha uma porcentagem entre 1 e 100.",
     "reaction": {
       "ten": "Que lindo. O seu dízimo sai primeiro, antes de tudo.",
-      "custom": "Toda oferta conta. Vou separar ela primeiro.",
+      "custom": "Que ato de fé incrível!",
       "none": "Tudo bem. Você pode ativar quando quiser nos Ajustes."
     },
     "button": "Vamos em frente",
