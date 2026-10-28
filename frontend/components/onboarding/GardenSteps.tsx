@@ -28,7 +28,13 @@ import StepLayout, { type StepProps } from './StepLayout';
 export function CommitmentStep({ a, set, next, name }: StepProps) {
     const { t } = useTranslation('onboarding');
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+    // Arriving here (including by the back arrow) always starts with the hold undone:
+    // a held button has no action of its own, so a kept `committed` would leave the
+    // user with no way forward.
+    useEffect(() => {
+        if (a.committed) set({ committed: false });
+        return () => { if (timer.current) clearTimeout(timer.current); };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
     const commit = () => {
         set({ committed: true });
         // A breath before moving on: the moment is the point, not the button.
