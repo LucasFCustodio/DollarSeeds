@@ -191,6 +191,11 @@
     "eyebrow": "Liberdade das dívidas",
     "line": "Comece a sair das dívidas.",
     "cta": "Saiba como",
-    "ctaA11y": "Saiba como funciona a Liberdade das dívidas"
+    "ctaA11y": "Saiba como funciona a Liberdade das dívidas",
+    "plantedOne": "Sua dívida {{name}} está plantada.",
+    "plantedMany": "Suas dívidas estão plantadas.",
+    "grow": "Ajude a crescer.",
+    "water": "Regar",
+    "waterA11y": "Assine o Premium para continuar cultivando"
   }
 }

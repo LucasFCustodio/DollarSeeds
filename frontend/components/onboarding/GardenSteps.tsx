@@ -4,7 +4,11 @@
  *
  * Sign-up reuses lib/authActions.ts (the same flows app/auth.tsx runs): Sign in with
  * Apple first, then Google, then email. Success needs nothing here — the session
- * lands in AuthContext and app/onboarding.tsx writes the plan.
+ * lands in AuthContext and app/onboarding.tsx writes the plan ON THIS SCREEN: its
+ * button reads "Planting your plan…" until the writes finish, then the paywall opens.
+ * A failed write shows the kind error and Try again here too.
+ *
+ * No screen here advances on a timer (ONBOARDING_FIXES.md §2).
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -19,6 +23,7 @@ import {
 } from '../../lib/authActions';
 import { verseFor } from '../../lib/onboardingFlow';
 import Card from '../ui/Card';
+import Confetti from './Confetti';
 import MiniPlant from '../home/MiniPlant';
 import { usePlanDate, VerseCard } from './HarvestSteps';
 import CardIcon from './cardIcons';
@@ -27,24 +32,18 @@ import StepLayout, { type StepProps } from './StepLayout';
 
 export function CommitmentStep({ a, set, next, name }: StepProps) {
     const { t } = useTranslation('onboarding');
-    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     // Arriving here (including by the back arrow) always starts with the hold undone:
     // a held button has no action of its own, so a kept `committed` would leave the
     // user with no way forward.
     useEffect(() => {
         if (a.committed) set({ committed: false });
-        return () => { if (timer.current) clearTimeout(timer.current); };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
-    const commit = () => {
-        set({ committed: true });
-        // A breath before moving on: the moment is the point, not the button.
-        timer.current = setTimeout(next, 1400);
-    };
+    // Straight to the plan, where the celebration is.
+    const commit = () => { set({ committed: true }); next(); };
     return (
         <StepLayout
             pose="praying"
-            bubble={a.committed ? t('commitment.held') : t('commitment.bubble')}
-            title={t('commitment.title', { name })}
+            bubble={t('commitment.bubble', { name })}
             subtitle={t('commitment.subtitle')}
             footer={<HoldButton label={t('commitment.hold')} done={!!a.committed} onComplete={commit} />}
         >
@@ -53,7 +52,7 @@ export function CommitmentStep({ a, set, next, name }: StepProps) {
     );
 }
 
-export function PlanStep({ a, next, name, split, preview }: StepProps) {
+export function PlanStep({ a, next, name, split, preview, forward }: StepProps) {
     const { t } = useTranslation('onboarding');
     const { theme } = useTheme();
     const { formatMoney } = useLocale();
@@ -69,6 +68,8 @@ export function PlanStep({ a, next, name, split, preview }: StepProps) {
             pose="proud"
             bubble={t('plan.bubble')}
             title={t('plan.title', { name })}
+            // Arriving from the commitment: confetti flies up as the plan opens.
+            overlay={forward ? <Confetti /> : undefined}
             footer={<PrimaryButton label={t('plan.button')} onPress={next} disabled={!split} />}
         >
             {split ? (
@@ -118,7 +119,11 @@ export function PlanStep({ a, next, name, split, preview }: StepProps) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const PASSWORD_MIN = 6;
 
-export function SignupStep({ busy, onHaveAccount }: StepProps & { onHaveAccount: () => void }) {
+export function SignupStep({ busy, saveError, onRetry, signedIn, onHaveAccount }: StepProps & {
+    /** The account exists: the plan is being written (or failed to be). */
+    signedIn: boolean;
+    onHaveAccount: () => void;
+}) {
     const { t } = useTranslation('onboarding');
     const { theme } = useTheme();
     const [email, setEmail] = useState('');
@@ -167,13 +172,26 @@ export function SignupStep({ busy, onHaveAccount }: StepProps & { onHaveAccount:
         }
     });
 
+    // Signed in: the plan is being written here, then the paywall opens.
+    if (signedIn) {
+        return (
+            <StepLayout
+                pose={saveError ? 'oops' : 'planting'}
+                bubble={saveError ? t('chrome.saveError') : t('signup.bubble')}
+                title={t('signup.title')}
+                footer={saveError
+                    ? <PrimaryButton label={t('chrome.tryAgain')} onPress={onRetry} busy={busy} />
+                    : <PrimaryButton label={t('chrome.saving')} onPress={() => {}} busy />}
+            />
+        );
+    }
+
     if (confirming) {
         return (
             <StepLayout
                 pose={error ? 'oops' : 'waving'}
-                bubble={error ?? t('signup.confirmTitle')}
+                bubble={error ?? t('signup.confirmBody', { email: email.trim() })}
                 title={t('signup.confirmTitle')}
-                subtitle={t('signup.confirmBody', { email: email.trim() })}
                 footer={<PrimaryButton label={t('signup.confirmButton')} onPress={confirmed} busy={working || busy} />}
             />
         );
@@ -182,9 +200,8 @@ export function SignupStep({ busy, onHaveAccount }: StepProps & { onHaveAccount:
     return (
         <StepLayout
             pose={error ? 'oops' : 'waving'}
-            bubble={error ?? t('signup.bubble')}
+            bubble={error ?? t('signup.subtitle')}
             title={t('signup.title')}
-            subtitle={t('signup.subtitle')}
             footer={<>
                 <PrimaryButton label={t('signup.button')} onPress={create} disabled={!valid} busy={working || busy} />
                 <TextLink label={t('signup.haveAccount')} onPress={onHaveAccount} />
@@ -252,8 +269,7 @@ export function PremiumStep({ a, next }: StepProps) {
     const copy = { headline: t(planted ? 'premium.debtHeadline' : 'premium.planHeadline'), subtitle: t('premium.subtitle') };
 
     useEffect(() => {
-        const timer = setTimeout(() => openPaywallWith(copy), 300);
-        return () => clearTimeout(timer);
+        openPaywallWith(copy);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Closing the paywall (or buying) continues to the last screen.
@@ -279,7 +295,6 @@ export function DoneStep({ name, onDone, busy }: StepProps & { onDone: () => voi
             pose="waving"
             bubble={t('onboarding:done.bubble')}
             title={t('onboarding:done.title', { name })}
-            subtitle={t('onboarding:done.subtitle')}
             footer={<PrimaryButton label={t('onboarding:done.button')} onPress={onDone} busy={busy} />}
         >
             {/* Compliance copy: shown on the onboarding's last step (constants/legal.ts). */}

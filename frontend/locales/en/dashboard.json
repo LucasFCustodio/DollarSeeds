@@ -191,6 +191,11 @@
     "eyebrow": "Debt Freedom",
     "line": "Start getting out of debt.",
     "cta": "Learn how",
-    "ctaA11y": "Learn how Debt Freedom works"
+    "ctaA11y": "Learn how Debt Freedom works",
+    "plantedOne": "Your {{name}} is planted.",
+    "plantedMany": "Your debts are planted.",
+    "grow": "Help it grow.",
+    "water": "Water it",
+    "waterA11y": "Subscribe to Premium to keep growing it"
   }
 }

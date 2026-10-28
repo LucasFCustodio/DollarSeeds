@@ -17,6 +17,9 @@ import { DEBT_KINDS, DEBT_NAME_MAX, GOAL_KINDS, stepAnswered, type DebtKind, typ
 import Card from '../ui/Card';
 import GoalForm from '../goals/GoalForm';
 import PlantView, { type PlantViewHandle } from '../debts/PlantView';
+import PotLabel from '../debts/PotLabel';
+import { CANVAS_W, POT_LABEL_BOX } from '../debts/art';
+import type { GoalFormHandle } from '../goals/GoalForm';
 import { IconScripture } from '../icons';
 import CardIcon, { type CardIconName } from './cardIcons';
 import { CardGrid, Field, PrimaryButton, TapCard } from './controls';
@@ -48,7 +51,7 @@ export function DebtAskStep({ a, set, next }: StepProps) {
         <StepLayout
             pose={choice === 'free' ? 'excited' : 'gentle'}
             bubble={choice ? t(`debtAsk.reaction.${choice}`) : t('debtAsk.question')}
-            title={choice ? t('debtAsk.question') : undefined}
+            lead={choice ? t('debtAsk.short') : undefined}
             subtitle={t('debtAsk.subtitle')}
             footer={<PrimaryButton label={t('chrome.continue')} onPress={next} disabled={!choice} />}
         >
@@ -77,7 +80,9 @@ export function DebtTypeStep({ a, set, next }: StepProps) {
     return (
         <StepLayout
             pose="planting"
-            bubble={t('debtType.question')}
+            bubble={a.debtKind ? t('debtType.reaction') : t('debtType.question')}
+            lead={a.debtKind ? t('debtType.short') : undefined}
+            subtitle={t('debtType.subtitle')}
             footer={<PrimaryButton label={t('debtType.button')} onPress={next} disabled={!stepAnswered('debtType', a)} />}
         >
             <CardGrid>
@@ -172,14 +177,28 @@ export function DebtPreviewStep({ a, next, preview }: StepProps) {
     }, []);
     const debt = (a.debtName ?? '').trim();
     const stalled = !!p && (!p.covers_interest || !p.payoff_month);
+    // The garden's own pot label, filled from the answers on the phone (nothing is on
+    // the server yet): the name, the minimum and its next due date, 0% paid.
+    const label = {
+        name: debt,
+        missing: [],
+        next_due_date: nextDueISO(a.debt?.dueDay ?? 1),
+        min_payment: a.debt?.minPayment ?? 0,
+        status: 'active' as const,
+        pct_paid: 0,
+    };
     return (
         <StepLayout
             pose="watering"
             bubble={t('onboarding:debtPreview.bubble')}
+            ownHeading
             footer={<PrimaryButton label={t('onboarding:debtPreview.button')} onPress={next} disabled={!p} />}
         >
             <View style={styles.plant}>
-                <PlantView ref={plant} species={4} growthStep={1} state="growing" isFocus active width={150} />
+                <PlantView
+                    ref={plant} species={4} growthStep={1} state="growing" isFocus active width={PLANT_W}
+                    potLabel={<PotLabel debt={label} boxHeight={POT_LABEL_BOX.height * (PLANT_W / CANVAS_W)} />}
+                />
             </View>
             {!p ? <ActivityIndicator color={theme.brand} /> : (
                 <>
@@ -192,12 +211,23 @@ export function DebtPreviewStep({ a, next, preview }: StepProps) {
                             />
                         )}
                     </Text>
-                    <Text style={[styles.subtitle, { color: theme.ink2 }]}>{t('onboarding:debtPreview.subtitle')}</Text>
                     <VerseCard id="proverbs-22-7" />
                 </>
             )}
         </StepLayout>
     );
+}
+
+const PLANT_W = 170;
+
+/** The next time `dueDay` comes round, today included, as YYYY-MM-DD (a day past a
+ *  short month's end lands on its last day, as on the server). */
+function nextDueISO(dueDay: number, now = new Date()): string {
+    const on = (y: number, m: number) => new Date(y, m, Math.min(dueDay, new Date(y, m + 1, 0).getDate()));
+    let due = on(now.getFullYear(), now.getMonth());
+    if (due.getDate() < now.getDate()) due = on(now.getFullYear(), now.getMonth() + 1);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${due.getFullYear()}-${p(due.getMonth() + 1)}-${p(due.getDate())}`;
 }
 
 export function VerseCard({ id }: { id: string }) {
@@ -225,8 +255,8 @@ export function GoalPickStep({ a, set, next }: StepProps) {
     return (
         <StepLayout
             pose="curious"
-            bubble={a.goalKind ? t('goalPick.reaction') : t('goalPick.question')}
-            title={a.goalKind ? t('goalPick.question') : undefined}
+            bubble={a.goalKind ? t(`goalPick.reaction.${a.goalKind}`) : t('goalPick.question')}
+            lead={a.goalKind ? t('goalPick.short') : undefined}
             subtitle={t('goalPick.subtitle')}
             footer={<PrimaryButton label={t('goalPick.button')} onPress={next} disabled={!a.goalKind} />}
         >
@@ -247,7 +277,7 @@ export function GoalPickStep({ a, set, next }: StepProps) {
     );
 }
 
-export function GoalDetailsStep({ a, set, next, split, mode }: StepProps) {
+export function GoalDetailsStep({ a, set, next, split, mode, busy }: StepProps) {
     const { t } = useTranslation('onboarding');
     const kind = a.goalKind;
     // Before sign-up there is no account to read the budget context from: it is the
@@ -259,14 +289,26 @@ export function GoalDetailsStep({ a, set, next, split, mode }: StepProps) {
         goal_minimums: 0,
         debt_minimums: a.debtChoice === 'yes' && a.debt ? a.debt.minPayment : 0,
     } : undefined, [mode, split, a.debtChoice, a.debt]);
+    const form = useRef<GoalFormHandle>(null);
+    const [valid, setValid] = useState(false);
+    // Looks like every other screen: Benny pinned above, the fields straight on the
+    // screen (no card), and the screen's one button submits the form.
     return (
-        <StepLayout pose="planting" bubble={t('goalDetails.bubble')}>
+        <StepLayout
+            pose="planting"
+            bubble={t('goalDetails.bubble')}
+            pinBenny
+            footer={<PrimaryButton label={t('goalDetails.button')} onPress={() => form.current?.submit()} disabled={!valid} busy={busy} />}
+        >
             <GoalForm
+                ref={form}
+                bare
+                hideSubmit
                 requireAll
+                onValidityChange={setValid}
                 initialTitle={kind && kind !== 'other' ? t(`goalPick.options.${kind}`) : ''}
                 initialValues={a.goal}
                 budgetContext={context}
-                submitLabel={t('goalDetails.button')}
                 onSubmitValues={values => { set({ goal: values }); next(); }}
             />
         </StepLayout>
@@ -287,6 +329,7 @@ export function GoalPreviewStep({ a, next, preview }: StepProps) {
         <StepLayout
             pose={a.goalKind === 'phone' ? 'excited-phone' : 'excited'}
             bubble={t('goalPreview.bubble')}
+            ownHeading
             footer={<PrimaryButton label={t('goalPreview.button')} onPress={next} disabled={!g} />}
         >
             {!g || !goal ? <ActivityIndicator color={theme.brand} /> : (

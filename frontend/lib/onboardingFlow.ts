@@ -6,6 +6,8 @@
  *   - Group 3 runs the debt steps before the goal steps when the user said they want
  *     to get out of debt (screen 4), and the goal steps first otherwise.
  *   - The debt steps after "Any debts?" only exist when the answer was "Yes, I do".
+ *   - "That's it!" (expenseDone, the updated containers) only follows a logged
+ *     expense; "I haven't spent anything yet" skips it.
  *   - In signed-in mode (an account that never did this onboarding) a step whose data
  *     the account already has is skipped (`ServerFacts`), and sign-up never shows.
  *   - Premium is skipped for an active subscriber, in both modes.
@@ -21,7 +23,7 @@
 export type StepId =
     | 'welcome' | 'promise'
     | 'name' | 'reasons' | 'feeling' | 'tithe'
-    | 'income' | 'split' | 'expense'
+    | 'income' | 'split' | 'expense' | 'expenseDone'
     | 'debtAsk' | 'debtType' | 'debtDetails' | 'debtPreview'
     | 'goalPick' | 'goalDetails' | 'goalPreview'
     | 'commitment' | 'plan' | 'signup' | 'premium' | 'done';
@@ -90,7 +92,7 @@ export interface ServerFacts {
 
 export const GROUP_OF: Partial<Record<StepId, GroupId>> = {
     name: 'heart', reasons: 'heart', feeling: 'heart', tithe: 'heart',
-    income: 'month', split: 'month', expense: 'month',
+    income: 'month', split: 'month', expense: 'month', expenseDone: 'month',
     debtAsk: 'harvest', debtType: 'harvest', debtDetails: 'harvest', debtPreview: 'harvest',
     goalPick: 'harvest', goalDetails: 'harvest', goalPreview: 'harvest',
     commitment: 'garden', plan: 'garden', signup: 'garden', premium: 'garden', done: 'garden',
@@ -106,7 +108,7 @@ export function canonicalSteps(answers: Answers): StepId[] {
     return [
         'welcome', 'promise',
         'name', 'reasons', 'feeling', 'tithe',
-        'income', 'split', 'expense',
+        'income', 'split', 'expense', 'expenseDone',
         ...harvest,
         'commitment', 'plan', 'signup', 'premium', 'done',
     ];
@@ -115,6 +117,13 @@ export function canonicalSteps(answers: Answers): StepId[] {
 /** Is this step left out for this user? */
 export function isSkipped(step: StepId, answers: Answers, mode: Mode, facts: ServerFacts): boolean {
     if (step === 'premium' && facts.premiumActive) return true;
+    if (step === 'expenseDone') {
+        // Only after a logged expense. Before screen 9 is answered it still counts
+        // toward the progress bar, like the debt steps.
+        if (answers.expense === null) return true;
+        if (mode === 'signed_in' && facts.hasExpenseThisMonth) return true;
+        return false;
+    }
     if (['debtType', 'debtDetails', 'debtPreview'].includes(step) && answers.debtChoice !== 'yes') {
         // Only "Yes, I do" goes on. Until "Any debts?" is answered they still count
         // toward the progress bar, so it never jumps backwards on a "Yes".

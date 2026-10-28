@@ -21,7 +21,6 @@
   },
   "promise": {
     "bubble": "I'm so glad you're here.",
-    "title": "I'd love to get to know you.",
     "subtitle": "A few quick questions, and I'll build a plan that's truly yours: your month, your goal, your debt. About 3 minutes.",
     "button": "Sounds good"
   },
@@ -50,7 +49,8 @@
       "honor": "That's the best reason there is. Everything we plant starts there.",
       "organized": "Peace of mind is coming. Every dollar will have a place.",
       "many": "Got it, all of those. I'll keep every one in mind."
-    }
+    },
+    "short": "What brought you here?"
   },
   "feeling": {
     "question": "Honestly, how does money feel for you right now?",
@@ -66,7 +66,8 @@
       "overwhelmed": "Let's make it smaller together. One seed at a time is plenty.",
       "hopeful": "Hope is a great place to plant from. Let's grow it.",
       "good": "That's wonderful! Let's keep it growing."
-    }
+    },
+    "short": "How does money feel for you?"
   },
   "tithe": {
     "question": "Do you give a tithe?",
@@ -83,7 +84,8 @@
       "custom": "Every gift counts. I'll set it aside first.",
       "none": "That's okay. You can turn it on anytime in Settings."
     },
-    "button": "Let's keep going"
+    "button": "Let's keep going",
+    "short": "Do you give a tithe?"
   },
   "income": {
     "question": "How much money will you make this month (after taxes)?",
@@ -108,7 +110,6 @@
     "subtitle": "Tap the + on Needs or Wants, wherever it belongs.",
     "skip": "I haven't spent anything yet",
     "reaction": "That's it! Do this whenever you spend, and your plan stays true.",
-    "skipReaction": "No problem! When you do spend, tap the + and I'll keep track.",
     "button": "Let's keep going",
     "sheet": {
       "titleNeeds": "Log a Need",
@@ -134,7 +135,8 @@
       "yes": "Thank you for trusting me with that. Let's plant it and watch it shrink.",
       "free": "Debt-free! That's a harvest worth celebrating.",
       "later": "Of course. The Debts tab will walk you through it whenever you're ready."
-    }
+    },
+    "short": "Any debts to pay off?"
   },
   "debtType": {
     "question": "Let's plant your first one. What kind of debt is it?",
@@ -148,7 +150,10 @@
     },
     "nameLabel": "What do you call it?",
     "errName": "Give it a name you'll recognize.",
-    "button": "That's the one"
+    "button": "That's the one",
+    "short": "What kind of debt is it?",
+    "subtitle": "Pick the closest match. You can name it however you like.",
+    "reaction": "Got it. Now give it a name you'll recognize."
   },
   "debtDetails": {
     "bubble": "Just a few numbers. You'll find them all on your statement.",
@@ -165,11 +170,10 @@
     "button": "Plant my debt"
   },
   "debtPreview": {
-    "bubble": "Look at that, it's already growing.",
+    "bubble": "Look at that, it's already growing. Every extra dollar gets you there sooner.",
     "title": "At your minimum, {{debt}} is paid off by <bold>{{date}}</bold>.",
     "titleBeforeInterest": "At your minimum, {{debt}} is paid off by <bold>{{date}}</bold>, before interest.",
     "stalled": "Right now your minimum barely covers the interest. Let's change that together.",
-    "subtitle": "Every extra dollar gets you there sooner. That's what your garden is for.",
     "button": "Let's set me free"
   },
   "goalPick": {
@@ -185,8 +189,18 @@
       "gift": "Gift",
       "other": "Something else"
     },
-    "reaction": "Ooh, I like it. Let's make it real.",
-    "button": "That's my goal"
+    "reaction": {
+      "emergency": "Safety with your finances is key for peace of mind.",
+      "phone": "It's always nice to have new tech!",
+      "vacation": "Oh, a little getaway is always rejuvenating.",
+      "car": "I can already smell that new car smell.",
+      "home": "This is one of the most financially responsible goals.",
+      "wedding": "Congratulations! What an amazing goal to save for.",
+      "gift": "Doesn't gift giving just feel so great?!",
+      "other": "Let's see what you've got up your sleeve."
+    },
+    "button": "That's my goal",
+    "short": "What would you love to save for?"
   },
   "goalDetails": {
     "bubble": "Tell me a little more, and I'll work out the monthly amount.",
@@ -199,14 +213,12 @@
     "button": "I can do that"
   },
   "commitment": {
-    "bubble": "Let's pause for a moment.",
-    "title": "One last thing, {{name}}.",
+    "bubble": "One last thing, {{name}}. Let's pause for a moment.",
     "subtitle": "Whatever comes next, you won't walk it alone.",
-    "hold": "Hold to say: “I want to steward what God has given me.”",
-    "held": "Amen. I'm right here with you."
+    "hold": "Hold to say: “I want to steward what God has given me.”"
   },
   "plan": {
-    "bubble": "I'm so proud of you. This is a real plan.",
+    "bubble": "Amen! I'm so proud of you. This is a real plan.",
     "title": "Here's your plan, {{name}}.",
     "month": "Your month",
     "monthLine": "{{needs}} Needs · {{wants}} Wants · {{goals}} Goals",
@@ -246,9 +258,8 @@
     "subtitle": "Ready to help it grow?"
   },
   "done": {
-    "bubble": "We did it!",
+    "bubble": "Come back tomorrow and log what you spend. I'll be here.",
     "title": "You're all set, {{name}}!",
-    "subtitle": "Come back tomorrow and log what you spend. I'll be here.",
     "button": "Take me home"
   },
   "homeHint": {

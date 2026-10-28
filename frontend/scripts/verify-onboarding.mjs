@@ -4,6 +4,7 @@
  *
  *   - the skip logic in signed-in mode;
  *   - the debt-before-goal ordering;
+ *   - screen 10 ("That's it!", expenseDone): only after a logged expense;
  *   - resuming from saved answers after a kill at every step;
  *   - retry-safe writes: no duplicates when a write sequence is interrupted, at every
  *     point, and resumed.
@@ -67,6 +68,26 @@ console.log('\nDebt before goal');
     check('debt-free hides the debt steps', ['debtType', 'debtDetails', 'debtPreview'].some(s => has(flowSteps({ debtChoice: 'free' }, 'new'), s)), false);
 }
 
+// ── Screen 10: the updated containers ─────────────────────────────────────────
+console.log('\nScreen 10 follows a logged expense only');
+{
+    const logged = { reasons: ['debt'], expense: { category: 'needs', title: 'Groceries', amount: 84.2 } };
+    check('a logged expense → screen 10', nextStep('expense', logged, 'new'), 'expenseDone');
+    check('screen 10 → group 3', nextStep('expenseDone', logged, 'new'), 'debtAsk');
+    check('back from screen 10 → screen 9', prevStep('expenseDone', logged, 'new'), 'expense');
+    const skipped = { reasons: ['debt'], expense: null };
+    check('"I haven\'t spent anything yet" skips screen 10', nextStep('expense', skipped, 'new'), 'debtAsk');
+    check('…and back from group 3 lands on screen 9', prevStep('debtAsk', skipped, 'new'), 'expense');
+    check('screen 10 counts toward the bar before screen 9 is answered', has(flowSteps({}, 'new'), 'expenseDone'), true);
+    const order = flowSteps(logged, 'new');
+    check('screens 7–10 in order', order.slice(order.indexOf('income'), order.indexOf('debtAsk')),
+        ['income', 'split', 'expense', 'expenseDone']);
+    check('screen 10 is in Your Month', progressOf('expenseDone', logged, 'new')?.group, 'month');
+    const nine = progressOf('expense', logged, 'new').value;
+    const ten = progressOf('expenseDone', logged, 'new').value;
+    check('the bar moves on at screen 10', ten > nine, true);
+}
+
 // ── Signed-in skips ───────────────────────────────────────────────────────────
 console.log('\nSigned-in mode skips');
 {
@@ -80,6 +101,7 @@ console.log('\nSigned-in mode skips');
     check('income skipped when this month has income', has(income, 'income'), false);
     check('…the split still shows', has(income, 'split'), true);
     check('expense skipped when this month has one', has(flowSteps({}, 'signed_in', { hasExpenseThisMonth: true }), 'expense'), false);
+    check('…and screen 10 with it', has(flowSteps({ expense: { category: 'wants', title: 'x', amount: 1 } }, 'signed_in', { hasExpenseThisMonth: true }), 'expenseDone'), false);
     const debt = flowSteps({ debtChoice: 'yes' }, 'signed_in', { hasDebt: true });
     check('every debt step skipped with any debt', ['debtAsk', 'debtType', 'debtDetails', 'debtPreview'].filter(s => has(debt, s)), []);
     const goals = flowSteps({}, 'signed_in', { goalsUsed: 1 });

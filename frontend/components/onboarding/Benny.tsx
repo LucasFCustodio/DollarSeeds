@@ -5,6 +5,9 @@
  * so swapping `pose` never moves the layout. The bubble holds the screen's question;
  * a step passes its reaction instead once the user has tapped an answer, and the text
  * fades across so the change reads as Benny talking.
+ *
+ * A screen shows at most two of: the bubble, a heading, a subtitle (ONBOARDING_FIXES.md
+ * §1). Without a heading the bubble carries the screen, so its text is `large`.
  */
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
@@ -47,7 +50,7 @@ export function BennyImage({ pose, size = SIZE }: { pose: Pose; size?: number })
     );
 }
 
-export default function Benny({ pose, text }: { pose: Pose; text: string }) {
+export default function Benny({ pose, text, large = false }: { pose: Pose; text: string; large?: boolean }) {
     const { theme } = useTheme();
     return (
         <View style={styles.row}>
@@ -58,7 +61,7 @@ export default function Benny({ pose, text }: { pose: Pose; text: string }) {
             >
                 {/* The tail, pointing back at Benny. */}
                 <View style={[styles.tail, { backgroundColor: theme.surface, borderColor: theme.border }]} />
-                <Animated.Text key={text} entering={FadeIn.duration(220)} style={[styles.text, { color: theme.ink }]}>
+                <Animated.Text key={text} entering={FadeIn.duration(220)} style={[large ? styles.textLarge : styles.text, { color: theme.ink }]}>
                     {text}
                 </Animated.Text>
             </View>
@@ -66,13 +69,23 @@ export default function Benny({ pose, text }: { pose: Pose; text: string }) {
     );
 }
 
-/** A screen title under Benny, and the expectation-setting line under it. */
-export function StepTitle({ title, subtitle }: { title?: string; subtitle?: string }) {
+/**
+ * A screen title under Benny, and the expectation-setting line under it. `lead` is a
+ * short bold question at the start of the subtitle: where an answer screen's question
+ * goes once the bubble has switched to Benny's reaction.
+ */
+export function StepTitle({ title, subtitle, lead }: { title?: string; subtitle?: string; lead?: string }) {
     const { theme } = useTheme();
+    if (!title && !subtitle) return null;
     return (
         <View style={styles.titles}>
             {title ? <Text accessibilityRole="header" style={[styles.title, { color: theme.ink }]}>{title}</Text> : null}
-            {subtitle ? <Text style={[styles.subtitle, { color: theme.ink2 }]}>{subtitle}</Text> : null}
+            {subtitle ? (
+                <Text style={[styles.subtitle, { color: theme.ink2 }]}>
+                    {lead ? <Text style={[styles.lead, { color: theme.ink }]}>{lead} </Text> : null}
+                    {subtitle}
+                </Text>
+            ) : null}
         </View>
     );
 }
@@ -98,6 +111,8 @@ const styles = StyleSheet.create({
         transform: [{ rotate: '45deg' }],
     },
     text: { fontFamily: Fonts.sansMedium, fontSize: ft(16), lineHeight: ft(22) },
+    textLarge: { fontFamily: Fonts.sansMedium, fontSize: ft(20), lineHeight: ft(27) },
+    lead: { fontFamily: Fonts.sansSemiBold },
     titles: { gap: 6, marginBottom: 16 },
     title: { fontFamily: Fonts.serif, fontSize: ft(32, 1.25), lineHeight: ft(36, 1.25), letterSpacing: -0.4 },
     subtitle: { fontFamily: Fonts.sans, fontSize: ft(15), lineHeight: ft(21) },

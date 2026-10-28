@@ -31,7 +31,8 @@ interface Props {
     budgets: Totals;
     spent: Totals;
     onOpen: (split: SplitKey) => void;
-    onAdd: (split: 'needs' | 'wants') => void;
+    /** Omit for the read-only version (the onboarding's screen 10): no + buttons. */
+    onAdd?: (split: 'needs' | 'wants') => void;
 }
 
 export default function SplitContainers({ budgets, spent, onOpen, onAdd }: Props) {

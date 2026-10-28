@@ -45,6 +45,7 @@ import { ClosedLine, CloseOutCard } from '../../components/home/CloseOut';
 import NextPaymentCard from '../../components/home/NextPaymentCard';
 import DebtFreedomTeaser from '../../components/home/DebtFreedomTeaser';
 import { useDebtFreedomAccess } from '../../lib/debtFreedomAccess';
+import { useSubscription } from '../../context/SubscriptionContext';
 import SplitContainers from '../../components/home/SplitContainers';
 import BennyHint, { useBennyHint } from '../../components/home/BennyHint';
 import LoggingArea, { BubbleFace } from '../../components/home/LoggingArea';
@@ -85,6 +86,7 @@ function Home() {
     const home = useHomeData();
     const debtAccess = useDebtFreedomAccess();
     const hint = useBennyHint();
+    const { openPaywall } = useSubscription();
     const debtFreedom = DEBT_FREEDOM_ENABLED && debtAccess === 'full';
     const showTeaser = DEBT_FREEDOM_ENABLED && (debtAccess === 'none' || debtAccess === 'read_only');
 
@@ -182,7 +184,18 @@ function Home() {
                                     onPrune={() => openDebts(nextPayment.id)}
                                 />
                             ) : null}
-                            {showTeaser ? <DebtFreedomTeaser onLearn={() => openDebts()} /> : null}
+                            {showTeaser ? (
+                                <DebtFreedomTeaser
+                                    onLearn={() => openDebts()}
+                                    onWater={openPaywall}
+                                    // read_only = not entitled AND has debts (a debt planted in
+                                    // the onboarding, or a lapsed subscriber's garden).
+                                    planted={debtAccess === 'read_only' ? {
+                                        count: summary?.debts?.total_count ?? 1,
+                                        name: summary?.debts?.focus?.name ?? null,
+                                    } : null}
+                                />
+                            ) : null}
                             {titheActive ? (
                                 <TitheEnvelope
                                     amount={titheAmount}

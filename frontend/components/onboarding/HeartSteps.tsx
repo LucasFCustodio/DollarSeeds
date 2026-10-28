@@ -1,5 +1,9 @@
 /**
  * Before the progress bar (screens 1–2) and Group 1 · Your Heart (screens 3–6).
+ *
+ * Question screens never show a heading (ONBOARDING_FIXES.md §1): before an answer the
+ * bubble asks and the subtitle explains; after one, the bubble is Benny's reaction and
+ * the short question leads the subtitle in bold.
  */
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +35,6 @@ export function PromiseStep({ next }: StepProps) {
         <StepLayout
             pose="listening"
             bubble={t('promise.bubble')}
-            title={t('promise.title')}
             subtitle={t('promise.subtitle')}
             footer={<PrimaryButton label={t('promise.button')} onPress={next} />}
         />
@@ -85,7 +88,7 @@ export function ReasonsStep({ a, set, next, name }: StepProps) {
         <StepLayout
             pose="curious"
             bubble={reaction ?? t('reasons.question', { name })}
-            title={reaction ? t('reasons.question', { name }) : undefined}
+            lead={reaction ? t('reasons.short') : undefined}
             subtitle={t('reasons.subtitle')}
             footer={<PrimaryButton label={t('reasons.button')} onPress={next} disabled={!stepAnswered('reasons', a)} />}
         >
@@ -110,7 +113,7 @@ export function FeelingStep({ a, set, next }: StepProps) {
         <StepLayout
             pose="gentle"
             bubble={a.feeling ? t(`feeling.reaction.${a.feeling}`) : t('feeling.question')}
-            title={a.feeling ? t('feeling.question') : undefined}
+            lead={a.feeling ? t('feeling.short') : undefined}
             subtitle={t('feeling.subtitle')}
             footer={<PrimaryButton label={t('chrome.continue')} onPress={next} disabled={!a.feeling} />}
         >
@@ -144,7 +147,7 @@ export function TitheStep({ a, set, next }: StepProps) {
         <StepLayout
             pose="bible"
             bubble={choice ? t(`tithe.reaction.${choice}`) : t('tithe.question')}
-            title={choice ? t('tithe.question') : undefined}
+            lead={choice ? t('tithe.short') : undefined}
             subtitle={t('tithe.subtitle')}
             footer={<PrimaryButton label={t('tithe.button')} onPress={next} disabled={!stepAnswered('tithe', a)} />}
         >

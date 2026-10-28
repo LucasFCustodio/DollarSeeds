@@ -135,8 +135,18 @@ Both expense and income forms follow the same structure.
   The answers stay on the phone throughout; signing in later through `/auth` also writes them.
 - **Numbers** come from `POST /onboarding/preview/` (data_model.md), or in signed-in mode with
   this month's income already logged, from the account's own `/dashboard/{month}`. The goal step
-  renders `GoalForm` with `requireAll`, `onSubmitValues` (hand back, don't POST) and a
-  `budgetContext` from the preview.
+  renders `GoalForm` with `requireAll`, `onSubmitValues` (hand back, don't POST), a
+  `budgetContext` from the preview, and `bare` + `hideSubmit`: no card, no button of its own —
+  the screen's one button submits through the form's ref (`GoalFormHandle.submit`), enabled by
+  `onValidityChange`. The Goals tab passes none of these.
+- **Layout rule** ([ONBOARDING_FIXES.md](../../ONBOARDING_FIXES.md) §1): each screen shows at
+  most two of Benny's bubble, a heading and a subtitle (the goal preview is the one exception).
+  Question screens never show a heading: after an answer the bubble is Benny's reaction and
+  the short question leads the subtitle in bold (`StepLayout`'s `lead`). Without a heading the
+  bubble text is larger.
+- **No timed transitions.** The commitment goes straight to the plan (confetti plays as it
+  opens); the plan's writes run on the sign-up screen itself ("Planting your plan…" on its
+  button, the kind error and Try again in place), then the paywall opens directly.
 - **Paywall**: screen 20 calls `openPaywallWith({headline, subtitle})`; the root `PaywallSheet`
   takes optional `headline` / `subtitle` props, unset everywhere else.
 - **The root layout's spinner gate is boot-only.** Once the navigator has rendered it is never

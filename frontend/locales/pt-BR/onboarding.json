@@ -21,7 +21,6 @@
   },
   "promise": {
     "bubble": "Que bom que você está aqui.",
-    "title": "Quero muito conhecer você.",
     "subtitle": "Algumas perguntas rápidas e eu monto um plano que é a sua cara: o seu mês, a sua meta, a sua dívida. Leva uns 3 minutos.",
     "button": "Combinado"
   },
@@ -50,7 +49,8 @@
       "honor": "Não existe motivo melhor. Tudo o que a gente planta começa aí.",
       "organized": "A paz de espírito está chegando. Cada real vai ter o seu lugar.",
       "many": "Entendi, tudo isso. Vou ter cada um em mente."
-    }
+    },
+    "short": "O que te trouxe aqui?"
   },
   "feeling": {
     "question": "Sinceramente, como você se sente com o dinheiro hoje?",
@@ -66,7 +66,8 @@
       "overwhelmed": "Vamos deixar isso menor juntos. Uma semente por vez já é muito.",
       "hopeful": "A esperança é um ótimo lugar para plantar. Vamos fazer crescer.",
       "good": "Que maravilha! Vamos continuar crescendo."
-    }
+    },
+    "short": "Como você se sente com o dinheiro?"
   },
   "tithe": {
     "question": "Você dá o dízimo?",
@@ -83,7 +84,8 @@
       "custom": "Toda oferta conta. Vou separar ela primeiro.",
       "none": "Tudo bem. Você pode ativar quando quiser nos Ajustes."
     },
-    "button": "Vamos em frente"
+    "button": "Vamos em frente",
+    "short": "Você dá o dízimo?"
   },
   "income": {
     "question": "Quanto você vai ganhar este mês (já sem os impostos)?",
@@ -108,7 +110,6 @@
     "subtitle": "Toque no + de Necessidades ou de Desejos, onde ela se encaixar.",
     "skip": "Ainda não gastei nada",
     "reaction": "É isso! Faça assim sempre que gastar, e o seu plano fica fiel à realidade.",
-    "skipReaction": "Sem problema! Quando gastar, é só tocar no + que eu acompanho.",
     "button": "Vamos em frente",
     "sheet": {
       "titleNeeds": "Registrar uma Necessidade",
@@ -134,7 +135,8 @@
       "yes": "Obrigado por confiar isso a mim. Vamos plantar e ver ela encolher.",
       "free": "Sem dívidas! Essa é uma colheita para comemorar.",
       "later": "Claro. A aba Dívidas te mostra o caminho quando você quiser."
-    }
+    },
+    "short": "Tem dívidas para quitar?"
   },
   "debtType": {
     "question": "Vamos plantar a primeira. Que tipo de dívida é?",
@@ -148,7 +150,10 @@
     },
     "nameLabel": "Como você chama ela?",
     "errName": "Dê um nome que você reconheça.",
-    "button": "É essa"
+    "button": "É essa",
+    "short": "Que tipo de dívida é?",
+    "subtitle": "Escolha a opção mais próxima. Você pode dar o nome que quiser.",
+    "reaction": "Entendi. Agora dê um nome que você reconheça."
   },
   "debtDetails": {
     "bubble": "Só alguns números. Você encontra todos na sua fatura.",
@@ -165,11 +170,10 @@
     "button": "Plantar minha dívida"
   },
   "debtPreview": {
-    "bubble": "Olha só, já está crescendo.",
+    "bubble": "Olha só, já está crescendo. Cada real a mais te leva lá mais cedo.",
     "title": "Pagando o mínimo, {{debt}} fica quitada em <bold>{{date}}</bold>.",
     "titleBeforeInterest": "Pagando o mínimo, {{debt}} fica quitada em <bold>{{date}}</bold>, sem contar os juros.",
     "stalled": "Hoje o seu mínimo mal cobre os juros. Vamos mudar isso juntos.",
-    "subtitle": "Cada real a mais te leva lá mais cedo. É para isso que serve o seu jardim.",
     "button": "Quero ficar livre"
   },
   "goalPick": {
@@ -185,8 +189,18 @@
       "gift": "Presente",
       "other": "Outra coisa"
     },
-    "reaction": "Hum, gostei. Vamos tornar isso real.",
-    "button": "Essa é a minha meta"
+    "reaction": {
+      "emergency": "Ter segurança nas finanças é essencial para ter paz de espírito.",
+      "phone": "É sempre bom ter tecnologia nova!",
+      "vacation": "Ah, uma escapadinha sempre renova as energias.",
+      "car": "Já consigo sentir aquele cheirinho de carro novo.",
+      "home": "Essa é uma das metas financeiras mais responsáveis.",
+      "wedding": "Parabéns! Que meta incrível para juntar dinheiro.",
+      "gift": "Dar presentes não é uma sensação maravilhosa?!",
+      "other": "Vamos ver o que você tem na manga."
+    },
+    "button": "Essa é a minha meta",
+    "short": "Para o que você adoraria juntar?"
   },
   "goalDetails": {
     "bubble": "Me conta um pouco mais, e eu calculo o valor por mês.",
@@ -199,14 +213,12 @@
     "button": "Eu consigo"
   },
   "commitment": {
-    "bubble": "Vamos parar um momento.",
-    "title": "Só mais uma coisa, {{name}}.",
+    "bubble": "Só mais uma coisa, {{name}}. Vamos parar um momento.",
     "subtitle": "Seja o que for que vier pela frente, você não vai caminhar sozinho.",
-    "hold": "Segure para dizer: “Quero administrar bem o que Deus me deu.”",
-    "held": "Amém. Estou aqui com você."
+    "hold": "Segure para dizer: “Quero administrar bem o que Deus me deu.”"
   },
   "plan": {
-    "bubble": "Tenho muito orgulho de você. Esse é um plano de verdade.",
+    "bubble": "Amém! Tenho muito orgulho de você. Esse é um plano de verdade.",
     "title": "Este é o seu plano, {{name}}.",
     "month": "O seu mês",
     "monthLine": "{{needs}} Necessidades · {{wants}} Desejos · {{goals}} Metas",
@@ -246,9 +258,8 @@
     "subtitle": "Pronto para ajudar a crescer?"
   },
   "done": {
-    "bubble": "Conseguimos!",
+    "bubble": "Volte amanhã e registre o que você gastar. Eu vou estar aqui.",
     "title": "Tudo pronto, {{name}}!",
-    "subtitle": "Volte amanhã e registre o que você gastar. Eu vou estar aqui.",
     "button": "Ir para o início"
   },
   "homeHint": {

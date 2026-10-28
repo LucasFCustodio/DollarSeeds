@@ -14,6 +14,9 @@
  *                 disabled until every field is valid.
  *   budgetContext — the share/warning context, given instead of read from the server
  *                 (before sign-up there is no account to read it from).
+ *   bare + hideSubmit — onboarding: no card and no form title around the fields, and
+ *                 no button of its own. The host's button submits through the ref
+ *                 (`GoalFormHandle.submit`) and is enabled by `onValidityChange`.
  *
  * Fields: name (≤ 30, unique — the server's 400 says so), target (> 0), amount saved
  * up (optional here, ≥ 0 and below the target; reaching it means the goal is already
@@ -26,7 +29,7 @@
  * month has income, and a gentle note when every goal and debt minimum together would
  * not fit. That note never blocks saving.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Pressable, Switch, Text, TextInput, View } from 'react-native';
 import axios from 'axios';
 import { Trans, useTranslation } from 'react-i18next';
@@ -61,7 +64,18 @@ export interface GoalFormValues {
     autoMinimum: boolean;
 }
 
+/** For a host that renders its own submit button (`hideSubmit`). */
+export interface GoalFormHandle {
+    submit: () => void;
+}
+
 interface Props {
+    /** No card and no form title: the fields sit straight on the host's screen. */
+    bare?: boolean;
+    /** No submit button: the host submits through the ref. */
+    hideSubmit?: boolean;
+    /** Called whenever the form becomes valid or invalid (for the host's button). */
+    onValidityChange?: (valid: boolean) => void;
     /** Onboarding: every field must be filled in explicitly. */
     requireAll?: boolean;
     initialTitle?: string;
@@ -78,10 +92,11 @@ interface Props {
     onPremiumError?: (code: string) => void;
 }
 
-export default function GoalForm({
+const GoalForm = forwardRef<GoalFormHandle, Props>(function GoalForm({
+    bare = false, hideSubmit = false, onValidityChange,
     requireAll = false, initialTitle = '', initialAmount = '', initialValues, onCreated, onSubmitValues,
     budgetContext, submitLabel, onCancel, onPremiumError,
-}: Props) {
+}, ref) {
     const { t } = useTranslation('goals');
     const { t: tc } = useTranslation('common');
     const { theme } = useTheme();
@@ -197,12 +212,16 @@ export default function GoalForm({
         }
     };
 
-    const input = [styles.textInput, { backgroundColor: theme.surfaceSoft, borderColor: theme.border, color: theme.ink }];
+    // The host's button always calls the latest submit (it closes over the fields).
+    const submitRef = useRef(submit);
+    submitRef.current = submit;
+    useImperativeHandle(ref, () => ({ submit: () => { submitRef.current(); } }), []);
+    useEffect(() => { onValidityChange?.(valid); }, [valid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return (
-        <Card theme={theme} depth={4} padding={18} style={{ marginBottom: 16 }}>
-            <Text style={[styles.formTitle, { color: theme.ink }]}>{t('form.title')}</Text>
+    const input = [styles.textInput, { backgroundColor: bare ? theme.surface : theme.surfaceSoft, borderColor: theme.border, color: theme.ink }];
 
+    const fields = (
+        <>
             <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>{t('newGoal.nameLabelSaving')}</Text>
             <TextInput
                 style={input}
@@ -286,7 +305,7 @@ export default function GoalForm({
                 <Text style={[styles.errorText, { color: theme.danger, marginTop: 0 }]}>{error}</Text>
             ) : null}
 
-            <View style={styles.formBtnRow}>
+            {hideSubmit ? null : <View style={styles.formBtnRow}>
                 <Pressable
                     onPress={submit}
                     disabled={busy || (!!onSubmitValues && !valid)}
@@ -311,7 +330,17 @@ export default function GoalForm({
                         <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>{tc('action.cancel')}</Text>
                     </Pressable>
                 ) : null}
-            </View>
+            </View>}
+        </>
+    );
+
+    if (bare) return <View>{fields}</View>;
+    return (
+        <Card theme={theme} depth={4} padding={18} style={{ marginBottom: 16 }}>
+            <Text style={[styles.formTitle, { color: theme.ink }]}>{t('form.title')}</Text>
+            {fields}
         </Card>
     );
-}
+});
+
+export default GoalForm;

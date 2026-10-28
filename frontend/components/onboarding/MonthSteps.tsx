@@ -1,5 +1,6 @@
 /**
- * Group 2 · Your Month (screens 7–9): income, the split, the first expense.
+ * Group 2 · Your Month (screens 7–10): income, the split, the first expense, and
+ * (only after one is logged) the updated containers.
  *
  * The split's numbers are the server's (POST /onboarding/preview/, or the account's
  * own dashboard in signed-in mode when this month's income already exists) — nothing
@@ -103,25 +104,32 @@ export function SplitStep({ next, name, split, busy }: StepProps) {
     );
 }
 
+function containers(a: StepProps['a'], split: StepProps['split']) {
+    const logged = a.expense ?? null;
+    return {
+        budgets: { needs: split?.needs ?? 0, wants: split?.wants ?? 0, goals: split?.goals ?? 0 },
+        spent: {
+            needs: logged?.category === 'needs' ? logged.amount : 0,
+            wants: logged?.category === 'wants' ? logged.amount : 0,
+            goals: 0,
+        },
+    };
+}
+
+/** Screen 9: the question stays in the bubble. Logging moves on to screen 10. */
 export function ExpenseStep({ a, set, next, split, busy }: StepProps) {
     const { t } = useTranslation('onboarding');
     const [open, setOpen] = useState<'needs' | 'wants' | null>(null);
     const logged = a.expense ?? null;
-    const budgets = { needs: split?.needs ?? 0, wants: split?.wants ?? 0, goals: split?.goals ?? 0 };
-    const spent = {
-        needs: logged?.category === 'needs' ? logged.amount : 0,
-        wants: logged?.category === 'wants' ? logged.amount : 0,
-        goals: 0,
-    };
-    const bubble = logged ? t('expense.reaction') : a.expense === null ? t('expense.skipReaction') : t('expense.question');
+    const { budgets, spent } = containers(a, split);
     return (
         <StepLayout
-            pose={logged ? 'thumbs-up' : 'pointing'}
-            bubble={bubble}
-            title={a.expense !== undefined ? t('expense.question') : undefined}
+            pose="pointing"
+            bubble={t('expense.question')}
             subtitle={t('expense.subtitle')}
             footer={<>
-                <PrimaryButton label={t('expense.button')} onPress={next} disabled={a.expense === undefined} busy={busy} />
+                {/* Enabled only on a return visit, once the expense is logged. */}
+                <PrimaryButton label={t('expense.button')} onPress={next} disabled={!logged} busy={busy} />
                 {logged ? null : <TextLink label={t('expense.skip')} onPress={() => { set({ expense: null }); next(); }} />}
             </>}
         >
@@ -132,8 +140,25 @@ export function ExpenseStep({ a, set, next, split, busy }: StepProps) {
                 category={open}
                 initial={logged}
                 onClose={() => setOpen(null)}
-                onLog={e => { set({ expense: e }); setOpen(null); }}
+                onLog={e => { set({ expense: e }); setOpen(null); next(); }}
             />
+        </StepLayout>
+    );
+}
+
+/** Screen 10: the containers with the expense taken off, no + buttons. */
+export function ExpenseDoneStep({ a, next, split, busy }: StepProps) {
+    const { t } = useTranslation('onboarding');
+    const { budgets, spent } = containers(a, split);
+    return (
+        <StepLayout
+            pose="thumbs-up"
+            bubble={t('expense.reaction')}
+            footer={<PrimaryButton label={t('expense.button')} onPress={next} busy={busy} />}
+        >
+            <DropZoneProvider renderGhost={() => null}>
+                <SplitContainers budgets={budgets} spent={spent} onOpen={() => {}} />
+            </DropZoneProvider>
         </StepLayout>
     );
 }

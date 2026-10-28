@@ -41,7 +41,7 @@ import StepLayout, { type StepProps } from '../components/onboarding/StepLayout'
 import {
     FeelingStep, NameStep, PromiseStep, ReasonsStep, TitheStep, WelcomeStep,
 } from '../components/onboarding/HeartSteps';
-import { ExpenseStep, IncomeStep, SplitStep } from '../components/onboarding/MonthSteps';
+import { ExpenseDoneStep, ExpenseStep, IncomeStep, SplitStep } from '../components/onboarding/MonthSteps';
 import {
     DebtAskStep, DebtDetailsStep, DebtPreviewStep, DebtTypeStep, GoalDetailsStep, GoalPickStep, GoalPreviewStep,
 } from '../components/onboarding/HarvestSteps';
@@ -52,7 +52,7 @@ import {
 /** Steps after which the account exists: a saved `new` flow there stays `new`. */
 const ACCOUNT_STEPS: StepId[] = ['signup', 'premium', 'done'];
 /** Steps that show numbers from the preview endpoint. */
-const PREVIEW_STEPS: StepId[] = ['split', 'expense', 'debtPreview', 'goalDetails', 'goalPreview', 'plan'];
+const PREVIEW_STEPS: StepId[] = ['split', 'expense', 'expenseDone', 'debtPreview', 'goalDetails', 'goalPreview', 'plan'];
 
 /** The answers to screens 4, 5, 10, 11 and 14, as category keys (never a name or figure). */
 function answerProps(step: StepId, a: Answers): OnboardingAnswerProps {
@@ -78,6 +78,8 @@ export default function OnboardingScreen() {
 
     const [ready, setReady] = useState(false);
     const [step, setStep] = useState<StepId>('welcome');
+    /** Was the current step reached going forward? (The plan's confetti plays only then.) */
+    const [forward, setForward] = useState(false);
     const [answers, setAnswersState] = useState<Answers>({});
     const answersRef = useRef<Answers>({});
     const [writes, setWrites] = useState<WriteStates>({});
@@ -210,16 +212,17 @@ export default function OnboardingScreen() {
         // Signed in, each answer is written as it is given.
         if (user && !(await flush())) return;
         const n = nextStep(step, a, mode, live);
-        if (n) setStep(n);
+        if (n) { setForward(true); setStep(n); }
     }, [analytics, step, mode, user, flush, live]);
 
     const back = useCallback(() => {
         const p = prevStep(step, answersRef.current, mode, live);
-        if (p) { setSaveError(false); setStep(p); }
+        if (p) { setSaveError(false); setForward(false); setStep(p); }
     }, [step, mode, live]);
 
     // Sign-up landed (or the app relaunched signed in on this step): write the plan
-    // in order, then go on once the new account's entitlement is known.
+    // in order ON the sign-up screen (its button reads "Planting your plan…"), then
+    // open the paywall once the new account's entitlement is known. No interstitial.
     useEffect(() => {
         if (!ready || step !== 'signup' || !user || saveError || signupRunning.current) return;
         signupRunning.current = true;
@@ -237,6 +240,7 @@ export default function OnboardingScreen() {
     useEffect(() => {
         if (!afterSignup || !entitlementSettled) return;
         setAfterSignup(false);
+        setForward(true);
         setStep(nextStep('signup', answersRef.current, mode, { premiumActive }) ?? 'done');
     }, [afterSignup, entitlementSettled, premiumActive, mode]);
 
@@ -272,12 +276,15 @@ export default function OnboardingScreen() {
         );
     }
 
-    const props: StepProps = { a: answers, set, next, name, mode, split, preview, busy: saving };
+    const props: StepProps = {
+        a: answers, set, next, name, mode, split, preview, busy: saving, forward, saveError, onRetry: retry,
+    };
     const progress = progressOf(step, answers, mode, live);
+    // Sign-up shows its own writing state and its own error, in place.
     const writingPlan = step === 'signup' && !!user;
 
     let body: React.ReactNode;
-    if (saveError || loadError) {
+    if (loadError || (saveError && !writingPlan)) {
         body = (
             <StepLayout
                 pose="oops"
@@ -285,10 +292,8 @@ export default function OnboardingScreen() {
                 footer={<PrimaryButton label={t('chrome.tryAgain')} onPress={retry} busy={saving} />}
             />
         );
-    } else if (writingPlan) {
-        body = <StepLayout pose="planting" bubble={t('chrome.saving')}><ActivityIndicator color={theme.brand} /></StepLayout>;
     } else {
-        body = renderStep(step, props, { goToAuth, finish });
+        body = renderStep(step, props, { goToAuth, finish, signedIn: !!user });
     }
 
     return (
@@ -308,7 +313,7 @@ export default function OnboardingScreen() {
     );
 }
 
-function renderStep(step: StepId, p: StepProps, actions: { goToAuth: () => void; finish: () => void }) {
+function renderStep(step: StepId, p: StepProps, actions: { goToAuth: () => void; finish: () => void; signedIn: boolean }) {
     switch (step) {
         case 'welcome': return <WelcomeStep {...p} onHaveAccount={actions.goToAuth} />;
         case 'promise': return <PromiseStep {...p} />;
@@ -319,6 +324,7 @@ function renderStep(step: StepId, p: StepProps, actions: { goToAuth: () => void;
         case 'income': return <IncomeStep {...p} />;
         case 'split': return <SplitStep {...p} />;
         case 'expense': return <ExpenseStep {...p} />;
+        case 'expenseDone': return <ExpenseDoneStep {...p} />;
         case 'debtAsk': return <DebtAskStep {...p} />;
         case 'debtType': return <DebtTypeStep {...p} />;
         case 'debtDetails': return <DebtDetailsStep {...p} />;
@@ -328,7 +334,7 @@ function renderStep(step: StepId, p: StepProps, actions: { goToAuth: () => void;
         case 'goalPreview': return <GoalPreviewStep {...p} />;
         case 'commitment': return <CommitmentStep {...p} />;
         case 'plan': return <PlanStep {...p} />;
-        case 'signup': return <SignupStep {...p} onHaveAccount={actions.goToAuth} />;
+        case 'signup': return <SignupStep {...p} signedIn={actions.signedIn} onHaveAccount={actions.goToAuth} />;
         case 'premium': return <PremiumStep {...p} />;
         case 'done': return <DoneStep {...p} onDone={actions.finish} />;
     }
