@@ -274,7 +274,8 @@ const GoalForm = forwardRef<GoalFormHandle, Props>(function GoalForm({
                         <Trans
                             i18nKey="goals:form.perMonth"
                             values={{ amount: formatMoney(minimum) }}
-                            components={{ bold: <Text style={styles.planStrong} /> }}
+                            // Keyed for the same reason as the goal card's pace line.
+                            components={{ bold: <Text key="bold" style={styles.planStrong} /> }}
                         />
                     </Text>
                     {fit.share !== null ? (

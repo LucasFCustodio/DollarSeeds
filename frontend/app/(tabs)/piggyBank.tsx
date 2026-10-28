@@ -735,7 +735,9 @@ export default function PiggyBankScreen() {
         const minimum = g.monthly_minimum ?? null;
         const hasToggle = (g.minimum_amount ?? 0) > 0 || !!g.minimum_logged;
         const pace = g.on_pace;
-        const bold = <Text style={styles.goalLineStrong} />;
+        // Keyed: react-i18next 14 hands this element back in a list as-is, and React 19
+        // warns about an unkeyed list child. "bold" is the tag name Trans looks it up by.
+        const bold = <Text key="bold" style={styles.goalLineStrong} />;
 
         let line: React.ReactNode = null;
         if (funded) {
