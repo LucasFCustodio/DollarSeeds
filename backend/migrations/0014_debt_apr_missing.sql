@@ -47,5 +47,5 @@ alter table public.debts
 --    where table_schema = 'public' and table_name = 'debts' and column_name = 'apr';
 --   -- expect NO
 --
--- Applied to project … on <date>.
+-- Applied to project vbvsblpyeylnemrecyqv on 2026-10-27.
 -- ─────────────────────────────────────────────────────────────────────────────
