@@ -4623,7 +4623,11 @@ def get_home_progress(today: Optional[datetime.date] = None,
 
     return {
         "debts": df.home_progress_debts(garden, debt_txns, local_today),
-        "goals": hp.home_progress_goals(goals, savings_txns, local_today, goals_v2=goals_v2),
+        # Whether today's month is closed decides if "kept under budget" plots it (an
+        # open month has no leftover yet). Read for goals_v2 builds only.
+        "goals": hp.home_progress_goals(
+            goals, savings_txns, local_today, goals_v2=goals_v2,
+            current_month_closed=goals_v2 and _is_month_closed(user_id, _month_name(local_today))),
     }
 
 

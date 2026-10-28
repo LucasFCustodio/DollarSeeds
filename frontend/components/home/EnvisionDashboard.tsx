@@ -47,10 +47,10 @@ const ART = require('../../assets/images/home/envision-dashboard-bg.png');
 const ROW_PAD_X = 16;
 const ROW_PAD_Y = 10;
 const GOAL_ROW_H = 90;
-/** The "kept under budget" line (count view) and its small graph (amount view) share
- *  one fixed height, so the card still never jumps when it flips. */
-const KEPT_H = 40;
-const KEPT_SPARK_H = 20;
+/** The "kept under budget" line (count view) and its graph with its total (amount
+ *  view, laid out like the goals row's) share one fixed height, so the card still never
+ *  jumps when it flips. Room for the AmountRow's graph and its padding. */
+const KEPT_H = 44 + ROW_PAD_Y * 2;
 
 /** Pot rim width: 36 pt for up to 6 debts, shrinking evenly to 26 pt at 8. More
  *  than 8 switch to segments. */
@@ -369,13 +369,13 @@ function AmountRow({ height, total, caption, series, color, firstLine, onPress }
 }
 
 /** goals_v2 "kept under budget": the month-end leftovers since the user joined. Count
- *  view — one small line under the ring. Amount view — its own small graph of each
- *  month's amount, opening the full one. Hidden by the caller when the total is 0. */
+ *  view — one small line under the ring. Amount view — the total and its graph of each
+ *  month's amount, the same way the goals row shows "saved toward goals"; it opens the
+ *  goals sheet at the full graph. Hidden by the caller when the total is 0. */
 function KeptRow({ view, goals, onOpenGraph }: { view: View2; goals: GoalProgress; onOpenGraph: () => void }) {
     const { theme } = useTheme();
     const { t } = useTranslation('dashboard');
     const { formatMoney } = useLocale();
-    const [sparkW, setSparkW] = useState(0);
     const line = t('progress.keptSinceJoined', { amount: formatMoney(goals.kept_under_budget) });
     if (view === 'count') {
         return (
@@ -385,18 +385,16 @@ function KeptRow({ view, goals, onOpenGraph }: { view: View2; goals: GoalProgres
             </Row>
         );
     }
-    const values = goals.kept_under_budget_series.map(p => p.amount).slice(-12);
     return (
-        <Row height={KEPT_H} onPress={onOpenGraph}>
-            <View style={styles.amountLine}>
-                <Text numberOfLines={1} style={[homeType.verySmall, styles.keptCaption, { color: theme.ink2 }]}>
-                    {t('progress.keptUnderBudget')}
-                </Text>
-                <View style={styles.flex} onLayout={e => setSparkW(Math.floor(e.nativeEvent.layout.width))}>
-                    <Sparkline values={values} color={theme.success} width={sparkW} height={KEPT_SPARK_H} />
-                </View>
-            </View>
-        </Row>
+        <AmountRow
+            height={KEPT_H}
+            total={goals.kept_under_budget}
+            caption={t('progress.keptUnderBudget')}
+            series={goals.kept_under_budget_series.map(p => p.amount)}
+            color={theme.success}
+            firstLine=""
+            onPress={onOpenGraph}
+        />
     );
 }
 
@@ -445,7 +443,6 @@ const styles = StyleSheet.create({
     amountLine: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     amountText: { flexShrink: 0, maxWidth: '45%' },
     firstLine: { marginBottom: 6 },
-    keptCaption: { flexShrink: 0, maxWidth: '45%' },
     emptyLine: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     plus: { width: PLUS, height: PLUS, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
 });

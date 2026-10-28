@@ -179,7 +179,7 @@ pair (no budget effect; one history entry).
 **Home.** `GET /home/progress/` for `goals_v2`: "saved toward goals" counts listed
 goals only (completed amounts + what in-progress goals hold), and the goals block adds
 `kept_under_budget` (Σ `rollover` deposits into General Savings) and
-`kept_under_budget_series` (`[{month, amount}]`, monthly, not cumulative).
+`kept_under_budget_series` (`[{month, amount}]`, monthly, not cumulative). Each rollover plots in the month it belongs to — its own `month` name, in the year of the most recent such month on or before `created_at` (a close-out is usually booked early the next month) — and the current month is left out, point and amount, while it is open (`month_status` via `_is_month_closed`): an open month has no leftover yet.
 
 ### `subscriptions`
 

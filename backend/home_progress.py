@@ -168,9 +168,11 @@ def nearest_goal(active_goals: list) -> Optional[dict]:
 
 
 def _rollover_month(t: dict, today: datetime.date) -> Optional[datetime.date]:
-    """The budget month a rollover deposit is FOR: its `month` name, in the year that
-    name meant when the row was written (a December row stamped in January is last
-    December). Rollover is booked at close-out, so `created_at` is that moment."""
+    """The budget month a rollover deposit BELONGS to: its own `month` name — never
+    the month of `created_at`. The row is written at close-out, which is usually
+    early the next month (September's leftover booked on October 4 is September's).
+    `month` has no year, so the year is that of the most recent such month on or
+    before `created_at`: a December row stamped in January is last December."""
     name = t.get("month")
     if name not in MONTHS:
         return None
@@ -180,11 +182,17 @@ def _rollover_month(t: dict, today: datetime.date) -> Optional[datetime.date]:
     return datetime.date(year, number, 1)
 
 
-def kept_under_budget(goals: list, transactions: list, today: datetime.date) -> dict:
+def kept_under_budget(goals: list, transactions: list, today: datetime.date,
+                      current_month_closed: bool = False) -> dict:
     """{"total", "series"} — the month-end leftovers swept into General Savings.
-    `series` is one point per month, the first rollover's month through today's,
-    each that month's own amount (not cumulative; 0 for a month with none).
-    Total 0 and series [] when there has never been one."""
+    `series` is one point per month, the first rollover's month through the last
+    month that can have one, each that month's own amount (not cumulative; 0 for a
+    month with none). Total 0 and series [] when there has never been one.
+
+    The CURRENT month is left out while it is open (`current_month_closed` false):
+    an open month has no leftover yet, and plotting it as $0 made the line drop as
+    if the user had kept less. A rollover row already booked to it (the month was
+    closed, then reopened) is left out of the total too, until it is closed again."""
     general = {g["id"] for g in goals if g.get("is_general")}
     by_month: dict = {}
     for t in transactions:
@@ -196,11 +204,17 @@ def kept_under_budget(goals: list, transactions: list, today: datetime.date) -> 
             continue
         key = month_key(month)
         by_month[key] = money(by_month.get(key, 0.0) + _num(t.get("amount")))
+    current = month_key(today)
+    if current_month_closed:
+        end = current
+    else:
+        by_month.pop(current, None)
+        end = month_key(datetime.date(today.year - (today.month == 1), (today.month - 2) % 12 + 1, 1))
     if not by_month:
         return {"total": 0.0, "series": []}
     first = min(by_month)
     year, number = int(first[:4]), int(first[5:7])
-    last = month_key(today) if month_key(today) > max(by_month) else max(by_month)
+    last = max(end, max(by_month))
     series = []
     while True:
         key = f"{year:04d}-{number:02d}"
@@ -212,7 +226,7 @@ def kept_under_budget(goals: list, transactions: list, today: datetime.date) -> 
 
 
 def home_progress_goals(goals: list, transactions: list, today: datetime.date,
-                        goals_v2: bool = False) -> Optional[dict]:
+                        goals_v2: bool = False, current_month_closed: bool = False) -> Optional[dict]:
     """The Envision dashboard's goals block. `goals` is every savings_goals row for
     the user, with `allocated_amount` on the not-completed ones (_with_allocated);
     `transactions` every savings_transactions row. None when the user has no listed
@@ -220,7 +234,8 @@ def home_progress_goals(goals: list, transactions: list, today: datetime.date,
 
     `goals_v2`: "saved toward goals" counts listed goals only, and the block gains
     `kept_under_budget` / `kept_under_budget_series` (the transactions must then
-    carry `source` and `month`)."""
+    carry `source` and `month`; `current_month_closed` says whether today's month
+    is closed, which decides whether it is plotted)."""
     listed = [g for g in goals if is_listed_goal(g)]
     if not listed:
         return None
@@ -237,7 +252,7 @@ def home_progress_goals(goals: list, transactions: list, today: datetime.date,
         "milestones": goal_milestones(goals, transactions, today),
     }
     if goals_v2:
-        kept = kept_under_budget(goals, transactions, today)
+        kept = kept_under_budget(goals, transactions, today, current_month_closed)
         block["kept_under_budget"] = kept["total"]
         block["kept_under_budget_series"] = kept["series"]
     return block
