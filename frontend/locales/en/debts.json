@@ -247,5 +247,9 @@
     "banner": "Your debts are saved. Subscribe to keep growing them.",
     "subscribe": "Subscribe",
     "subscribeA11y": "Subscribe to Premium"
+  },
+  "aprMissing": {
+    "warning": "Add your interest rate so I can show your real payoff date",
+    "beforeInterest": "{{date}}, before interest"
   }
 }

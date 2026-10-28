@@ -384,12 +384,11 @@ def test_kept_under_budget_counts_month_end_leftovers_only():
     kept = hp.kept_under_budget(KEPT_GOALS, txns, KEPT_TODAY)
     assert kept["total"] == 200.0
     # Monthly, not cumulative: each month its own amount, 0 where there was none,
-    # through today's month.
+    # through last month (October is still open).
     assert kept["series"] == [
         {"month": "2026-07", "amount": 120.0},
         {"month": "2026-08", "amount": 0.0},
         {"month": "2026-09", "amount": 80.0},
-        {"month": "2026-10", "amount": 0.0},
     ]
 
 
@@ -398,8 +397,109 @@ def test_kept_under_budget_dates_a_rollover_by_the_month_it_is_for():
     txns = [roll(90.0, "December", "2027-01-03T09:00:00+00:00")]
     kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2027, 2, 10))
     assert kept["series"] == [{"month": "2026-12", "amount": 90.0},
-                              {"month": "2027-01", "amount": 0.0},
-                              {"month": "2027-02", "amount": 0.0}]
+                              {"month": "2027-01", "amount": 0.0}]
+
+
+# Item 3: each rollover plots in the month it BELONGS to (the row's own `month`),
+# not the month of created_at; the year is the most recent such month on or before
+# created_at.
+
+def test_a_rollover_booked_next_month_plots_in_its_own_month():
+    """Production: September's $2,287.83 rollover was written on October 4."""
+    txns = [roll(2287.83, "September", "2026-10-04T20:49:44+00:00")]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2026, 10, 28))
+    assert kept == {"total": 2287.83, "series": [{"month": "2026-09", "amount": 2287.83}]}
+
+
+def test_a_rollover_booked_in_its_own_month_stays_there():
+    """Closed out on its last day: the most recent September on or before Sep 30."""
+    txns = [roll(50.0, "September", "2026-09-30T23:10:00+00:00")]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2026, 11, 2))
+    assert kept["series"] == [{"month": "2026-09", "amount": 50.0}, {"month": "2026-10", "amount": 0.0}]
+
+
+def test_a_rollover_booked_months_later_is_still_its_own_month():
+    """August closed out in late November: still August, not November."""
+    txns = [roll(70.0, "August", "2026-11-20T09:00:00+00:00"),
+            roll(30.0, "October", "2026-11-03T09:00:00+00:00", id=2)]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2026, 12, 1))
+    assert kept["series"] == [{"month": "2026-08", "amount": 70.0}, {"month": "2026-09", "amount": 0.0},
+                              {"month": "2026-10", "amount": 30.0}, {"month": "2026-11", "amount": 0.0}]
+
+
+def test_a_late_month_name_never_resolves_to_a_future_year():
+    """A November row stamped in March is last November, never next."""
+    txns = [roll(40.0, "November", "2027-03-02T09:00:00+00:00")]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2027, 3, 15))
+    assert kept["series"][0] == {"month": "2026-11", "amount": 40.0}
+    assert kept["series"][-1]["month"] == "2027-02"
+
+
+# Item 4: the current month is left out while it is open.
+
+def test_the_open_current_month_is_not_plotted_as_zero():
+    txns = [roll(2287.83, "September", "2026-10-04T20:49:44+00:00")]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2026, 10, 28), current_month_closed=False)
+    assert [p["month"] for p in kept["series"]] == ["2026-09"]
+
+
+def test_the_current_month_is_plotted_once_closed():
+    txns = [roll(2287.83, "September", "2026-10-04T20:49:44+00:00"),
+            roll(310.0, "October", "2026-10-31T21:00:00+00:00", id=2)]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2026, 10, 31), current_month_closed=True)
+    assert kept == {"total": 2597.83, "series": [{"month": "2026-09", "amount": 2287.83},
+                                                 {"month": "2026-10", "amount": 310.0}]}
+
+
+def test_a_closed_current_month_with_nothing_left_is_a_real_zero():
+    txns = [roll(80.0, "September", "2026-10-02T09:00:00+00:00")]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2026, 10, 31), current_month_closed=True)
+    assert kept["series"] == [{"month": "2026-09", "amount": 80.0}, {"month": "2026-10", "amount": 0.0}]
+
+
+def test_a_reopened_current_month_leaves_its_old_rollover_out():
+    """Reopening keeps the rollover row; while the month is open again it has no
+    leftover yet, so neither its point nor its amount counts."""
+    txns = [roll(80.0, "September", "2026-10-02T09:00:00+00:00"),
+            roll(310.0, "October", "2026-10-31T21:00:00+00:00", id=2)]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2026, 10, 31), current_month_closed=False)
+    assert kept == {"total": 80.0, "series": [{"month": "2026-09", "amount": 80.0}]}
+
+
+def test_only_a_reopened_current_month_means_nothing_to_show():
+    txns = [roll(310.0, "October", "2026-10-31T21:00:00+00:00")]
+    assert hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2026, 10, 31)) == {"total": 0.0, "series": []}
+
+
+def test_january_open_ends_the_series_at_last_december():
+    txns = [roll(60.0, "November", "2026-12-01T09:00:00+00:00")]
+    kept = hp.kept_under_budget(KEPT_GOALS, txns, datetime.date(2027, 1, 9))
+    assert [p["month"] for p in kept["series"]] == ["2026-11", "2026-12"]
+
+
+def test_route_plots_the_current_month_only_once_it_is_closed(client, supabase_db, monkeypatch):
+    """GET /home/progress/ for goals_v2 reads month_status for today's month."""
+    today = datetime.date(2026, 10, 28)
+    monkeypatch.setattr(main, "_df_server_today", lambda: today)
+    general = supabase_db.seed("savings_goals", {"user_id": USER_A, "title": "General Savings",
+                                                 "is_general": True, "target_amount": None})
+    supabase_db.seed("savings_goals", {"user_id": USER_A, "title": "Trip", "target_amount": 900.0,
+                                       "target_month": "March", "target_year": 2027})
+    supabase_db.seed("savings_transactions", {
+        "user_id": USER_A, "goal_id": general["id"], "title": "Rollover — September", "amount": 2287.83,
+        "type": "deposit", "source": "rollover", "day": 28, "month": "September",
+        "created_at": "2026-10-04T20:49:44+00:00"})
+    headers = {**auth(USER_A), "X-Client-Features": "premium, social, limits, goals_v2"}
+    params = {"today": today.isoformat()}
+
+    goals = client.get("/home/progress/", headers=headers, params=params).json()["goals"]
+    assert goals["kept_under_budget_series"] == [{"month": "2026-09", "amount": 2287.83}]
+
+    supabase_db.seed("month_status", {"user_id": USER_A, "month": "October", "year": 2026,
+                                      "closed_at": "2026-10-28T10:00:00+00:00"})
+    goals = client.get("/home/progress/", headers=headers, params=params).json()["goals"]
+    assert goals["kept_under_budget_series"] == [{"month": "2026-09", "amount": 2287.83},
+                                                 {"month": "2026-10", "amount": 0.0}]
 
 
 def test_kept_under_budget_is_zero_with_no_rollover():

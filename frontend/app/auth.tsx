@@ -13,14 +13,17 @@ import { Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { supabase } from '../lib/supabase'; // Adjust this path if you put it in a different folder!
+import { useRouter } from 'expo-router';
+import {
+  signInWithApple as signInApple,
+  signInWithEmail as signInEmail,
+  signInWithGoogle as signInGoogle,
+  signUpWithEmail as signUpEmail,
+  type AuthOutcome,
+} from '../lib/authActions';
 import { useTheme, Fonts, shadow } from '../context/ThemeContext';
-const logo = require('../assets/images/dollar-seeds-logo.png');
-import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
 import * as AppleAuthentication from 'expo-apple-authentication';
-
-WebBrowser.maybeCompleteAuthSession();
+const logo = require('../assets/images/dollar-seeds-logo.png');
 
 // ─── Local white "account" button ───────────────────────────────────────────
 function AuthButton({
@@ -52,40 +55,39 @@ export default function AuthScreen() {
   // Keeps the heading clear of the notch / Dynamic Island on every model. The inset
   // is 0 on devices with no cutout, so the `+ 16` floor gives those a breathing gap too.
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // The Sign Up Function
+  // The flows themselves live in lib/authActions.ts, shared with the onboarding's
+  // sign-up screen; this screen only turns their outcomes into alerts.
+  const alertFailure = (title: string, outcome: AuthOutcome) => {
+    if (outcome.status !== 'error') return;
+    const fallback = outcome.reason === 'no_session' ? t('error.googleNoSession')
+      : outcome.reason === 'no_token' ? t('error.appleNoToken')
+      : t('error.tryAgain');
+    // `message` comes from Supabase and is not localised by us.
+    Alert.alert(title, outcome.message ?? fallback);
+  };
+
   async function signUpWithEmail() {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-      });
-
-      // `error.message` comes from Supabase and is not localised by us.
-      if (error) Alert.alert(t('error.signUpTitle'), error.message);
-      else Alert.alert(t('signUpSuccess.title'), t('signUpSuccess.body'));
+      const outcome = await signUpEmail(email, password);
+      if (outcome.status === 'error') Alert.alert(t('error.signUpTitle'), outcome.message ?? t('error.tryAgain'));
+      else if (outcome.status === 'confirm') Alert.alert(t('signUpSuccess.title'), t('signUpSuccess.body'));
     } finally {
       // Always re-enable the button, even if the request throws or the network hangs.
       setLoading(false);
     }
   }
 
-  // The Log In Function
   async function signInWithEmail() {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: password,
-      });
-
-      if (error) Alert.alert(t('error.signInTitle'), error.message);
+      alertFailure(t('error.signInTitle'), await signInEmail(email, password));
     } finally {
-      // Always re-enable the button, even if the request throws or the network hangs.
       setLoading(false);
     }
   }
@@ -93,110 +95,25 @@ export default function AuthScreen() {
   const signInWithGoogle = async () => {
     setLoading(true);
     try {
-        // 1. Tell Google exactly where to return to after the login finishes
-        const redirectTo = makeRedirectUri();
-
-        // 2. Ask Supabase for the Google login URL. The client uses the implicit flow
-        // (see lib/supabase.ts), so the redirect back carries the session tokens in the
-        // URL fragment — no server-side code exchange, no flow-state to go stale.
-        const { data, error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: redirectTo,
-                skipBrowserRedirect: true, // Crucial: We want Expo to open the browser, not Supabase
-            },
-        });
-
-        if (error || !data?.url) {
-            console.error("OAuth Error:", error);
-            Alert.alert(t('error.googleTitle'), error?.message ?? t('error.tryAgain'));
-            return;
-        }
-
-        // 3. Pop open the phone's web browser to the Google login screen
-        const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
-        if (res.type !== 'success') {
-            // User closed the browser or cancelled — not an error, just no session.
-            return;
-        }
-
-        // 4. The redirect URL carries the tokens in its fragment, e.g.
-        //    dollarseeds://#access_token=...&refresh_token=...&expires_in=...
-        // Pull them out and set the session directly. AuthContext's onAuthStateChange
-        // then picks it up and routes into the app.
-        const getParam = (name: string) =>
-            new RegExp(`[#?&]${name}=([^&#]+)`).exec(res.url)?.[1];
-
-        const access_token = getParam('access_token');
-        const refresh_token = getParam('refresh_token');
-
-        if (!access_token || !refresh_token) {
-            const errDesc = getParam('error_description');
-            Alert.alert(
-                t('error.googleTitle'),
-                errDesc ? decodeURIComponent(errDesc.replace(/\+/g, ' ')) : t('error.googleNoSession'),
-            );
-            return;
-        }
-
-        const { error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
-        if (sessionError) {
-            console.error('Set session error:', sessionError);
-            Alert.alert(t('error.googleTitle'), sessionError.message);
-        }
+      alertFailure(t('error.googleTitle'), await signInGoogle());
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
-  // The Apple Sign In Function (iOS only). Native flow: Apple returns a signed
-  // identity token, which Supabase verifies directly via signInWithIdToken — no
-  // browser redirect, no URL parsing. AuthContext's onAuthStateChange picks up the
-  // resulting session and routes into the app, same as the other providers.
+  // iOS only. AuthContext's onAuthStateChange picks up the session and routes into
+  // the app, same as the other providers.
   const signInWithApple = async () => {
     setLoading(true);
     try {
-        const credential = await AppleAuthentication.signInAsync({
-            requestedScopes: [
-                AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-                AppleAuthentication.AppleAuthenticationScope.EMAIL,
-            ],
-        });
-
-        if (!credential.identityToken) {
-            // Thrown, then surfaced to the user via `e?.message` in the catch below.
-            throw new Error(t('error.appleNoToken'));
-        }
-
-        const { error } = await supabase.auth.signInWithIdToken({
-            provider: 'apple',
-            token: credential.identityToken,
-        });
-
-        if (error) {
-            console.error('Apple sign-in error:', error);
-            Alert.alert(t('error.appleTitle'), error.message);
-            return;
-        }
-
-        // Apple only returns the user's name on the FIRST authorization — the identity
-        // token never carries it. Persist it now (into user metadata) or it's lost for good.
-        if (credential.fullName?.givenName || credential.fullName?.familyName) {
-            const full_name = [credential.fullName?.givenName, credential.fullName?.familyName]
-                .filter(Boolean)
-                .join(' ');
-            if (full_name) await supabase.auth.updateUser({ data: { full_name } });
-        }
-    } catch (e: any) {
-        // User tapped "Cancel" in the Apple sheet — not an error, just no session.
-        if (e?.code === 'ERR_REQUEST_CANCELED') return;
-        console.error('Apple sign-in exception:', e);
-        Alert.alert(t('error.appleFailedTitle'), e?.message ?? t('error.tryAgain'));
+      const outcome = await signInApple();
+      // Apple's own sheet failing (or returning no token) vs Supabase refusing the token.
+      const sheetFailed = outcome.status === 'error' && (outcome.reason === 'exception' || outcome.reason === 'no_token');
+      alertFailure(sheetFailed ? t('error.appleFailedTitle') : t('error.appleTitle'), outcome);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-};
+  };
 
   return (
     <LinearGradient
@@ -256,6 +173,16 @@ export default function AuthScreen() {
             />
           )}
         </View>
+
+        {/* Back to the onboarding for someone who landed here without an account. */}
+        <Pressable
+          onPress={() => router.replace('/onboarding' as any)}
+          hitSlop={10}
+          accessibilityRole="link"
+          style={({ pressed }) => [styles.newHere, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Text style={styles.newHereText}>{t('newHere')}</Text>
+        </Pressable>
       </ScrollView>
     </LinearGradient>
   );
@@ -313,6 +240,17 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sansSemiBold,
     fontSize: 16,
     color: '#111111',
+  },
+  newHere: {
+    alignSelf: 'center',
+    marginTop: 28,
+    paddingVertical: 8,
+  },
+  newHereText: {
+    fontFamily: Fonts.sansMedium,
+    fontSize: 15,
+    color: '#FFFFFF',
+    textDecorationLine: 'underline',
   },
   logoBadge: {
     width: 104,

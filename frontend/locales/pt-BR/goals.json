@@ -48,10 +48,20 @@
   },
   "card": {
     "goalAchieved": "Meta alcançada! 🎉",
-    "paceSaving": "Guarde {{amount}}/semana · faltam {{months}} meses",
     "ofTargetSaving": " de {{target}}",
     "completeGoalA11y": "Mover meta para concluídas",
-    "completedMetaSaving": "{{amount}} guardados de {{target}} · {{month}} de {{year}}"
+    "completedMetaSaving": "{{amount}} guardados de {{target}} · {{month}} de {{year}}",
+    "paceLine": "No ritmo para <bold>{{month}}</bold>: {{status}} · Guarde {{amount}}/mês",
+    "saveOnly": "Guarde {{amount}}/mês",
+    "status": {
+      "onTime": "bem na data",
+      "early": "{{count}} mês antes",
+      "early_plural": "{{count}} meses antes",
+      "behind": "com {{count}} mês de atraso",
+      "behind_plural": "com {{count}} meses de atraso"
+    },
+    "completeMyGoal": "Concluir minha meta",
+    "extraShort": "+ Extra"
   },
   "newGoal": {
     "button": "Plantar uma nova meta",
@@ -103,16 +113,9 @@
     "errDate": "Escolha o mês e o ano da meta.",
     "errPast": "Escolha um mês a partir deste."
   },
-  "pace": {
-    "early": "Nesse ritmo, você chega lá em <bold>{{month}}</bold>: {{count}} mês antes",
-    "early_plural": "Nesse ritmo, você chega lá em <bold>{{month}}</bold>: {{count}} meses antes",
-    "behind": "Nesse ritmo, você chega lá em <bold>{{month}}</bold>: {{count}} mês depois do planejado",
-    "behind_plural": "Nesse ritmo, você chega lá em <bold>{{month}}</bold>: {{count}} meses depois do planejado",
-    "onTrack": "Nesse ritmo, você chega lá em <bold>{{month}}</bold>, bem na data"
-  },
   "minimum": {
-    "log": "Adicionar meus {{amount}} de {{month}}",
-    "logged": "{{amount}} adicionados em {{month}}",
+    "log": "Guardar {{amount}}\nde {{month}}",
+    "logged": "{{amount}} guardados\nem {{month}}",
     "auto": "Adicionado automaticamente",
     "a11y": "Valor mensal de {{name}}",
     "errFailed": "Não conseguimos atualizar o valor deste mês. Tente de novo."

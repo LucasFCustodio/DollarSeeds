@@ -100,7 +100,7 @@
     "savedTowardGoals": "saved toward goals",
     "firstPayment": "Your first payment starts this line",
     "firstDeposit": "Your first deposit starts this line",
-    "keptSinceJoined": "{{amount}} kept under budget since you joined",
+    "keptSinceJoined": "kept under budget since you joined",
     "keptUnderBudget": "Kept under budget"
   },
   "graph": {
@@ -177,12 +177,25 @@
     "luke-6-38": {
       "text": "Give, and it will be given to you. A good measure, pressed down, shaken together and running over, will be poured into your lap.",
       "ref": "Luke 6:38"
+    },
+    "philippians-4-6": {
+      "text": "Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God. And the peace of God, which transcends all understanding, will guard your hearts and your minds in Christ Jesus.",
+      "ref": "Philippians 4:6–7"
+    },
+    "proverbs-21-5": {
+      "text": "The plans of the diligent lead to profit as surely as haste leads to poverty.",
+      "ref": "Proverbs 21:5"
     }
   },
   "debtTeaser": {
     "eyebrow": "Debt Freedom",
     "line": "Start getting out of debt.",
     "cta": "Learn how",
-    "ctaA11y": "Learn how Debt Freedom works"
+    "ctaA11y": "Learn how Debt Freedom works",
+    "plantedOne": "Your {{name}} is planted.",
+    "plantedMany": "Your debts are planted.",
+    "grow": "Help it grow.",
+    "water": "Water it",
+    "waterA11y": "Subscribe to Premium to keep growing it"
   }
 }

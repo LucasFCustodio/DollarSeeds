@@ -1,51 +1,268 @@
 {
   "chrome": {
-    "skip": "Skip",
-    "next": "Next",
-    "getStarted": "Get started",
-    "progress": "{{step}} of {{total}}"
+    "back": "Go back",
+    "friend": "friend",
+    "groups": {
+      "heart": "Your Heart",
+      "month": "Your Month",
+      "harvest": "Your Harvest",
+      "garden": "Your Garden"
+    },
+    "saving": "Planting your plan…",
+    "saveError": "Hmm, I couldn't save your plan just yet. Your answers are safe with me.",
+    "loadError": "Hmm, I couldn't reach the garden just now. Let's try that again.",
+    "tryAgain": "Try again",
+    "continue": "Let's keep going"
   },
-  "steps": {
-    "dashboard": {
-      "eyebrow": "DASHBOARD",
-      "title": "Welcome to DollarSeeds",
-      "body": "Go here to see your current income, what's left to spend, and how much money you have for each spending category"
+  "welcome": {
+    "bubble": "Hi there! I'm Benny. I help people grow their money God's way, one seed at a time.",
+    "button": "Let's grow!",
+    "haveAccount": "I already have an account"
+  },
+  "promise": {
+    "bubble": "I'm so glad you're here.",
+    "subtitle": "A few quick questions, and I'll build a plan that's truly yours: your month, your goal, your debt. About 3 minutes.",
+    "button": "Sounds good"
+  },
+  "name": {
+    "question": "First things first, what should I call you?",
+    "placeholder": "Your first name",
+    "button": "That's me",
+    "errEmpty": "I'd love a name to call you by.",
+    "reaction": "So nice to meet you, {{name}}!"
+  },
+  "reasons": {
+    "question": "What brought you to DollarSeeds, {{name}}?",
+    "subtitle": "Pick all that fit. I'll shape your plan around them.",
+    "button": "That's why I'm here",
+    "options": {
+      "debt": "I want to get out of debt",
+      "overspending": "I keep overspending",
+      "saving": "I'm saving up for something",
+      "honor": "I want to honor God with my money",
+      "organized": "I just want to get organized"
     },
-    "transactions": {
-      "eyebrow": "LOGGING",
-      "title": "Log from Home",
-      "body": "Tap + beside what you have left to log income, or + on Needs or Wants to log an expense. New income is automatically split across all categories"
+    "reaction": {
+      "debt": "Freedom from debt is a beautiful goal. We'll start with your debts.",
+      "overspending": "That's so common, and so fixable. Your month will show you exactly where it goes.",
+      "saving": "I love that. Let's give it a date and a plan.",
+      "honor": "That's the best reason there is. Everything we plant starts there.",
+      "organized": "Peace of mind is coming. Every dollar will have a place.",
+      "many": "Got it, all of those. I'll keep every one in mind."
     },
-    "goals": {
-      "eyebrow": "GOALS",
-      "title": "Track Your Goals",
-      "body": "Create a savings goal. Add money to it from this month's income, or from your General Savings (GS). ",
-      "subnote": "Add to GS whenever you have no specific saving goal. Money not spent will roll over into your GS at the end of the month"
+    "short": "What brought you here?"
+  },
+  "feeling": {
+    "question": "Honestly, how does money feel for you right now?",
+    "subtitle": "There's no wrong answer. It just helps me know how to help.",
+    "options": {
+      "stressed": "Stressful",
+      "overwhelmed": "Overwhelming",
+      "hopeful": "Hopeful",
+      "good": "Pretty good"
     },
-    "lessons": {
-      "eyebrow": "LESSONS",
-      "title": "Grow in wisdom",
-      "body": "Scripture-rooted video series on money, generosity, and stewardship, given by successful professionals.",
-      "subnote": "More series will be added as the app and its reach grows"
+    "reaction": {
+      "stressed": "You're not alone in that. We'll take it one step at a time.",
+      "overwhelmed": "Let's make it smaller together. One seed at a time is plenty.",
+      "hopeful": "Hope is a great place to plant from. Let's grow it.",
+      "good": "That's wonderful! Let's keep it growing."
+    },
+    "short": "How does money feel for you?"
+  },
+  "tithe": {
+    "question": "Do you give a tithe?",
+    "subtitle": "If you do, I'll set it aside first, before anything else gets planted.",
+    "options": {
+      "ten": "Yes, 10%",
+      "custom": "Yes, a different amount",
+      "none": "Not right now"
+    },
+    "customLabel": "What percent do you give?",
+    "reaction": {
+      "ten": "Beautiful. Your tithe comes off the top, before anything else.",
+      "custom": "That is an amazing act of faith!",
+      "none": "That's okay. You can turn it on anytime in Settings."
+    },
+    "button": "Let's keep going",
+    "short": "Do you give a tithe?"
+  },
+  "income": {
+    "question": "How much money will you make this month (after taxes)?",
+    "subtitle": "I'll give every dollar a place.",
+    "placeholder": "0",
+    "errAmount": "Just the amount, like 3,200.",
+    "button": "Plan my month"
+  },
+  "split": {
+    "title": "Here's your month, {{name}}.",
+    "bubble": "Needs keep the lights on, Wants keep life fun, and Goals empower your future and big accomplishments.",
+    "tithe": "Tithe",
+    "titheRate": "{{pct}}% first",
+    "needs": "Needs",
+    "wants": "Wants",
+    "goals": "Goals",
+    "note": "That covers {{month}}. Starting next month, log each paycheck with the + next to your income.",
+    "button": "I love it"
+  },
+  "expense": {
+    "question": "Let's log one thing you've bought this month.",
+    "subtitle": "Tap the + on Needs or Wants, wherever it belongs.",
+    "skip": "I haven't spent anything yet",
+    "reaction": "That's it! Do this whenever you spend, and your plan stays true.",
+    "button": "Let's keep going",
+    "sheet": {
+      "titleNeeds": "Log a Need",
+      "titleWants": "Log a Want",
+      "close": "Close",
+      "what": "What was it?",
+      "whatPlaceholder": "Groceries",
+      "how": "How much?",
+      "errWhat": "Give it a short name so you'll recognize it later.",
+      "errHow": "Just the amount, like 24.50.",
+      "button": "Log it"
     }
   },
-  "startingBalance": {
-    "eyebrow": "ONE LAST THING",
-    "title": "Your starting balance",
-    "body": "DollarSeeds tracks your money month by month. Enter the savings you had BEFORE {{month}} — everything you'd already put away.",
-    "note": "Don't include any {{month}} income or expenses. You'll log those normally with the + buttons on Home.",
-    "inputLabel": "Starting balance",
-    "add": "+ Add",
-    "done": "Done",
-    "skip": "Skip for now",
-    "confirmTitle": "Is this correct?",
-    "confirmBody": "This becomes your General Savings balance. You can add to it or move it into a goal any time.",
-    "no": "No",
-    "yes": "Yes",
-    "retry": "Retry",
-    "error": {
-      "timeout": "That's taking too long. Check your connection and try again.",
-      "generic": "Couldn't save your starting balance. Please try again."
-    }
+  "debtAsk": {
+    "question": "Do you have any debts you're working to pay off?",
+    "subtitle": "Credit cards, loans, anything you owe. No judgment here, we're in this together.",
+    "options": {
+      "yes": "Yes, I do",
+      "free": "No, I'm debt-free",
+      "later": "I'd rather add it later"
+    },
+    "reaction": {
+      "yes": "Thank you for trusting me with that. Let's plant it and watch it shrink.",
+      "free": "Debt-free! That's a harvest worth celebrating.",
+      "later": "Of course. The Debts tab will walk you through it whenever you're ready."
+    },
+    "short": "Any debts to pay off?"
+  },
+  "debtType": {
+    "question": "Let's plant your first one. What kind of debt is it?",
+    "options": {
+      "credit_card": "Credit card",
+      "car": "Car loan",
+      "student": "Student loan",
+      "medical": "Medical bill",
+      "personal": "Personal loan",
+      "other": "Other"
+    },
+    "nameLabel": "What do you call it?",
+    "errName": "Give it a name you'll recognize.",
+    "button": "That's the one",
+    "short": "What kind of debt is it?",
+    "subtitle": "Pick the closest match. You can name it however you like.",
+    "reaction": "Got it. Now give it a name you'll recognize."
+  },
+  "debtDetails": {
+    "bubble": "Just a few numbers. You'll find them all on your statement.",
+    "owe": "How much do you owe right now?",
+    "min": "What's the minimum payment?",
+    "due": "What day of the month is it due?",
+    "duePlaceholder": "15",
+    "apr": "What's the interest rate (APR)?",
+    "aprHelper": "<bold>Optional.</bold> You'll find it on your statement. You can add it later.",
+    "errOwe": "Just the amount you owe, like 2,400.",
+    "errMin": "Just the amount, like 75.",
+    "errDue": "A day from 1 to 31.",
+    "errApr": "A rate like 22.9, or leave it blank for now.",
+    "button": "Plant my debt"
+  },
+  "debtPreview": {
+    "bubble": "Look at that, it's already growing. Every extra dollar gets you there sooner.",
+    "title": "At your minimum, {{debt}} is paid off by <bold>{{date}}</bold>.",
+    "titleBeforeInterest": "At your minimum, {{debt}} is paid off by <bold>{{date}}</bold>, before interest.",
+    "stalled": "Right now your minimum barely covers the interest. Let's change that together.",
+    "button": "Let's set me free"
+  },
+  "goalPick": {
+    "question": "What's something you'd love to save up for?",
+    "subtitle": "Pick one to start. You can add more anytime.",
+    "options": {
+      "emergency": "Emergency fund",
+      "phone": "New phone",
+      "vacation": "Vacation",
+      "car": "Car",
+      "home": "Home",
+      "wedding": "Wedding",
+      "gift": "Gift",
+      "other": "Something else"
+    },
+    "reaction": {
+      "emergency": "Safety with your finances is key for peace of mind.",
+      "phone": "It's always nice to have new tech!",
+      "vacation": "Oh, a little getaway is always rejuvenating.",
+      "car": "I can already smell that new car smell.",
+      "home": "This is one of the most financially responsible goals.",
+      "wedding": "Congratulations! What an amazing goal to save for.",
+      "gift": "Doesn't gift giving just feel so great?!",
+      "other": "Let's see what you've got up your sleeve."
+    },
+    "button": "That's my goal",
+    "short": "What would you love to save for?"
+  },
+  "goalDetails": {
+    "bubble": "Tell me a little more, and I'll work out the monthly amount.",
+    "button": "Plant my goal"
+  },
+  "goalPreview": {
+    "bubble": "You're going to get there!",
+    "title": "You'll have your {{goal}} by <bold>{{date}}</bold>!",
+    "subtitle": "Just {{amount}} a month. Tick it off on your Goals page each time.",
+    "button": "I can do that"
+  },
+  "commitment": {
+    "bubble": "One last thing, {{name}}. Let's pause for a moment.",
+    "subtitle": "Whatever comes next, you won't walk it alone.",
+    "hold": "Hold to say: “I want to steward what God has given me.”"
+  },
+  "plan": {
+    "bubble": "Amen! I'm so proud of you. This is a real plan.",
+    "title": "Here's your plan, {{name}}.",
+    "month": "Your month",
+    "monthLine": "{{needs}} Needs · {{wants}} Wants · {{goals}} Goals",
+    "titheLine": "{{amount}} tithe first",
+    "debt": "Your debt",
+    "debtLine": "{{debt}} free by {{date}}",
+    "debtLineBeforeInterest": "{{debt}} free by {{date}}, before interest",
+    "debtStalled": "{{debt}} is planted. Let's beat its interest together.",
+    "goal": "Your goal",
+    "goalLine": "{{goal}} by {{date}}",
+    "button": "Save my plan"
+  },
+  "signup": {
+    "bubble": "Almost there!",
+    "title": "Let's keep your plan safe.",
+    "subtitle": "Create your account so it's here every time you come back.",
+    "google": "Continue with Google",
+    "or": "or with email",
+    "email": "Email",
+    "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "button": "Create my account",
+    "errEmail": "Hmm, that email doesn't look quite right.",
+    "errPassword": "Let's make it at least 6 characters.",
+    "errTaken": "Hmm, that email already has an account. Try signing in instead.",
+    "errGeneric": "Hmm, that didn't work. Let's try once more.",
+    "confirmTitle": "Check your inbox!",
+    "confirmBody": "I sent a link to {{email}}. Tap it, then come back here.",
+    "confirmButton": "I've confirmed my email",
+    "confirmNotYet": "Hmm, it looks like that link hasn't been tapped yet.",
+    "haveAccount": "I already have an account"
+  },
+  "premium": {
+    "debtHeadline": "Your debt is planted.",
+    "planHeadline": "Your plan is planted.",
+    "subtitle": "Ready to help it grow?"
+  },
+  "done": {
+    "bubble": "Come back tomorrow and log what you spend. I'll be here.",
+    "title": "You're all set, {{name}}!",
+    "button": "Take me home"
+  },
+  "homeHint": {
+    "text": "Spent something? Tap a + to plant it in your plan.",
+    "dismiss": "Got it"
   }
 }

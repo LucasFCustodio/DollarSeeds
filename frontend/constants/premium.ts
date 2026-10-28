@@ -44,7 +44,7 @@ export const OFFERING_ID = 'premium-2026';
 
 /**
  * Per-user cache of the last known entitlement, matching the `<prefix>_<userId>`
- * convention in constants/onboarding.ts. Read on cold start so a subscriber does not
+ * convention in lib/onboardingStore.ts. Read on cold start so a subscriber does not
  * see the "Subscribe" CTA flash before the network answers.
  */
 export const premiumEntitlementKey = (userId: string) => `premium_entitlement_${userId}`;

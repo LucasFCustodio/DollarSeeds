@@ -8,6 +8,15 @@
  *   requireAll  — onboarding: every field must be answered explicitly. Amount saved up
  *                 must be typed (0 is a fine answer, blank is not) and the target month
  *                 and year start unpicked.
+ *   onSubmitValues — onboarding, before the account exists: the form validates exactly
+ *                 as always, then hands the values back instead of POSTing them (the
+ *                 onboarding writes them after sign-up). The submit button stays
+ *                 disabled until every field is valid.
+ *   budgetContext — the share/warning context, given instead of read from the server
+ *                 (before sign-up there is no account to read it from).
+ *   bare + hideSubmit — onboarding: no card and no form title around the fields, and
+ *                 no button of its own. The host's button submits through the ref
+ *                 (`GoalFormHandle.submit`) and is enabled by `onValidityChange`.
  *
  * Fields: name (≤ 30, unique — the server's 400 says so), target (> 0), amount saved
  * up (optional here, ≥ 0 and below the target; reaching it means the goal is already
@@ -20,7 +29,7 @@
  * month has income, and a gentle note when every goal and debt minimum together would
  * not fit. That note never blocks saving.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Pressable, Switch, Text, TextInput, View } from 'react-native';
 import axios from 'axios';
 import { Trans, useTranslation } from 'react-i18next';
@@ -44,21 +53,50 @@ export interface CreatedGoal {
     title: string;
 }
 
+/** What the form would POST, for a host that writes it later (onSubmitValues). */
+export interface GoalFormValues {
+    title: string;
+    targetAmount: number;
+    savedAmount: number;
+    savedSource: MoneySource | null;
+    targetMonth: string;
+    targetYear: number;
+    autoMinimum: boolean;
+}
+
+/** For a host that renders its own submit button (`hideSubmit`). */
+export interface GoalFormHandle {
+    submit: () => void;
+}
+
 interface Props {
+    /** No card and no form title: the fields sit straight on the host's screen. */
+    bare?: boolean;
+    /** No submit button: the host submits through the ref. */
+    hideSubmit?: boolean;
+    /** Called whenever the form becomes valid or invalid (for the host's button). */
+    onValidityChange?: (valid: boolean) => void;
     /** Onboarding: every field must be filled in explicitly. */
     requireAll?: boolean;
     initialTitle?: string;
     initialAmount?: string;
-    onCreated: (goal: CreatedGoal) => void;
+    /** Every field prefilled (an onboarding step the user came back to). */
+    initialValues?: GoalFormValues;
+    onCreated?: (goal: CreatedGoal) => void;
+    onSubmitValues?: (values: GoalFormValues) => void;
+    budgetContext?: BudgetContext | null;
+    submitLabel?: string;
     /** Omit to hide the Cancel button (an onboarding step has its own navigation). */
     onCancel?: () => void;
     /** A premium refusal (goal_limit_reached), after the form has shown it in place. */
     onPremiumError?: (code: string) => void;
 }
 
-export default function GoalForm({
-    requireAll = false, initialTitle = '', initialAmount = '', onCreated, onCancel, onPremiumError,
-}: Props) {
+const GoalForm = forwardRef<GoalFormHandle, Props>(function GoalForm({
+    bare = false, hideSubmit = false, onValidityChange,
+    requireAll = false, initialTitle = '', initialAmount = '', initialValues, onCreated, onSubmitValues,
+    budgetContext, submitLabel, onCancel, onPremiumError,
+}, ref) {
     const { t } = useTranslation('goals');
     const { t: tc } = useTranslation('common');
     const { theme } = useTheme();
@@ -69,13 +107,15 @@ export default function GoalForm({
     const fallback = useMemo(() => defaultTargetDate(today), [today]);
     const thisYear = today.getFullYear();
 
-    const [title, setTitle] = useState(initialTitle);
-    const [target, setTarget] = useState(initialAmount);
-    const [saved, setSaved] = useState('');
-    const [source, setSource] = useState<MoneySource | null>(null);
-    const [month, setMonth] = useState<string | null>(requireAll ? null : fallback.month);
-    const [year, setYear] = useState<number | null>(requireAll ? null : fallback.year);
-    const [auto, setAuto] = useState(false);
+    const iv = initialValues;
+    const asInput = (v: number) => formatNumber(v, Number.isInteger(v) ? 0 : 2);
+    const [title, setTitle] = useState(iv?.title ?? initialTitle);
+    const [target, setTarget] = useState(iv ? asInput(iv.targetAmount) : initialAmount);
+    const [saved, setSaved] = useState(iv ? asInput(iv.savedAmount) : '');
+    const [source, setSource] = useState<MoneySource | null>(iv?.savedSource ?? null);
+    const [month, setMonth] = useState<string | null>(iv?.targetMonth ?? (requireAll ? null : fallback.month));
+    const [year, setYear] = useState<number | null>(iv?.targetYear ?? (requireAll ? null : fallback.year));
+    const [auto, setAuto] = useState(iv?.autoMinimum ?? false);
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const [ctx, setCtx] = useState<BudgetContext | null>(null);
@@ -83,13 +123,15 @@ export default function GoalForm({
     // The budget context is optional decoration: a failed read only drops the share
     // line and the warning, never the form.
     useEffect(() => {
+        if (budgetContext !== undefined) return;
         let live = true;
         fetchBudgetContext().then(c => { if (live) setCtx(c); }).catch(() => {});
         return () => { live = false; };
-    }, []);
+    }, [budgetContext]);
+    const context = budgetContext !== undefined ? budgetContext : ctx;
 
-    useEffect(() => { setTitle(initialTitle); }, [initialTitle]);
-    useEffect(() => { setTarget(initialAmount); }, [initialAmount]);
+    useEffect(() => { if (!iv) setTitle(initialTitle); }, [initialTitle]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { if (!iv) setTarget(initialAmount); }, [initialAmount]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const targetNum = target.trim() ? parseAmount(target) : null;
     const savedNum = saved.trim() ? parseAmount(saved) : 0;
@@ -97,7 +139,13 @@ export default function GoalForm({
     const minimum = month && year !== null && !alreadyDone
         ? monthlyMinimum(targetNum, savedNum, month, year, today)
         : null;
-    const fit = budgetFit(minimum, ctx);
+    const fit = budgetFit(minimum, context);
+
+    // The same checks submit() runs, as one boolean: the deferred (onboarding) form
+    // keeps its button disabled until they all pass.
+    const valid = !!title.trim() && targetNum !== null && targetNum > 0
+        && (!requireAll || !!saved.trim()) && savedNum !== null && savedNum >= 0 && !alreadyDone
+        && (savedNum === 0 || !!source) && !!month && year !== null && !isBeforeThisMonth(month, year, today);
 
     // A month before this one can't be picked in this year; picking an earlier year's
     // month never happens (the year list starts at this year).
@@ -119,6 +167,16 @@ export default function GoalForm({
         if (!month || year === null) return setError(t('form.errDate'));
         if (isBeforeThisMonth(month, year, today)) return setError(t('form.errPast'));
 
+        if (onSubmitValues) {
+            setError('');
+            onSubmitValues({
+                title: title.trim(), targetAmount: targetNum, savedAmount: savedNum,
+                savedSource: savedNum > 0 ? source : null, targetMonth: month, targetYear: year,
+                autoMinimum: auto,
+            });
+            return;
+        }
+
         setBusy(true);
         setError('');
         try {
@@ -137,7 +195,7 @@ export default function GoalForm({
             setTitle(''); setTarget(''); setSaved(''); setSource(null); setAuto(false);
             setMonth(requireAll ? null : fallback.month);
             setYear(requireAll ? null : fallback.year);
-            onCreated({ id: goal?.id, title: goal?.title ?? title.trim() });
+            onCreated?.({ id: goal?.id, title: goal?.title ?? title.trim() });
         } catch (e: any) {
             const code = premiumErrorCode(e);
             if (code) {
@@ -154,12 +212,16 @@ export default function GoalForm({
         }
     };
 
-    const input = [styles.textInput, { backgroundColor: theme.surfaceSoft, borderColor: theme.border, color: theme.ink }];
+    // The host's button always calls the latest submit (it closes over the fields).
+    const submitRef = useRef(submit);
+    submitRef.current = submit;
+    useImperativeHandle(ref, () => ({ submit: () => { submitRef.current(); } }), []);
+    useEffect(() => { onValidityChange?.(valid); }, [valid]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return (
-        <Card theme={theme} depth={4} padding={18} style={{ marginBottom: 16 }}>
-            <Text style={[styles.formTitle, { color: theme.ink }]}>{t('form.title')}</Text>
+    const input = [styles.textInput, { backgroundColor: bare ? theme.surface : theme.surfaceSoft, borderColor: theme.border, color: theme.ink }];
 
+    const fields = (
+        <>
             <Text style={[styles.fieldLabel, { color: theme.ink3 }]}>{t('newGoal.nameLabelSaving')}</Text>
             <TextInput
                 style={input}
@@ -212,7 +274,8 @@ export default function GoalForm({
                         <Trans
                             i18nKey="goals:form.perMonth"
                             values={{ amount: formatMoney(minimum) }}
-                            components={{ bold: <Text style={styles.planStrong} /> }}
+                            // Keyed for the same reason as the goal card's pace line.
+                            components={{ bold: <Text key="bold" style={styles.planStrong} /> }}
                         />
                     </Text>
                     {fit.share !== null ? (
@@ -243,17 +306,22 @@ export default function GoalForm({
                 <Text style={[styles.errorText, { color: theme.danger, marginTop: 0 }]}>{error}</Text>
             ) : null}
 
-            <View style={styles.formBtnRow}>
+            {hideSubmit ? null : <View style={styles.formBtnRow}>
                 <Pressable
                     onPress={submit}
-                    disabled={busy}
+                    disabled={busy || (!!onSubmitValues && !valid)}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: busy || (!!onSubmitValues && !valid) }}
                     style={({ pressed }) => [
-                        styles.submitBtn, { backgroundColor: theme.brand },
+                        styles.submitBtn,
+                        { backgroundColor: onSubmitValues && !valid ? theme.border : theme.brand },
                         (pressed || busy) && { opacity: 0.85 },
                     ]}
                 >
-                    <IconCheck size={15} color={theme.onBrand} />
-                    <Text style={styles.submitBtnText}>{t('form.submit')}</Text>
+                    <IconCheck size={15} color={onSubmitValues && !valid ? theme.ink3 : theme.onBrand} />
+                    <Text style={[styles.submitBtnText, onSubmitValues && !valid ? { color: theme.ink3 } : null]}>
+                        {submitLabel ?? t('form.submit')}
+                    </Text>
                 </Pressable>
                 {onCancel ? (
                     <Pressable
@@ -263,7 +331,17 @@ export default function GoalForm({
                         <Text style={[styles.cancelBtnText, { color: theme.ink2 }]}>{tc('action.cancel')}</Text>
                     </Pressable>
                 ) : null}
-            </View>
+            </View>}
+        </>
+    );
+
+    if (bare) return <View>{fields}</View>;
+    return (
+        <Card theme={theme} depth={4} padding={18} style={{ marginBottom: 16 }}>
+            <Text style={[styles.formTitle, { color: theme.ink }]}>{t('form.title')}</Text>
+            {fields}
         </Card>
     );
-}
+});
+
+export default GoalForm;

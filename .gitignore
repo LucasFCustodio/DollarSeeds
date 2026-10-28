@@ -7,3 +7,6 @@ DollarSeeds-feature-graphic.png
 DollarSeeds-logo.jpg
 github_commands.txt
 py_and_js_commands.txt
+
+# Claude Code prompts, kept locally
+prompts/

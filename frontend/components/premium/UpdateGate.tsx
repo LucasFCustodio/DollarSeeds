@@ -1,16 +1,16 @@
 /**
  * UpdateGate — blocks the app when this build is below `min_supported_version`.
  *
- * Rendered as a sibling of <Stack>, alongside OnboardingTour and StartingBalanceGate,
- * because it has to cover every screen including auth.
+ * Rendered as a sibling of <Stack>, because it has to cover every screen including
+ * auth and the onboarding.
  *
  * IT CANNOT HELP THE BUILD ALREADY IN THE STORE. That binary has no gate and never
  * will, which is the whole reason the backend hides premium content from unmarked
  * clients instead of locking it. This is for v3 onward.
  *
  * FAILS OPEN, THREE WAYS. An unreachable /config/, a malformed `min_supported_version`,
- * and an unreadable local version all pass. The app's own rule (see
- * StartingBalanceGate) is that a gate must never be able to trap the user, and a false
+ * and an unreadable local version all pass. The app's own rule is
+ * that a gate must never be able to trap the user, and a false
  * positive here bricks the app for everyone with no way back that does not involve
  * shipping another binary.
  */

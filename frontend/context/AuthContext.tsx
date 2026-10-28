@@ -29,9 +29,15 @@ export const AuthProvider = ({ children }: any) => {
     useEffect(() => {
         // Tie analytics events to the anonymous user id — NO email or financial data
         // is ever attached as a person property.
-        const syncIdentity = (nextUser: User | null) => {
+        //
+        // The onboarding runs BEFORE sign-up, so its events are captured under
+        // PostHog's anonymous id. identify() on sign-up links that anonymous id to the
+        // account, which only works if the anonymous id is still the one the events
+        // went out under. So reset() runs on an actual sign-out only — never merely
+        // because a launch found no session, which would mint a fresh anonymous id on
+        // every relaunch mid-onboarding and orphan everything captured before it.
+        const identify = (nextUser: User | null) => {
             if (nextUser) posthog?.identify(nextUser.id);
-            else posthog?.reset();
         };
 
         // 1. Check if they are already logged in when the app opens
@@ -39,14 +45,15 @@ export const AuthProvider = ({ children }: any) => {
             setSession(session);
             setUser(session?.user ?? null);
             setInitialized(true);
-            syncIdentity(session?.user ?? null); // session-restore → identify
+            identify(session?.user ?? null); // session-restore → identify
         });
 
         // 2. Listen for login/logout events while the app is open
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             setSession(session);
             setUser(session?.user ?? null);
-            syncIdentity(session?.user ?? null); // login → identify · logout → reset
+            if (event === 'SIGNED_OUT') posthog?.reset();   // logout → a new anonymous id
+            else identify(session?.user ?? null);         // login → identify (links the anonymous events)
         });
 
         return () => subscription.unsubscribe();

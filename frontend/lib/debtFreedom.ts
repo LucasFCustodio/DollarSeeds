@@ -57,6 +57,9 @@ export interface DebtRow {
     /** A missed due date waiting for the user to enter the late fee. */
     late_fee_pending_for: string | null;
     highest_step: number | null;
+    /** Migration 0014: planted without an APR (apr holds 0). Absent/null/false = the
+     *  APR is the real rate. */
+    apr_missing?: boolean | null;
 }
 
 /** A debt as the garden renders it: the row plus server-computed fields. */

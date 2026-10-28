@@ -61,11 +61,19 @@ console.log('\nB3 — allocating money must NOT change the rate');
     // exact shape of the original bug — fails here instead of passing silently.
     check('weeklyGoalRate takes exactly (target, createdAt, deadline)', weeklyGoalRate.length, 3);
 
+    // The goal card dropped its $/week line in the card redesign
+    // (prompts/GOAL_CARD_REDESIGN.md): the server's "on pace for" and the stored monthly
+    // minimum replaced it. The guard stays for the day it comes back: any call site
+    // must still go through a helper that takes no allocated argument.
     const callSite = readFileSync(new URL('../app/(tabs)/piggyBank.tsx', import.meta.url), 'utf8');
-    const signature = /const getWeeklyRate = \(([^)]*)\)/.exec(callSite);
-    assert('the goal card helper does not accept an allocated argument',
-        !!signature && !/allocated/i.test(signature[1]),
-        signature ? signature[1] : 'getWeeklyRate not found in piggyBank.tsx');
+    if (!/weeklyGoalRate/.test(callSite)) {
+        assert('the goal card no longer renders a $/week rate, so no call site can pass allocated', true);
+    } else {
+        const signature = /const getWeeklyRate = \(([^)]*)\)/.exec(callSite);
+        assert('the goal card helper does not accept an allocated argument',
+            !!signature && !/allocated/i.test(signature[1]),
+            signature ? signature[1] : 'getWeeklyRate not found in piggyBank.tsx');
+    }
 }
 
 console.log('\nB2 — editing the target MUST change the rate');

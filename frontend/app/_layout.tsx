@@ -6,17 +6,16 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { useFonts } from 'expo-font';
 
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { LocaleProvider, useLocale } from '../context/LocaleContext';
-import { OnboardingProvider } from '../context/OnboardingContext';
-import { SubscriptionProvider } from '../context/SubscriptionContext';
+import { OnboardingProvider, useOnboarding } from '../context/OnboardingContext';
+import { SubscriptionProvider, useSubscription } from '../context/SubscriptionContext';
 import { AnnouncementsProvider } from '../context/AnnouncementsContext';
-import OnboardingTour from '../components/onboarding/OnboardingTour';
 import PaywallSheet from '../components/premium/PaywallSheet';
 import UpdateGate from '../components/premium/UpdateGate';
 import NewsModal from '../components/news/NewsModal';
@@ -52,6 +51,8 @@ function RootLayoutNav() {
     const { ready: localeReady } = useLocale();
     const router = useRouter();
     const segments = useSegments();
+    const { status: onboarding, replaying } = useOnboarding();
+    const { paywallCopy } = useSubscription();
 
     // Load custom font families via @expo-google-fonts packages
     // (files live inside node_modules — no manual TTF download needed)
@@ -78,15 +79,29 @@ function RootLayoutNav() {
 
     useNotifications(initialized && !!user);
 
+    // The bouncer (ONBOARDING_REWORK.md §1):
+    //   signed out → the onboarding; only /auth ("I already have an account") and the
+    //                onboarding itself are reachable.
+    //   signed in, onboarding not done (every pre-rework account, once) or the dev
+    //                replay → the onboarding, in signed-in mode.
+    //   signed in and done → never left on /auth.
+    // A signed-in user is never moved OFF /onboarding from here: sign-up happens on
+    // screen 19 and the flow still has its writes, the paywall and the last screen to
+    // run. The screen leaves by itself when it is done.
     useEffect(() => {
         if (!initialized) return;
-        const inAuthGroup = segments[0] === 'auth';
-        if (!user && !inAuthGroup) {
-            router.replace('/auth');
-        } else if (user && inAuthGroup) {
+        const at = segments[0] as string | undefined;
+        if (!user) {
+            if (at !== 'auth' && at !== 'onboarding') router.replace('/onboarding' as any);
+            return;
+        }
+        if (onboarding === 'unknown') return;
+        if ((onboarding === 'needed' || replaying) && at !== 'onboarding') {
+            router.replace('/onboarding' as any);
+        } else if (onboarding === 'done' && !replaying && at === 'auth') {
             router.replace('/(tabs)');
         }
-    }, [user, initialized, segments]);
+    }, [user, initialized, segments, onboarding, replaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Wait for the fonts, not just auth + locale. The first screen used to mount before
     // they registered, so iOS measured its text in the system font and then drew the
@@ -95,7 +110,17 @@ function RootLayoutNav() {
     // than holding the spinner forever.
     const fontsReady = fontsLoaded || !!fontError;
 
-    if (!initialized || !localeReady || !fontsReady) {
+    // A signed-in user waits for the onboarding flag too, so an account that still has
+    // the onboarding to do never sees the tabs flash first.
+    const onboardingReady = !user || onboarding !== 'unknown';
+
+    // BOOT ONLY. Once the navigator has rendered it is never swapped back for the
+    // spinner: sign-up on the onboarding's screen 19 makes the flag 'unknown' for a
+    // moment, and unmounting the onboarding then would cut its plan writes off halfway.
+    const booted = useRef(false);
+    if (initialized && localeReady && fontsReady && onboardingReady) booted.current = true;
+
+    if (!booted.current) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.bg }}>
                 <ActivityIndicator size="large" color={theme.brand} />
@@ -114,6 +139,7 @@ function RootLayoutNav() {
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
                 <Stack.Screen name="auth" options={{ headerShown: false }} />
+                <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
                 <Stack.Screen name="lessonDetail" options={{ headerShown: false }} />
                 <Stack.Screen name="lessonSeries/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="lessonPlayer" options={{ headerShown: false }} />
@@ -123,13 +149,10 @@ function RootLayoutNav() {
                 <Stack.Screen name="logExpense" options={{ headerShown: false }} />
                 <Stack.Screen name="logIncome" options={{ headerShown: false }} />
             </Stack>
-            <OnboardingTour />
-            {/* StartingBalanceGate is out of this build's flow (GOALS_REWORK.md §5a): it
-                booked into General Savings, which goals_v2 never shows. The onboarding
-                replaces it later; the component file stays until then. */}
             {/* One paywall instance for the whole app — it opens from both CTAs, a
-                locked series card, a locked lesson row, and a 403 from the player. */}
-            <PaywallSheet />
+                locked series card, a locked lesson row, a 403 from the player, and the
+                onboarding (the only caller that overrides its headline). */}
+            <PaywallSheet headline={paywallCopy?.headline} subtitle={paywallCopy?.subtitle} />
             {/* Last, so it covers everything above it including the auth screen. */}
             <UpdateGate />
             {/* AFTER UpdateGate on purpose. An announcement is never allowed to sit on

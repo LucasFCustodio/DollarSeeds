@@ -1,137 +1,103 @@
 /**
- * OnboardingContext — drives the first-run guided tour.
+ * OnboardingContext — has this ACCOUNT done the onboarding? (ONBOARDING_REWORK.md §1)
  *
- * Holds the tour's active/step state and persists a per-user "completed" flag in
- * AsyncStorage (local only — no backend). Auto-starts the tour once for genuinely
- * new accounts (created on/after ONBOARDING_RELEASE_DATE) that haven't seen it,
- * so existing beta testers are never surfaced it. The dev replay button calls
- * replay() to clear the flag and run it again.
+ * The answer lives on the account: `user_metadata.onboarding_v2_completed_at`, written
+ * with supabase.auth.updateUser, so a reinstall or a new phone never shows it again.
+ * AsyncStorage keeps a copy as a fast cache (and as the fallback when that write
+ * failed offline — the next launch pushes it up).
+ *
+ *   status  'unknown' until the signed-in user's flag has been read; then 'needed' or
+ *           'done'. Signed out it is 'needed' — the logged-out first launch IS the
+ *           onboarding. Every account without the flag, including every account from
+ *           before this rework, is 'needed' once (there is no release-date cutoff).
+ *   replaying  the dev account's "Replay Onboarding Tour" (Settings): the flow runs
+ *           again in signed-in mode without clearing the account's flag.
+ *
+ * The root layout routes on `status` / `replaying`; app/onboarding.tsx calls
+ * `markComplete` on its last screen.
  */
-import React, {
-    createContext, useCallback, useContext, useEffect, useRef, useState,
-} from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 import { useAuth } from './AuthContext';
-import {
-    ONBOARDING_STEPS,
-    isNewAccount,
-    onboardingKey,
-} from '../constants/onboarding';
+import { supabase } from '../lib/supabase';
+import { clearSaved, completedKey, getFlag, homeHintKey, setFlag } from '../lib/onboardingStore';
+
+export type OnboardingStatus = 'unknown' | 'needed' | 'done';
 
 type OnboardingContextType = {
-    active: boolean;
-    step: number;
-    stepCount: number;
-    next: () => void;
-    skip: () => void;
-    start: () => void;
-    replay: () => void;
+    status: OnboardingStatus;
+    replaying: boolean;
+    /** Dev only: run the flow again, signed in. */
+    replay: () => Promise<void>;
+    /** The last screen: store completion on the account (and the cache). */
+    markComplete: () => Promise<void>;
 };
 
 const OnboardingContext = createContext<OnboardingContextType>({
-    active: false,
-    step: 0,
-    stepCount: ONBOARDING_STEPS.length,
-    next: () => {},
-    skip: () => {},
-    start: () => {},
-    replay: () => {},
+    status: 'unknown',
+    replaying: false,
+    replay: async () => {},
+    markComplete: async () => {},
 });
 
 export const useOnboarding = () => useContext(OnboardingContext);
 
 export const OnboardingProvider = ({ children }: { children: React.ReactNode }) => {
     const { user, initialized } = useAuth();
-    const [active, setActive] = useState(false);
-    const [step, setStep] = useState(0);
+    const [status, setStatus] = useState<OnboardingStatus>('unknown');
+    const [replaying, setReplaying] = useState(false);
 
-    // Ensures the auto-start check runs at most once per signed-in session.
-    const autoCheckedFor = useRef<string | null>(null);
+    const metaDone = !!user?.user_metadata?.onboarding_v2_completed_at;
 
-    const persistCompleted = useCallback(async () => {
-        if (!user?.id) return;
-        try {
-            await AsyncStorage.setItem(onboardingKey(user.id), 'true');
-        } catch (err) {
-            console.error('Onboarding flag save error:', err);
-        }
-    }, [user?.id]);
-
-    const start = useCallback(() => {
-        setStep(0);
-        setActive(true);
-    }, []);
-
-    const finish = useCallback(() => {
-        setActive(false);
-        persistCompleted();
-    }, [persistCompleted]);
-
-    const next = useCallback(() => {
-        setStep((prev) => {
-            if (prev >= ONBOARDING_STEPS.length - 1) {
-                finish();
-                return prev;
-            }
-            return prev + 1;
-        });
-    }, [finish]);
-
-    const skip = useCallback(() => {
-        finish();
-    }, [finish]);
-
-    // Replay: clear the completed flag then restart from step 0 (dev-only entry point).
-    const replay = useCallback(async () => {
-        if (user?.id) {
-            try {
-                await AsyncStorage.removeItem(onboardingKey(user.id));
-            } catch (err) {
-                console.error('Onboarding flag reset error:', err);
-            }
-        }
-        start();
-    }, [user?.id, start]);
-
-    // Auto-start once for eligible new accounts.
     useEffect(() => {
-        if (!initialized || !user?.id) {
-            autoCheckedFor.current = null;
+        if (!initialized) return;
+        if (!user?.id) {
+            setStatus('needed');
+            setReplaying(false);
             return;
         }
-        if (autoCheckedFor.current === user.id) return;
-        autoCheckedFor.current = user.id;
-
-        let cancelled = false;
-        (async () => {
-            try {
-                const seen = await AsyncStorage.getItem(onboardingKey(user.id));
-                if (cancelled || seen) return;
-
-                // Only genuinely new accounts (created on/after the release cutoff)
-                // auto-start — existing beta accounts are skipped.
-                if (isNewAccount(user.created_at)) start();
-            } catch (err) {
-                console.error('Onboarding auto-start check error:', err);
+        if (metaDone) {
+            setStatus('done');
+            setFlag(completedKey(user.id), String(user.user_metadata.onboarding_v2_completed_at));
+            return;
+        }
+        let live = true;
+        setStatus('unknown');
+        getFlag(completedKey(user.id)).then(cached => {
+            if (!live) return;
+            if (cached) {
+                setStatus('done');
+                // The account write failed last time (offline): try it again.
+                supabase.auth.updateUser({ data: { onboarding_v2_completed_at: cached } }).catch(() => {});
+            } else {
+                setStatus('needed');
             }
-        })();
+        });
+        return () => { live = false; };
+    }, [initialized, user?.id, metaDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
-        return () => { cancelled = true; };
-    }, [initialized, user?.id, user?.created_at, start]);
+    const replay = useCallback(async () => {
+        await clearSaved();
+        setReplaying(true);
+    }, []);
+
+    const markComplete = useCallback(async () => {
+        if (!user?.id) return;
+        const at = new Date().toISOString();
+        await setFlag(completedKey(user.id), at);
+        await setFlag(homeHintKey(user.id), 'pending');
+        try {
+            const { error } = await supabase.auth.updateUser({ data: { onboarding_v2_completed_at: at } });
+            if (error) console.error('Onboarding completion save error:', error);
+        } catch (err) {
+            console.error('Onboarding completion save error:', err);
+        }
+        setStatus('done');
+        setReplaying(false);
+    }, [user?.id]);
 
     return (
-        <OnboardingContext.Provider
-            value={{
-                active,
-                step,
-                stepCount: ONBOARDING_STEPS.length,
-                next,
-                skip,
-                start,
-                replay,
-            }}
-        >
+        <OnboardingContext.Provider value={{ status, replaying, replay, markComplete }}>
             {children}
         </OnboardingContext.Provider>
     );

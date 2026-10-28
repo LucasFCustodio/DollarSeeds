@@ -26,7 +26,15 @@ function PotLabel({ debt, boxHeight }: Props) {
     const { t } = useTranslation('debts');
     const { theme } = useTheme();
     const f = useDebtFormat();
-    const size = Math.max(9, boxHeight * 0.2);
+    // The type scales with the label panel, with a 9pt floor. On a small pot (the
+    // onboarding's debt preview: a ~29pt panel) that floor makes the three lines taller
+    // than the panel and clips the last one, so there the size is capped to what fits
+    // and the lines are set tight. Larger panels (the garden) are untouched.
+    const natural = Math.max(9, boxHeight * 0.2);
+    const fitCap = (boxHeight * 0.9) / ((1.25 + 0.92 + 0.86) * TIGHT_LINE);   // 10% breathing room
+    const tight = natural > fitCap;
+    const size = tight ? fitCap : natural;
+    const lh = (scale: number) => (tight ? { lineHeight: size * scale * TIGHT_LINE } : null);
     const missingDue = debt.missing.includes('due_day');
     const due = missingDue ? t('label.missing') : f.dayMonthOf(debt.next_due_date);
 
@@ -41,7 +49,7 @@ function PotLabel({ debt, boxHeight }: Props) {
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.5}
-                style={[styles.name, { color: theme.ink, fontFamily: Fonts.sansBold, fontSize: size * 1.25 }]}
+                style={[styles.name, { color: theme.ink, fontFamily: Fonts.sansBold, fontSize: size * 1.25 }, lh(1.25)]}
             >
                 {debt.name}
             </Text>
@@ -49,7 +57,7 @@ function PotLabel({ debt, boxHeight }: Props) {
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.6}
-                style={{ color: theme.ink, fontFamily: Fonts.sansSemiBold, fontSize: size * 0.92 }}
+                style={[{ color: theme.ink, fontFamily: Fonts.sansSemiBold, fontSize: size * 0.92 }, lh(0.92)]}
             >
                 {before}
                 <Text style={missingDue ? { color: theme.danger } : null}>{due}</Text>
@@ -61,7 +69,7 @@ function PotLabel({ debt, boxHeight }: Props) {
                 numberOfLines={1}
                 adjustsFontSizeToFit
                 minimumFontScale={0.6}
-                style={{ color: missingDue ? theme.danger : theme.ink2, fontFamily: Fonts.sansSemiBold, fontSize: size * 0.86 }}
+                style={[{ color: missingDue ? theme.danger : theme.ink2, fontFamily: Fonts.sansSemiBold, fontSize: size * 0.86 }, lh(0.86)]}
             >
                 {missingDue && debt.status !== 'paid_off' ? t('label.addDueDay') : t('label.pctPaid', { pct: f.pct(debt.pct_paid) })}
             </Text>
@@ -70,6 +78,9 @@ function PotLabel({ debt, boxHeight }: Props) {
 }
 
 export default memo(PotLabel);
+
+/** Line height as a multiple of the font size when the label is capped to fit. */
+const TIGHT_LINE = 1.08;
 
 const styles = StyleSheet.create({
     box: { flex: 1, alignItems: 'center', justifyContent: 'center' },

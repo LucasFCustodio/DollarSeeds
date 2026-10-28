@@ -4,7 +4,9 @@
  *
  *   Heading   "Debt $ paid off - {year}" / "Goal $ saved - {year}", where {year} is
  *             the year of the month at the horizontal centre of the visible graph,
- *             updated while scrolling.
+ *             updated while scrolling. The goals sheet also carries the goals_v2
+ *             "kept under budget" graph below, with its own heading; the sheet's body
+ *             scrolls vertically to reach it.
  *   Summary   total so far · this calendar year · debts paid off / goals completed.
  *   Graph     the cumulative line from the first month to today, one point per
  *             month. Every month is a fixed MONTH_W wide, so the graph is as wide as
@@ -26,8 +28,9 @@ import {
     type NativeScrollEvent, type NativeSyntheticEvent,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
-import { useTheme } from '../../context/ThemeContext';
+import { Fonts, useTheme } from '../../context/ThemeContext';
 import { useLocale, MONTHS } from '../../context/LocaleContext';
 import { CURRENCIES } from '../../constants/currencies';
 import Sheet from '../ui/Sheet';
@@ -35,7 +38,9 @@ import type { HomeProgress, Milestone, SeriesPoint } from '../../lib/homeProgres
 import { homeType } from './homeType';
 
 /** 'kept' — the goals_v2 "kept under budget" graph: each month's own leftover, not a
- *  running total, plotted on the same axes with no milestones. */
+ *  running total, plotted on the same axes with no milestones. It shares the goals
+ *  sheet: opening either 'goals' or 'kept' shows "Goal $ saved" with "kept under
+ *  budget" under it, and 'kept' opens scrolled to its own graph. */
 export type GraphKind = 'debts' | 'goals' | 'kept';
 
 const SHEET_HEIGHT = 0.8;
@@ -57,58 +62,126 @@ interface Props {
     onClose: () => void;
 }
 
+/** What one graph plots. For 'kept' `cumulative` carries the month's own amount. */
+function seriesFor(kind: GraphKind, progress: HomeProgress): SeriesPoint[] {
+    if (kind === 'kept') {
+        return (progress.goals?.kept_under_budget_series ?? []).map(p => ({ month: p.month, cumulative: p.amount }));
+    }
+    return (kind === 'debts' ? progress.debts?.series : progress.goals?.series) ?? [];
+}
+
+/** The graphs a sheet shows, in order: the debts graph alone, or the goals graph
+ *  with "kept under budget" under it. Only those with something to plot. */
+function sectionsFor(kind: GraphKind | null, progress: HomeProgress): GraphKind[] {
+    if (!kind) return [];
+    const wanted: GraphKind[] = kind === 'debts' ? ['debts'] : ['goals', 'kept'];
+    return wanted.filter(k => {
+        if (k === 'kept' && !((progress.goals?.kept_under_budget ?? 0) > 0.005)) return false;
+        return seriesFor(k, progress).length > 0;
+    });
+}
+
 export default function ProgressGraphSheet({ kind, progress, onClose }: Props) {
     const { t } = useTranslation('dashboard');
-    const { formatMoney, currency } = useLocale();
-    const { theme } = useTheme();
-    const block = kind === 'debts' ? progress.debts : kind === 'goals' || kind === 'kept' ? progress.goals : null;
-    const series = useMemo<SeriesPoint[]>(() => {
-        if (kind === 'kept') {
-            // The graph plots `cumulative`; for this one it is the month's own amount.
-            return (progress.goals?.kept_under_budget_series ?? []).map(p => ({ month: p.month, cumulative: p.amount }));
-        }
-        return (block as { series?: SeriesPoint[] } | null)?.series ?? [];
-    }, [block, kind, progress.goals]);
-    const lastYear = series.length ? series[series.length - 1].month.slice(0, 4) : '';
-    const [year, setYear] = useState(lastYear);
+    const { currency } = useLocale();
+    const sections = useMemo(() => sectionsFor(kind, progress), [kind, progress]);
+    const first = sections[0];
+    const [year, setYear] = useState('');
+    const scroller = useRef<ScrollView>(null);
+    const scrolledTo = useRef(false);
 
-    // Each opening starts on today's year; the graph then reports as it scrolls.
-    useEffect(() => {
-        if (kind) setYear(lastYear);
-    }, [kind, lastYear]);
+    useEffect(() => { if (kind) scrolledTo.current = false; }, [kind]);
 
     const symbol = CURRENCIES[currency].symbol;
-    const title = kind === 'goals'
-        ? t('graph.goalsTitle', { symbol, year })
-        : kind === 'kept'
-            ? t('graph.keptTitle', { symbol, year })
-            : t('graph.debtsTitle', { symbol, year });
-    const thisYear = String(new Date().getFullYear());
-
-    const stats = !block ? [] : kind === 'kept' && progress.goals ? [
-        { label: t('graph.total'), value: formatMoney(progress.goals.kept_under_budget) },
-        {
-            label: t('graph.thisYear'),
-            value: formatMoney(series.filter(p => p.month.startsWith(thisYear)).reduce((sum, p) => sum + p.cumulative, 0)),
-        },
-    ] : kind === 'debts' && progress.debts ? [
-        { label: t('graph.total'), value: formatMoney(progress.debts.total_paid) },
-        { label: t('graph.thisYear'), value: formatMoney(progress.debts.paid_this_year) },
-        { label: t('graph.debtsPaidOff'), value: String(progress.debts.paid_count) },
-    ] : progress.goals ? [
-        { label: t('graph.total'), value: formatMoney(progress.goals.total_saved) },
-        { label: t('graph.thisYear'), value: formatMoney(progress.goals.saved_this_year) },
-        { label: t('graph.goalsCompleted'), value: String(progress.goals.completed_count) },
-    ] : [];
+    const title = first ? titleFor(first, year, symbol, t) : '';
 
     return (
         <Sheet
-            visible={!!block && series.length > 0}
+            visible={sections.length > 0}
             onClose={onClose}
             closeLabel={t('graph.close')}
             title={title}
             heightRatio={SHEET_HEIGHT}
         >
+            <ScrollView ref={scroller} style={styles.flex} showsVerticalScrollIndicator={false}>
+                {sections.map((k, i) => (
+                    <View
+                        key={k}
+                        style={i > 0 ? styles.nextSection : undefined}
+                        onLayout={e => {
+                            // Opened from the kept row: land on its graph, once.
+                            if (kind === 'kept' && k === 'kept' && i > 0 && !scrolledTo.current) {
+                                scrolledTo.current = true;
+                                scroller.current?.scrollTo({ y: e.nativeEvent.layout.y, animated: false });
+                            }
+                        }}
+                    >
+                        <GraphSection
+                            kind={k}
+                            progress={progress}
+                            // The first graph's heading is the sheet's title.
+                            showHeading={i > 0}
+                            onYear={i === 0 ? setYear : undefined}
+                        />
+                    </View>
+                ))}
+            </ScrollView>
+        </Sheet>
+    );
+}
+
+function titleFor(kind: GraphKind, year: string, symbol: string, t: TFunction<'dashboard'>) {
+    return kind === 'goals'
+        ? t('graph.goalsTitle', { symbol, year })
+        : kind === 'kept'
+            ? t('graph.keptTitle', { symbol, year })
+            : t('graph.debtsTitle', { symbol, year });
+}
+
+/** One graph with its summary row (and, below the first, its own heading). Each keeps
+ *  its own year, reported by its graph as it scrolls sideways. */
+function GraphSection({ kind, progress, showHeading, onYear }: {
+    kind: GraphKind;
+    progress: HomeProgress;
+    showHeading: boolean;
+    onYear?: (year: string) => void;
+}) {
+    const { t } = useTranslation('dashboard');
+    const { formatMoney, currency } = useLocale();
+    const { theme } = useTheme();
+    const series = useMemo(() => seriesFor(kind, progress), [kind, progress]);
+    const lastYear = series.length ? series[series.length - 1].month.slice(0, 4) : '';
+    const [year, setYear] = useState(lastYear);
+    useEffect(() => { setYear(lastYear); onYear?.(lastYear); }, [lastYear]); // eslint-disable-line react-hooks/exhaustive-deps
+    const report = (y: string) => { setYear(y); onYear?.(y); };
+
+    const thisYear = String(new Date().getFullYear());
+    const goals = progress.goals;
+    const debts = progress.debts;
+    const stats = kind === 'kept' && goals ? [
+        { label: t('graph.total'), value: formatMoney(goals.kept_under_budget) },
+        {
+            label: t('graph.thisYear'),
+            value: formatMoney(series.filter(p => p.month.startsWith(thisYear)).reduce((sum, p) => sum + p.cumulative, 0)),
+        },
+    ] : kind === 'debts' && debts ? [
+        { label: t('graph.total'), value: formatMoney(debts.total_paid) },
+        { label: t('graph.thisYear'), value: formatMoney(debts.paid_this_year) },
+        { label: t('graph.debtsPaidOff'), value: String(debts.paid_count) },
+    ] : goals ? [
+        { label: t('graph.total'), value: formatMoney(goals.total_saved) },
+        { label: t('graph.thisYear'), value: formatMoney(goals.saved_this_year) },
+        { label: t('graph.goalsCompleted'), value: String(goals.completed_count) },
+    ] : [];
+    const milestones = kind === 'kept' ? [] : (kind === 'debts' ? debts?.milestones : goals?.milestones) ?? [];
+
+    return (
+        <>
+            {showHeading ? (
+                <Text style={[styles.heading, { color: theme.ink }]} accessibilityRole="header">
+                    {titleFor(kind, year, CURRENCIES[currency].symbol, t)}
+                </Text>
+            ) : null}
             <View style={styles.stats}>
                 {stats.map(s => (
                     <View key={s.label} style={styles.stat}>
@@ -119,19 +192,16 @@ export default function ProgressGraphSheet({ kind, progress, onClose }: Props) {
                     </View>
                 ))}
             </View>
-            {block && series.length ? (
-                <Graph
-                    key={kind}
-                    series={series}
-                    milestones={kind === 'kept' ? [] : block.milestones}
-                    color={kind === 'goals' ? theme.goals : kind === 'kept' ? theme.success : theme.brand}
-                    merged={(count: number) => kind === 'goals'
-                        ? t('graph.mergedGoals', { count })
-                        : t('graph.mergedDebts', { count })}
-                    onYear={setYear}
-                />
-            ) : null}
-        </Sheet>
+            <Graph
+                series={series}
+                milestones={milestones}
+                color={kind === 'goals' ? theme.goals : kind === 'kept' ? theme.success : theme.brand}
+                merged={(count: number) => kind === 'goals'
+                    ? t('graph.mergedGoals', { count })
+                    : t('graph.mergedDebts', { count })}
+                onYear={report}
+            />
+        </>
     );
 }
 
@@ -336,6 +406,8 @@ function Graph({ series, milestones, color, merged, onYear }: {
 
 const styles = StyleSheet.create({
     flex: { flex: 1 },
+    nextSection: { marginTop: 28 },
+    heading: { fontFamily: Fonts.serif, fontSize: 24, marginBottom: 12 },
     stats: { flexDirection: 'row', gap: 12, marginBottom: 16 },
     stat: { flex: 1, gap: 2 },
     graph: { flexDirection: 'row' },

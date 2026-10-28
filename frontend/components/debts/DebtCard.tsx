@@ -56,6 +56,11 @@ function DebtCard({ debt, onPress }: { debt: Debt; onPress: (id: number) => void
                     {t('label.pctPaid', { pct: f.pct(debt.pct_paid) })}
                 </Text>
             )}
+            {debt.apr_missing && !paidOff ? (
+                <Text style={[styles.meta, { color: theme.harvestInk, fontFamily: Fonts.sans }]}>
+                    {t('aprMissing.warning')}
+                </Text>
+            ) : null}
             <View style={styles.bar}>
                 <AnimatedProgressBar value={Math.round(debt.pct_paid * 100)} color={theme.goals} bg={theme.borderSoft} height={6} />
             </View>

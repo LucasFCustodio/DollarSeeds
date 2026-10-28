@@ -45,7 +45,9 @@ import { ClosedLine, CloseOutCard } from '../../components/home/CloseOut';
 import NextPaymentCard from '../../components/home/NextPaymentCard';
 import DebtFreedomTeaser from '../../components/home/DebtFreedomTeaser';
 import { useDebtFreedomAccess } from '../../lib/debtFreedomAccess';
+import { useSubscription } from '../../context/SubscriptionContext';
 import SplitContainers from '../../components/home/SplitContainers';
+import BennyHint, { useBennyHint } from '../../components/home/BennyHint';
 import LoggingArea, { BubbleFace } from '../../components/home/LoggingArea';
 import ConnectBankPrompt from '../../components/home/ConnectBankPrompt';
 import { EncouragementCard } from '../../components/home/Encouragement';
@@ -83,6 +85,8 @@ function Home() {
     const zones = useDropZones();
     const home = useHomeData();
     const debtAccess = useDebtFreedomAccess();
+    const hint = useBennyHint();
+    const { openPaywall } = useSubscription();
     const debtFreedom = DEBT_FREEDOM_ENABLED && debtAccess === 'full';
     const showTeaser = DEBT_FREEDOM_ENABLED && (debtAccess === 'none' || debtAccess === 'read_only');
 
@@ -123,8 +127,10 @@ function Home() {
         params: { category: SPLIT_CATEGORY[split], month: currentMonth, type: 'expense' },
     });
     const openIncomeList = () => router.push({ pathname: '/details', params: { month: currentMonth, type: 'income' } } as any);
-    const logExpense = (category?: 'needs' | 'wants') =>
+    const logExpense = (category?: 'needs' | 'wants') => {
+        if (hint.show) hint.dismiss();
         router.push({ pathname: '/logExpense', params: category ? { category } : {} } as any);
+    };
     const logIncome = () => router.push('/logIncome' as any);
     const openDebts = (debtId?: number) =>
         router.push({ pathname: '/(tabs)/debts', params: debtId != null ? { debtId: String(debtId) } : {} } as any);
@@ -178,7 +184,18 @@ function Home() {
                                     onPrune={() => openDebts(nextPayment.id)}
                                 />
                             ) : null}
-                            {showTeaser ? <DebtFreedomTeaser onLearn={() => openDebts()} /> : null}
+                            {showTeaser ? (
+                                <DebtFreedomTeaser
+                                    onLearn={() => openDebts()}
+                                    onWater={openPaywall}
+                                    // read_only = not entitled AND has debts (a debt planted in
+                                    // the onboarding, or a lapsed subscriber's garden).
+                                    planted={debtAccess === 'read_only' ? {
+                                        count: summary?.debts?.total_count ?? 1,
+                                        name: summary?.debts?.focus?.name ?? null,
+                                    } : null}
+                                />
+                            ) : null}
                             {titheActive ? (
                                 <TitheEnvelope
                                     amount={titheAmount}
@@ -212,6 +229,8 @@ function Home() {
                                 onReopen={home.reopenMonth}
                             />
                         ) : null}
+                        {/* Once, after the onboarding: Benny points at the + buttons. */}
+                        {hint.show ? <BennyHint onDismiss={hint.dismiss} /> : null}
                         <SplitContainers budgets={budgets} spent={expenses} onOpen={openSplit} onAdd={logExpense} />
                         <LoggingArea
                             connected={home.bankConnected}

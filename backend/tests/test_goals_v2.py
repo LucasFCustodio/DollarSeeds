@@ -637,8 +637,8 @@ def test_home_progress_counts_goals_only_and_adds_kept_under_budget(client, at_o
     block = client.get("/home/progress/", headers=V2, params={"today": TODAY}).json()["goals"]
     assert block["total_saved"] == 300.0                 # the goal only; GS and Replant left out
     assert block["kept_under_budget"] == 120.0
-    assert block["kept_under_budget_series"] == [{"month": "2026-09", "amount": 120.0},
-                                                 {"month": "2026-10", "amount": 0.0}]
+    # October is still open, so it has no leftover yet and is not plotted.
+    assert block["kept_under_budget_series"] == [{"month": "2026-09", "amount": 120.0}]
 
 
 # ── the form's budget context ─────────────────────────────────────────────────

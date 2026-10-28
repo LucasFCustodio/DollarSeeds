@@ -1,8 +1,7 @@
 /**
  * NewsModal — announcements published from the Supabase SQL editor, shown in-app.
  *
- * Mounted once at the root beside UpdateGate and StartingBalanceGate (see
- * app/_layout.tsx). State lives in context/AnnouncementsContext.tsx; this file is the
+ * Mounted once at the root beside UpdateGate (see app/_layout.tsx). State lives in context/AnnouncementsContext.tsx; this file is the
  * rendering, the language pick, and the link handling.
  *
  * ── IT DEFERS TO UpdateGate ───────────────────────────────────────────────────

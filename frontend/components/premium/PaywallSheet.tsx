@@ -109,7 +109,12 @@ function changeKind(active: boolean, current: PlanInfo | null, target: PlanOptio
     return 'unknown';
 }
 
-export default function PaywallSheet() {
+/**
+ * `headline` / `subtitle` replace the default headline when given. Optional, and used
+ * only by the onboarding (through openPaywallWith); every other entry point renders
+ * the default copy unchanged.
+ */
+export default function PaywallSheet({ headline, subtitle }: { headline?: string; subtitle?: string } = {}) {
     const { theme } = useTheme();
     const { t } = useTranslation(['premium', 'common']);
     const { dayMonthYear, numberFormat } = useLocale();
@@ -356,9 +361,15 @@ export default function PaywallSheet() {
                     >
                         {/* Instrument Serif ships in regular only — size carries the
                             emphasis; a bold weight would be faux-bold. */}
-                        <Text style={[styles.headline, { color: theme.ink }]} accessibilityRole="header">
-                            {t('premium:paywall.headline')}
+                        <Text
+                            style={[styles.headline, { color: theme.ink }, subtitle ? styles.headlineTight : null]}
+                            accessibilityRole="header"
+                        >
+                            {headline ?? t('premium:paywall.headline')}
                         </Text>
+                        {subtitle ? (
+                            <Text style={[styles.subtitle, { color: theme.ink2 }]}>{subtitle}</Text>
+                        ) : null}
 
                         {/* What Premium adds. No free-tier numbers — see the header. */}
                         <View style={[styles.benefits, { backgroundColor: theme.surface }]}>
@@ -709,6 +720,13 @@ const styles = StyleSheet.create({
         fontSize: ft(40, 1.25),
         lineHeight: ft(44, 1.25),
         letterSpacing: -0.6,
+        marginBottom: 24,
+    },
+    headlineTight: { marginBottom: 8 },
+    subtitle: {
+        fontFamily: Fonts.sans,
+        fontSize: ft(16),
+        lineHeight: ft(22),
         marginBottom: 24,
     },
     benefits: {

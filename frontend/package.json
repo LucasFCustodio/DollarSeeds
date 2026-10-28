@@ -15,7 +15,8 @@
     "verify-review-prompt": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-review-prompt.mjs",
     "verify-announcements": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-announcements.mjs",
     "verify-plan-pricing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-plan-pricing.mjs",
-    "verify-goal-plan": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-goal-plan.mjs"
+    "verify-goal-plan": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-goal-plan.mjs",
+    "verify-onboarding": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-onboarding.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",

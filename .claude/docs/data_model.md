@@ -179,7 +179,7 @@ pair (no budget effect; one history entry).
 **Home.** `GET /home/progress/` for `goals_v2`: "saved toward goals" counts listed
 goals only (completed amounts + what in-progress goals hold), and the goals block adds
 `kept_under_budget` (Σ `rollover` deposits into General Savings) and
-`kept_under_budget_series` (`[{month, amount}]`, monthly, not cumulative).
+`kept_under_budget_series` (`[{month, amount}]`, monthly, not cumulative). Each rollover plots in the month it belongs to — its own `month` name, in the year of the most recent such month on or before `created_at` (a close-out is usually booked early the next month) — and the current month is left out, point and amount, while it is open (`month_status` via `_is_month_closed`): an open month has no leftover yet.
 
 ### `subscriptions`
 
@@ -314,6 +314,7 @@ the entitlement as for a `limits` caller, so `premium_enabled` off (the kill swi
 | `cycle_start_balance` | numeric | 0011. Nullable. The statement balance the full-payment check compares against; set on create, at each cycle close, and by a check-in; moves with a balance edit. NULL (pre-v2) = rebuilt as `current_balance` + the cycle's net payments |
 | `checkin_due_since` | date | 0011. Nullable. The due date whose statement check-in is pending. NULL = none |
 | `late_fee_pending_for` | date | 0011. Nullable. A missed due date waiting for the user to enter the fee. NULL = none |
+| `apr_missing` | boolean | [0014](../../backend/migrations/0014_debt_apr_missing.sql). Nullable. TRUE = planted by the onboarding without an APR: `apr` holds `0` as a stand-in (the column stays NOT NULL). The card and detail page show "Add your interest rate…" and label payoff dates "before interest". Any `PATCH /debt-freedom/{id}` that sends an `apr` sets it back to false (only on a row that carries the flag, so it is a no-op before 0014). NULL/FALSE = the APR is real. Stripped from `/home/summary/`'s `focus.debt` for builds without `goals_v2` |
 
 `debt_transactions`: `debt_id` (FK, cascade), `kind` (`payment_minimum` \|
 `payment_extra` \| `interest` \| `balance_edit` \| `late_fee` \| `statement_adjustment` \|
@@ -362,6 +363,21 @@ never refused for this reason.
 | `DELETE /debt-freedom/{id}` | Refused (409, "This debt has payments in a closed month…") when its net payments in any **closed** budget month are non-zero — deleting it would change that month. Otherwise unchanged; its open-month payments leave the Goals spend with it. Optional `today` |
 | `GET /debt-freedom/{id}` | History is newest first with legacy pairs collapsed; each row carries `deletable` (`df.extra_is_deletable`: an extra in the current cycle of an active debt). The closed-month rule is applied when the delete arrives, so its message can say why |
 | `GET /debt-freedom/payments?month=&today=` | The month's net Debt Freedom payments for the Goals split's "View all": `{id, debt_id, debt_name, kind, amount, occurred_on}`, minimums and extras only, legacy pairs collapsed, newest first. Same month/year rule as the budget, so it adds up to the debt part of the split. Declared before `/debt-freedom/{id}` |
+
+**The onboarding's first debt** (`POST /debt-freedom/first-debt/`, a new route). Fields: `name`,
+`debt_type`, `amount_owed` (→ `original_balance` = `current_balance` = `cycle_start_balance`),
+`min_payment`, `due_day`, optional `apr`, optional `today`; validated by the same `_df_clean`
+as the normal create. A user who is not entitled may create one only while `debts` holds **no
+row of theirs** (any status) — otherwise 403 `debt_freedom_locked`, exactly what the normal
+create answers. A free user can never delete a debt (DELETE is a premium write) and a paid-off
+debt stays a row, so "no row" means "never had one" (a lapsed subscriber who deleted every debt
+while subscribed is the one exception). Two overlapping calls can both pass the check: the one
+whose row is not the oldest deletes it again and is refused. An entitled user is simply
+creating a debt. Without an APR the row gets `apr = 0` and `apr_missing = true`; if PostgREST
+does not know the column yet (backend deployed before 0014) the insert is retried without it.
+Afterwards the free user's allowance is `read_only` (not entitled + has a debt), so the Debts
+tab shows the debt read-only with the subscribe banner, as for a lapsed subscriber. Tested in
+`tests/test_onboarding.py`.
 
 `debt_freedom_settings` (0011): `user_id` (PK), `monthly_extra` (numeric, nullable —
 blank/NULL = $0), `updated_at`. One row per user, upserted by
@@ -602,6 +618,29 @@ where n.nspname = 'public' and c.relkind = 'r' order by c.relname;
 
 Every `using_expression` should read `(auth.uid() = user_id)`. A policy with
 `USING (true)` would be a real hole.
+
+## Onboarding preview (`POST /onboarding/preview/`)
+
+The onboarding shows its numbers before an account exists, so this route is **public**
+(listed with `/config/` and the RevenueCat webhook in `test_auth_security.py`) and
+**stateless**: no token, no database read or write. It runs the existing functions on the
+numbers it is given — the split through `_month_tithe` (live settings, no frozen month) on
+`BUDGET_TYPES['balanced']`, the goal's `gv.monthly_minimum` / `gv.on_pace` exactly as a
+`goals_v2` create stores them, and the debt's payoff through `df.simulate` for a garden of
+one debt with no monthly extra.
+
+- **Body**: `income`, optional `tithe_rate` (a fraction, like `user_settings`), optional
+  `goal` {`target_amount`, `saved_amount`, `target_month`, `target_year`}, optional `debt`
+  {`amount_owed`, `min_payment`, optional `apr`}, optional `today` (clamped by `_df_today`).
+  Numbers only, bounded (amounts ≤ $100M, APR ≤ 1000, years ≤ 50 ahead); unknown fields are
+  refused (422). A target before this month or `saved ≥ target` is a 400.
+- **Response**: `split` {`income`, `tithe` {`enabled`, `rate`, `amount`}, `budgetable`,
+  `budget_type`, `needs`, `wants`, `goals`}, `goal` {`minimum`, `share` of the Goals budget
+  or null without income, `on_pace`}, `debt` {`payoff_month` 'YYYY-MM' or null,
+  `covers_interest` (minimum > the first projected month's interest), `monthly_interest`,
+  `before_interest` (APR skipped → projected at 0%)}.
+- `tests/test_onboarding.py` proves it matches the dashboard, a created goal and the garden
+  for the same inputs, and that it reads and writes nothing.
 
 ## Supabase Client Setup
 
