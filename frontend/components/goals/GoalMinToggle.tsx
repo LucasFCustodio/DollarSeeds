@@ -1,5 +1,5 @@
 /**
- * GoalMinToggle — "Add my $334 for October", the goal card's monthly-minimum switch.
+ * GoalMinToggle — "Add $334 for October", the goal card's monthly-minimum switch.
  * The same outlined container and switch as the debts' MinToggle (MinSwitch is
  * shared), so the two habits look like one.
  *
@@ -32,20 +32,28 @@ function GoalMinToggle({ title, logged, amount, auto, pendingValue, onChange }: 
     const pending = pendingValue != null;
     const on = pending ? pendingValue : logged;
     const month = monthLabel(MONTHS[new Date().getMonth()]);
+    // "Added automatically" describes a minimum that is actually in, so it shows only
+    // then: while auto is on but the month has no income yet, the label stays the plain
+    // call to action. That also keeps this state at two lines instead of three.
+    const addedAuto = auto && on;
     return (
         <View style={[styles.base, { borderColor: theme.brand, backgroundColor: on ? theme.brandSoft : theme.surface }]}>
             <View style={styles.text} importantForAccessibility="no">
-                {/* Half the card wide on the goal card, so the label is two lines; the
-                    catalogue string holds the break ("Add $90" / "for October"), and it
-                    only shrinks for a long amount. */}
+                {/* Two thirds of the card wide, and never more than two lines. The
+                    catalogue string holds the break ("Add $90" / "for October"); the
+                    automatic state drops the month instead, so the hint below it is
+                    line two rather than a third line. It only shrinks for a long
+                    amount. */}
                 <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75}
                     style={[styles.label, { color: theme.brand, fontFamily: Fonts.sansSemiBold }]}>
-                    {on
-                        ? t('minimum.logged', { amount: formatMoney(amount), month })
-                        : t('minimum.log', { amount: formatMoney(amount), month })}
+                    {addedAuto
+                        ? t('minimum.loggedAuto', { amount: formatMoney(amount) })
+                        : on
+                            ? t('minimum.logged', { amount: formatMoney(amount), month })
+                            : t('minimum.log', { amount: formatMoney(amount), month })}
                 </Text>
-                {auto ? (
-                    <Text style={[styles.sub, { color: theme.ink3, fontFamily: Fonts.sans }]}>{t('minimum.auto')}</Text>
+                {addedAuto ? (
+                    <Text numberOfLines={1} style={[styles.sub, { color: theme.ink3, fontFamily: Fonts.sans }]}>{t('minimum.auto')}</Text>
                 ) : null}
             </View>
             <View style={styles.switch}>
@@ -60,7 +68,10 @@ export default memo(GoalMinToggle);
 
 const styles = StyleSheet.create({
     base: {
-        flex: 1,
+        // Two thirds of the goal card's bottom row, against "+ Extra"'s one third:
+        // at an even split the longest label ("$1,250 added for September", with
+        // "Added automatically" under it) ran to four lines and broke mid-word.
+        flex: 2,
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8,
         minHeight: 46, paddingVertical: 4, paddingLeft: 10, paddingRight: 6, borderRadius: 10, borderWidth: 1.5,
     },

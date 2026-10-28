@@ -1694,8 +1694,9 @@ const styles = StyleSheet.create({
         gap: 10,
         marginTop: 14,
     },
-    // "+ Extra": the same height and outline as the minimum toggle beside it, and the
-    // same width, so the two read as a pair.
+    // "+ Extra": the same height and outline as the minimum toggle beside it, so the
+    // two read as a pair, but one third of the row to the toggle's two thirds — its own
+    // label is short and the toggle's needs the room. Alone (no toggle) it fills the row.
     extraHalf: {
         flex: 1,
         minHeight: 46,
