@@ -34,6 +34,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
 import { useAuth } from './AuthContext';
+import { useOnboarding } from './OnboardingContext';
 import type { Announcement } from '../lib/announcements';
 
 const BASE = (__DEV__ && process.env.EXPO_PUBLIC_API_URL) || 'https://dollarseeds-1.onrender.com';
@@ -75,6 +76,11 @@ export const useAnnouncements = () => useContext(AnnouncementsContext);
 
 export function AnnouncementsProvider({ children }: { children: React.ReactNode }) {
     const { user, initialized } = useAuth();
+    // Nothing pops up over Benny: the boot read waits until this account has finished
+    // the onboarding (and is not replaying it). Waiting, rather than hiding the modal,
+    // because the auto-open marks the announcement seen the moment it goes up.
+    const { status: onboarding, replaying } = useOnboarding();
+    const onboardingDone = onboarding === 'done' && !replaying;
 
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [seenId, setSeenId] = useState<string | null>(null);
@@ -113,6 +119,7 @@ export function AnnouncementsProvider({ children }: { children: React.ReactNode 
             setVisible(false);
             return;
         }
+        if (!onboardingDone) return;
 
         let cancelled = false;
         (async () => {
@@ -150,7 +157,7 @@ export function AnnouncementsProvider({ children }: { children: React.ReactNode 
         })();
 
         return () => { cancelled = true; };
-    }, [initialized, user?.id, markSeen]);
+    }, [initialized, user?.id, markSeen, onboardingDone]);
 
     const latestId = announcements[0]?.id ?? null;
     const unread = !!latestId && latestId !== seenId;
