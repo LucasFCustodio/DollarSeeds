@@ -534,6 +534,48 @@ def test_the_fallback_is_skipped_entirely_without_an_api_key(client, premium_ser
     assert stub.calls == 0
 
 
+def test_a_lifetime_grant_with_no_expiry_is_premium(
+        client, premium_series, premium_on, monkeypatch):
+    """A lifetime purchase or a promotional grant carries expires_date: null. Treating
+    the missing date as "expired" locked out the users who paid once for forever —
+    silently, since nothing errors and the paywall simply never goes away."""
+    monkeypatch.setattr(main, "REVENUECAT_API_KEY", "rc-key")
+    monkeypatch.setattr(main, "httpx", _StubHttpx({
+        "subscriber": {"entitlements": {"premium": {"expires_date": None}}}
+    }))
+
+    assert client.get("/lessons/l-prem/playback/", headers=v2()).status_code == 200
+
+
+def test_a_present_entitlement_that_has_already_expired_is_not_premium(
+        client, premium_series, premium_on, monkeypatch):
+    """The null rule must not spill onto a real date: a lapsed subscription still has
+    its entitlement in the payload, and it stays shut out."""
+    monkeypatch.setattr(main, "REVENUECAT_API_KEY", "rc-key")
+    monkeypatch.setattr(main, "httpx", _StubHttpx({
+        "subscriber": {"entitlements": {"premium": {"expires_date": PAST}}}
+    }))
+
+    res = client.get("/lessons/l-prem/playback/", headers=v2())
+    assert res.status_code == 403
+    assert res.json()["code"] == "premium_required"
+
+
+def test_an_absent_entitlement_is_not_premium(
+        client, premium_series, premium_on, monkeypatch):
+    """Never purchased: the key is not in the payload at all. Distinct from present-
+    and-null, which the two cases above are here to keep apart."""
+    monkeypatch.setattr(main, "REVENUECAT_API_KEY", "rc-key")
+    monkeypatch.setattr(main, "httpx", _StubHttpx({
+        "subscriber": {"entitlements": {"some_other_entitlement": {"expires_date": FUTURE}}}
+    }))
+
+    res = client.get("/lessons/l-prem/playback/", headers=v2())
+    assert res.status_code == 403
+    assert res.json()["code"] == "premium_required"
+
+
+
 class _StubResponse:
     def __init__(self, body):
         self._body = body
