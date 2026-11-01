@@ -6,13 +6,13 @@
   },
   "rollover": {
     "closeTitle": "Ready to close out {{month}}?",
-    "closeSub": "You have {{amount}} left to move into General Savings.",
+    "closeSub": "You spent less than you planned. Close out the month to count {{amount}} as kept under budget.",
     "closing": "Closing…",
-    "closeButton": "Close out & save {{amount}}",
+    "closeButton": "Close out & keep {{amount}}",
     "reopen": "Reopen",
     "reopenTitle": "Reopen {{month}}?",
     "reopenWarning": "This switches {{month}} to your current budget split ({{split}}) and tithe setting. If it should keep a different split, change it in Settings before you reopen.",
-    "closedLine": "{{month}} closed · {{amount}} rolled into General Savings",
+    "closedLine": "{{month}} closed · {{amount}} kept under budget",
     "dismissA11y": "Dismiss"
   },
   "scripture": {
