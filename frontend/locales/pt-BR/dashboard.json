@@ -6,13 +6,13 @@
   },
   "rollover": {
     "closeTitle": "Pronto para fechar {{month}}?",
-    "closeSub": "Você ainda tem {{amount}} para levar para a Poupança Geral.",
+    "closeSub": "Você gastou menos do que planejou. Feche o mês para contar {{amount}} como poupado no orçamento.",
     "closing": "Fechando…",
     "closeButton": "Fechar e guardar {{amount}}",
     "reopen": "Reabrir",
     "reopenTitle": "Reabrir {{month}}?",
     "reopenWarning": "Isso muda {{month}} para a sua divisão de orçamento atual ({{split}}) e para a sua configuração de dízimo. Se este mês precisa manter uma divisão diferente, altere-a nas Configurações antes de reabrir.",
-    "closedLine": "{{month}} fechado · {{amount}} foram para a Poupança Geral",
+    "closedLine": "{{month}} fechado · {{amount}} poupados no orçamento",
     "dismissA11y": "Dispensar"
   },
   "scripture": {
