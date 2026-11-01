@@ -62,7 +62,7 @@
     "rollover": "Sobra de {{month}}",
     "rolloverRecovery": "Recuperação da sobra de {{month}}",
     "spentAfterClose": "Gasto após o fechamento de {{month}}",
-    "transferToGoal": "Transferência da Poupança Geral para {{goal}}",
+    "transferToGoal": "Transferido para {{goal}}",
     "Ready to Replant": "Pronto para Replantar",
     "Moved to Ready to Replant": "Movido para Pronto para Replantar",
     "plantedInto": "Plantado de Pronto para Replantar em {{goal}}"

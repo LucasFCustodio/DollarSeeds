@@ -62,7 +62,7 @@
     "rollover": "Rollover — {{month}}",
     "rolloverRecovery": "Rollover recovery — {{month}}",
     "spentAfterClose": "Spent after close — {{month}}",
-    "transferToGoal": "Transfer from General Savings to {{goal}}",
+    "transferToGoal": "Moved to {{goal}}",
     "Ready to Replant": "Ready to Replant",
     "Moved to Ready to Replant": "Moved to Ready to Replant",
     "plantedInto": "Planted from Ready to Replant into {{goal}}"
