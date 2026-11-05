@@ -584,6 +584,7 @@ State as verified **2026-07-26** — already correct, nothing to apply:
 | `user_settings` | enabled | Three policies — `SELECT` / `INSERT` / `UPDATE`, same `auth.uid() = user_id` — but on role `public`, not `authenticated`. No `DELETE` policy. |
 | `lesson_series`, `lessons` | enabled | **None** — deny-all to anon and authenticated, by design. Shared content is served only through the backend (`GET /lessons/...`) on service_role. |
 | `subscriptions`, `subscription_events`, `app_config` | enabled | **None** — same posture. Entitlement is served only through `GET /me/entitlements/`; letting the anon key read `subscriptions` directly would expose who pays. Added by migration `0005`. |
+| `seed_rush_verses`, `seed_rush_profiles`, `seed_rush_runs`, `seed_rush_answers`, `seed_rush_guest_claims` | enabled | **None** — service_role only. A per-user policy would let a player write their own score or `email_verified_at` directly with their token, which the server-kept score and verification exist to prevent. Added by migration `0015`; see [seed_rush.md](seed_rush.md). |
 
 Notes on the two irregularities, both deliberate to leave alone:
 
