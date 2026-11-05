@@ -97,7 +97,7 @@
 --   select tablename, policyname, qual from pg_policies
 --    where schemaname = 'public' order by tablename;
 --
--- Applied to project … on <date>.
+-- Applied to project vbvsblpyeylnemrecyqv on 2026-11-05.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create table if not exists public.seed_rush_verses (
