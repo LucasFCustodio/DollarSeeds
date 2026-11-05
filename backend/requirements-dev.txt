@@ -2,3 +2,4 @@
 #   backend/venv/Scripts/python.exe -m pytest
 -r requirements.txt
 pytest
+openpyxl  # build_seed_rush_verses.py reads the verse review spreadsheet

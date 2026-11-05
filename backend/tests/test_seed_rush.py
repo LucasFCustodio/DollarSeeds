@@ -937,8 +937,10 @@ def test_the_loader_refuses_duplicate_slugs():
         sr.validate_verses([entry(), entry()])
 
 
-def test_the_shipped_verse_file_is_empty_and_valid():
-    assert loader.read_file(loader.DEFAULT_PATH) == []
+def test_the_shipped_verse_file_is_valid():
+    # Built from the review spreadsheet by build_seed_rush_verses.py.
+    verses = loader.read_file(loader.DEFAULT_PATH)
+    assert verses and all(v["explanation"] for v in verses)
 
 
 def test_the_loader_upserts_by_slug_deactivates_and_never_deletes(supabase_db, fixture_verses):
