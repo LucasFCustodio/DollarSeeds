@@ -39,7 +39,7 @@ access token. Identity is the token's verified `sub` claim — never a client-su
 - The verifier always passes a **fixed algorithm allowlist** — never the token's own `alg` — and only ever hands the JWKS public key to asymmetric algorithms. That is what makes an HS256-token-signed-with-the-public-key forgery impossible.
 - **Adding a route**: it must take that dependency. Anything reaching the database must use the injected `user_id`, not a value off the request model — the Supabase client uses the **service_role** key, which bypasses RLS, so this file is the only access control there is.
 - Tests in [backend/tests/](../../backend/tests/) enforce both halves; `test_every_protected_route_is_in_the_table` fails if a new route ships without security coverage.
-- **Env vars**: none new. `SUPABASE_JWT_SECRET` is an optional dormant escape hatch for a rollback to a legacy HS256 shared secret; this project's HS256 key is already rotated out, so leave it unset. `PyJWT[crypto]` in `requirements.txt` is required — plain `PyJWT` cannot verify ES256.
+- **Env vars**: none for auth. (Seed Rush adds `SEED_RUSH_SECRET`, `RESEND_API_KEY` and `RESEND_FROM` — see [seed_rush.md](./seed_rush.md#environment-variables-render--the-backend-service--environment).) `SUPABASE_JWT_SECRET` is an optional dormant escape hatch for a rollback to a legacy HS256 shared secret; this project's HS256 key is already rotated out, so leave it unset. `PyJWT[crypto]` in `requirements.txt` is required — plain `PyJWT` cannot verify ES256.
 
 ---
 

@@ -159,6 +159,17 @@ def reset_premium_module_state(monkeypatch):
     monkeypatch.setattr(main, "REVENUECAT_WEBHOOK_AUTH", "")
 
 
+@pytest.fixture(autouse=True)
+def reset_seed_rush_state(monkeypatch):
+    """Seed Rush's process-wide state: the in-memory rate limiter, the verse cache,
+    the order secret and the Resend key. Reset per test for the same reason as above.
+    No Resend key by default, so no test can reach the real email API."""
+    monkeypatch.setattr(main, "_sr_limiter", main.sr.RateLimiter())
+    monkeypatch.setattr(main, "_sr_verse_cache", None)
+    monkeypatch.setattr(main, "SEED_RUSH_SECRET", b"test-seed-rush-secret")
+    monkeypatch.setattr(main, "RESEND_API_KEY", "")
+
+
 @pytest.fixture
 def webhook_secret(monkeypatch) -> str:
     """Configure the webhook receiver. Without this the route 503s by design."""

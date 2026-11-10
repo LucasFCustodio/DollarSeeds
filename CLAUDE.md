@@ -71,6 +71,7 @@ dependency, or an `app.json` plugin / bundle-id / entitlement edit.
 cd backend
 # Activate venv first (Windows: venv\Scripts\activate)
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python load_seed_rush_verses.py --dry-run   # validate the Seed Rush verse file; drop --dry-run to load it
 ```
 
 > **API URL**: Frontend hardcodes `http://10.0.0.13:8000`. Update when on a different network. See [.claude/docs/architectural_patterns.md](.claude/docs/architectural_patterns.md#backend-api-calls).
@@ -98,6 +99,7 @@ All colors and theme tokens come from `useTheme()` — **never hardcode colors**
 | [.claude/docs/data_model.md](.claude/docs/data_model.md) | When touching DB queries, Supabase tables, or budget calculation logic |
 | [.claude/docs/design_system.md](.claude/docs/design_system.md) | When building UI — color tokens, Button variants, dark mode, SVG setup |
 | [.claude/docs/lessons_page.md](.claude/docs/lessons_page.md) | When touching the Lessons tab — written vs video content, series/lessons schema, storage buckets, backend routes |
+| [.claude/docs/seed_rush.md](.claude/docs/seed_rush.md) | When touching Seed Rush (the website's verse game) — its tables, rules, env vars and verse loader |
 | [.claude/docs/i18n.md](.claude/docs/i18n.md) | **Before touching any user-facing string** — the canonical-value invariant, the two check scripts, and what is deliberately left untranslated |
 
 ## Important - DB Changes

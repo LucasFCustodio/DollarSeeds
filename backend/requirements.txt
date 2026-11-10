@@ -16,3 +16,10 @@ PyJWT[crypto]
 # user with access and no way to backfill. Arrives transitively via supabase/starlette
 # today; declared directly because we now import it ourselves.
 httpx
+# Seed Rush usernames (seed_rush.is_profane): a maintained word list with leetspeak
+# variants. Pure Python, so any Python version works.
+better-profanity
+# Seed Rush's game day starts at 7:00 AM America/New_York (zoneinfo). zoneinfo reads
+# the OS time-zone database, which Windows lacks and slim Linux images may lack;
+# tzdata is its fallback, so the zone always resolves.
+tzdata

@@ -1,0 +1,4705 @@
+{
+  "components": {
+    "schemas": {
+      "AccountDeletion": {
+        "properties": {
+          "confirmation": {
+            "title": "Confirmation",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "confirmation"
+        ],
+        "title": "AccountDeletion",
+        "type": "object"
+      },
+      "DebtCheckin": {
+        "properties": {
+          "min_payment": {
+            "title": "Min Payment",
+            "type": "number"
+          },
+          "statement_balance": {
+            "title": "Statement Balance",
+            "type": "number"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "required": [
+          "statement_balance",
+          "min_payment"
+        ],
+        "title": "DebtCheckin",
+        "type": "object"
+      },
+      "DebtCreate": {
+        "properties": {
+          "apr": {
+            "title": "Apr",
+            "type": "number"
+          },
+          "autopay": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autopay"
+          },
+          "credit_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Limit"
+          },
+          "current_balance": {
+            "title": "Current Balance",
+            "type": "number"
+          },
+          "debt_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debt Type"
+          },
+          "due_day": {
+            "title": "Due Day",
+            "type": "integer"
+          },
+          "late_fee": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Fee"
+          },
+          "lender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lender"
+          },
+          "min_payment": {
+            "title": "Min Payment",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "original_balance": {
+            "title": "Original Balance",
+            "type": "number"
+          },
+          "pay_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay Url"
+          }
+        },
+        "required": [
+          "name",
+          "original_balance",
+          "current_balance",
+          "min_payment",
+          "apr",
+          "due_day"
+        ],
+        "title": "DebtCreate",
+        "type": "object"
+      },
+      "DebtFreedomSettings": {
+        "properties": {
+          "monthly_extra": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Extra"
+          }
+        },
+        "title": "DebtFreedomSettings",
+        "type": "object"
+      },
+      "DebtLateFee": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "remember": {
+            "default": false,
+            "title": "Remember",
+            "type": "boolean"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "required": [
+          "due_date"
+        ],
+        "title": "DebtLateFee",
+        "type": "object"
+      },
+      "DebtPayment": {
+        "properties": {
+          "cycle_due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Due Date"
+          },
+          "extra_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Amount"
+          },
+          "minimum": {
+            "default": false,
+            "title": "Minimum",
+            "type": "boolean"
+          },
+          "occurred_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred On"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "title": "DebtPayment",
+        "type": "object"
+      },
+      "DebtUndoMinimum": {
+        "properties": {
+          "cycle_due_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cycle Due Date"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "title": "DebtUndoMinimum",
+        "type": "object"
+      },
+      "DebtUpdate": {
+        "properties": {
+          "apr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apr"
+          },
+          "autopay": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autopay"
+          },
+          "credit_limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Limit"
+          },
+          "current_balance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Balance"
+          },
+          "debt_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debt Type"
+          },
+          "due_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Day"
+          },
+          "late_fee": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Fee"
+          },
+          "lender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lender"
+          },
+          "min_payment": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Payment"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "original_balance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Balance"
+          },
+          "pay_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pay Url"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "title": "DebtUpdate",
+        "type": "object"
+      },
+      "Expense": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "sub_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Category"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "title",
+          "amount",
+          "category",
+          "day",
+          "month"
+        ],
+        "title": "Expense",
+        "type": "object"
+      },
+      "FirstDebtCreate": {
+        "properties": {
+          "amount_owed": {
+            "title": "Amount Owed",
+            "type": "number"
+          },
+          "apr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apr"
+          },
+          "debt_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Debt Type"
+          },
+          "due_day": {
+            "title": "Due Day",
+            "type": "integer"
+          },
+          "min_payment": {
+            "title": "Min Payment",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "required": [
+          "name",
+          "amount_owed",
+          "min_payment",
+          "due_day"
+        ],
+        "title": "FirstDebtCreate",
+        "type": "object"
+      },
+      "GoalExtraPayment": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "source": {
+            "default": "income",
+            "title": "Source",
+            "type": "string"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "required": [
+          "amount"
+        ],
+        "title": "GoalExtraPayment",
+        "type": "object"
+      },
+      "GoalToday": {
+        "description": "Body of the goals_v2 minimum toggle routes: the phone's date (optional).",
+        "properties": {
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "title": "GoalToday",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Income": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "jobTitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jobtitle"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "amount",
+          "day",
+          "month"
+        ],
+        "title": "Income",
+        "type": "object"
+      },
+      "LessonRating": {
+        "properties": {
+          "lesson_id": {
+            "title": "Lesson Id",
+            "type": "integer"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "integer"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "lesson_id",
+          "rating"
+        ],
+        "title": "LessonRating",
+        "type": "object"
+      },
+      "OnboardingPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "debt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreviewDebt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PreviewGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "income": {
+            "maximum": 100000000.0,
+            "minimum": 0.0,
+            "title": "Income",
+            "type": "number"
+          },
+          "tithe_rate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tithe Rate"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "required": [
+          "income"
+        ],
+        "title": "OnboardingPreview",
+        "type": "object"
+      },
+      "PreviewDebt": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_owed": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000000.0,
+            "title": "Amount Owed",
+            "type": "number"
+          },
+          "apr": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apr"
+          },
+          "min_payment": {
+            "maximum": 100000000.0,
+            "minimum": 0.0,
+            "title": "Min Payment",
+            "type": "number"
+          }
+        },
+        "required": [
+          "amount_owed",
+          "min_payment"
+        ],
+        "title": "PreviewDebt",
+        "type": "object"
+      },
+      "PreviewGoal": {
+        "additionalProperties": false,
+        "properties": {
+          "saved_amount": {
+            "default": 0,
+            "maximum": 100000000.0,
+            "minimum": 0.0,
+            "title": "Saved Amount",
+            "type": "number"
+          },
+          "target_amount": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 100000000.0,
+            "title": "Target Amount",
+            "type": "number"
+          },
+          "target_month": {
+            "title": "Target Month",
+            "type": "string"
+          },
+          "target_year": {
+            "title": "Target Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "target_amount",
+          "target_month",
+          "target_year"
+        ],
+        "title": "PreviewGoal",
+        "type": "object"
+      },
+      "ReplantPlant": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "to_goal_id": {
+            "title": "To Goal Id",
+            "type": "integer"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "required": [
+          "to_goal_id",
+          "amount"
+        ],
+        "title": "ReplantPlant",
+        "type": "object"
+      },
+      "RolloverAction": {
+        "properties": {
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "month"
+        ],
+        "title": "RolloverAction",
+        "type": "object"
+      },
+      "SavingsEntry": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "source": {
+            "default": "income",
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "title",
+          "amount",
+          "type",
+          "day",
+          "month"
+        ],
+        "title": "SavingsEntry",
+        "type": "object"
+      },
+      "SavingsGoal": {
+        "properties": {
+          "auto_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Minimum"
+          },
+          "goal_type": {
+            "default": "saving",
+            "title": "Goal Type",
+            "type": "string"
+          },
+          "is_general": {
+            "default": false,
+            "title": "Is General",
+            "type": "boolean"
+          },
+          "saved_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Amount"
+          },
+          "saved_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Source"
+          },
+          "target_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Amount"
+          },
+          "target_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Month"
+          },
+          "target_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Year"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "SavingsGoal",
+        "type": "object"
+      },
+      "SavingsGoalFinish": {
+        "description": "Completing a goal in one tap: the server withdraws whatever the goal holds\n(no user-typed amount) and marks it done. day/month book the withdrawal row.",
+        "properties": {
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "day",
+          "month"
+        ],
+        "title": "SavingsGoalFinish",
+        "type": "object"
+      },
+      "SavingsGoalUpdate": {
+        "description": "Partial edit of a user-created goal. Every field is optional; only the ones\nthe client sends are written. General Savings and Reconciliation are auto-managed\nand reject edits.",
+        "properties": {
+          "auto_minimum": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Minimum"
+          },
+          "target_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Amount"
+          },
+          "target_month": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Month"
+          },
+          "target_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Year"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "title": "SavingsGoalUpdate",
+        "type": "object"
+      },
+      "SavingsTransfer": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "general_goal_id": {
+            "title": "General Goal Id",
+            "type": "integer"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "to_goal_id": {
+            "title": "To Goal Id",
+            "type": "integer"
+          },
+          "to_goal_title": {
+            "title": "To Goal Title",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "amount",
+          "to_goal_id",
+          "general_goal_id",
+          "day",
+          "month",
+          "to_goal_title"
+        ],
+        "title": "SavingsTransfer",
+        "type": "object"
+      },
+      "StartingBalance": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "number"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "amount",
+          "day",
+          "month"
+        ],
+        "title": "StartingBalance",
+        "type": "object"
+      },
+      "TitheGiven": {
+        "properties": {
+          "given": {
+            "default": true,
+            "title": "Given",
+            "type": "boolean"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "month"
+        ],
+        "title": "TitheGiven",
+        "type": "object"
+      },
+      "UserSettings": {
+        "properties": {
+          "budget_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Type"
+          },
+          "firm_foundation_goals_prompted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firm Foundation Goals Prompted"
+          },
+          "tithe_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tithe Enabled"
+          },
+          "tithe_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tithe Rate"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "title": "UserSettings",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "FastAPI",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "read_root__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Read Root"
+      }
+    },
+    "/account/delete/": {
+      "post": {
+        "description": "Irreversibly delete the CALLER'S OWN account. `user_id` from the body is ignored\nentirely — the only account this route can ever touch is the token's own.",
+        "operationId": "delete_account_account_delete__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Account"
+      }
+    },
+    "/announcements/": {
+      "get": {
+        "description": "The 3 most recent PUBLISHED announcements, newest first.\n\nProtected like every other route (the token's `sub` is verified even though\nannouncements are global and nothing here is user-scoped) — consistency is the\nproperty test_auth_security.py enforces, and an unauthenticated content route\nwould be the one exception someone has to remember forever.\n\nORDERING IS TWO-COLUMN ON PURPOSE. `published_at` defaults to now(), which is\nTRANSACTION time, so two rows inserted by one multi-row INSERT share it to the\nmicrosecond. Ordering on it alone would leave their relative order up to the\nplanner, and the client keys \"have I seen this?\" off the id of the FIRST row —\nso a flip between two boots would re-show a modal the user already dismissed.\n`id desc` is an arbitrary but STABLE tiebreak, which is all that is required.\n\nFails soft: an unreachable table answers with an empty list rather than a 500.\nNothing about the app depends on announcements existing, and a modal is not\nworth an error screen.",
+        "operationId": "list_announcements_announcements__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Announcements"
+      }
+    },
+    "/config/": {
+      "get": {
+        "description": "PUBLIC client bootstrap: the premium kill switch and the force-update floor.\n\nNo bearer token, deliberately — the force-update gate has to work before sign-in,\nand none of these three values is user-specific or sensitive. It is in the `public`\nset of tests/test_auth_security.py for that reason.\n\nThe CLIENT MUST FAIL OPEN if this is unreachable: behave as unrestricted rather than\nbricking. The adoption counters go to the Render log, never into this response.",
+        "operationId": "get_client_config_config__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Client Config"
+      }
+    },
+    "/dashboard/trends/": {
+      "get": {
+        "operationId": "get_spending_trends_dashboard_trends__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Spending Trends"
+      }
+    },
+    "/dashboard/{current_month}": {
+      "get": {
+        "operationId": "get_dashboard_data_dashboard__current_month__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "current_month",
+            "required": true,
+            "schema": {
+              "title": "Current Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Dashboard Data"
+      }
+    },
+    "/debt-freedom/": {
+      "get": {
+        "operationId": "get_debt_garden_debt_freedom__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Debt Garden"
+      },
+      "post": {
+        "operationId": "create_debt_debt_freedom__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Debt"
+      }
+    },
+    "/debt-freedom/first-debt/": {
+      "post": {
+        "description": "Create a debt for a user who is NOT premium, only if they have no row in\n`debts` (any status). Otherwise 403 `debt_freedom_locked`, exactly as the normal\ncreate would answer — so it is one free debt, never a way around the paywall. An\nentitled user is simply creating a debt.\n\n`debts` keeps every debt a free user ever had: they cannot delete one (DELETE is a\npremium write), and a paid-off debt stays a row. Account deletion is the only way\nto empty it, and that deletes the account too.",
+        "operationId": "create_first_debt_debt_freedom_first_debt__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirstDebtCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create First Debt"
+      }
+    },
+    "/debt-freedom/payments": {
+      "get": {
+        "description": "The Debt Freedom payments booked to budget month `month`, newest first — the\nrows the Goals split's \"View all\" lists next to its deposits. Same month/year rule\nand same rows as _debt_paydown, with legacy log/undo pairs collapsed (they net to\nzero there), so the list adds up to the debt part of the split's spend.\n\nA new endpoint rather than a field on a response an old client reads.",
+        "operationId": "list_debt_payments_debt_freedom_payments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Debt Payments"
+      }
+    },
+    "/debt-freedom/settings": {
+      "get": {
+        "operationId": "get_debt_freedom_settings_debt_freedom_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Debt Freedom Settings"
+      },
+      "put": {
+        "operationId": "put_debt_freedom_settings_debt_freedom_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtFreedomSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Debt Freedom Settings"
+      }
+    },
+    "/debt-freedom/{id}": {
+      "delete": {
+        "operationId": "delete_debt_debt_freedom__id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Debt"
+      },
+      "get": {
+        "operationId": "get_debt_debt_freedom__id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Debt"
+      },
+      "patch": {
+        "operationId": "update_debt_debt_freedom__id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Debt"
+      }
+    },
+    "/debt-freedom/{id}/checkin": {
+      "post": {
+        "operationId": "debt_statement_checkin_debt_freedom__id__checkin_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtCheckin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Debt Statement Checkin"
+      }
+    },
+    "/debt-freedom/{id}/complete": {
+      "post": {
+        "operationId": "complete_debt_debt_freedom__id__complete_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Debt"
+      }
+    },
+    "/debt-freedom/{id}/late-fee": {
+      "post": {
+        "operationId": "debt_late_fee_debt_freedom__id__late_fee_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtLateFee"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Debt Late Fee"
+      }
+    },
+    "/debt-freedom/{id}/payments": {
+      "post": {
+        "operationId": "log_debt_payment_debt_freedom__id__payments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebtPayment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Log Debt Payment"
+      }
+    },
+    "/debt-freedom/{id}/payments/undo-minimum": {
+      "post": {
+        "description": "The toggle's on → off: DELETES this cycle's minimum, so however often the user\ntoggles, the cycle ends with at most one minimum row. (It used to write a\nminimum_reversal; those legacy rows are still netted everywhere and collapsed\nfrom the history.) Refused once the cycle's due date has passed, and in a closed\nmonth. Never unlocks the species; the plant keeps its highest step.\n\nWith `cycle_due_date` it takes back a LATE minimum for that cycle instead, under\nthe same rules: only one logged in the current cycle, and not in a closed month.\nThe cycle is then owed its minimum again.",
+        "operationId": "undo_debt_minimum_debt_freedom__id__payments_undo_minimum_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DebtUndoMinimum"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Undo Debt Minimum"
+      }
+    },
+    "/debt-freedom/{id}/payments/{transaction_id}": {
+      "delete": {
+        "description": "Delete an extra payment logged by mistake. Only a `payment_extra` of this debt,\nin its current billing cycle, while the debt is active and the payment's month is\nopen: an earlier cycle was already closed against it (interest, the full-payment\ncheck). The money goes back on the balance and, through the budget rule, back to\nthe month's Goals split. Suggestions, focus and payoff dates recompute.",
+        "operationId": "delete_debt_payment_debt_freedom__id__payments__transaction_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "transaction_id",
+            "required": true,
+            "schema": {
+              "title": "Transaction Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Debt Payment"
+      }
+    },
+    "/expenses/": {
+      "post": {
+        "operationId": "create_expense_expenses__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Expense"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Expense"
+      }
+    },
+    "/expenses/delete/{id}": {
+      "delete": {
+        "operationId": "delete_expense_expenses_delete__id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Expense"
+      }
+    },
+    "/expenses/details/": {
+      "get": {
+        "operationId": "get_expense_details_expenses_details__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": true,
+            "schema": {
+              "title": "Category",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Expense Details"
+      }
+    },
+    "/home/progress/": {
+      "get": {
+        "operationId": "get_home_progress_home_progress__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Home Progress"
+      }
+    },
+    "/home/summary/": {
+      "get": {
+        "operationId": "get_home_summary_home_summary__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Home Summary"
+      }
+    },
+    "/income/": {
+      "post": {
+        "operationId": "create_income_income__post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Income"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Income"
+      }
+    },
+    "/income/delete/{id}": {
+      "delete": {
+        "operationId": "delete_income_income_delete__id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Income"
+      }
+    },
+    "/income/details/": {
+      "get": {
+        "operationId": "get_income_details_income_details__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "title": "Month",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Income Details"
+      }
+    },
+    "/income/funding-months/": {
+      "get": {
+        "description": "Months earlier in the calendar than current_month that are still OPEN (not\nclosed) and have > $0 of income. Each can fund a goal deposit from that month's\nleftover income — the deposit is booked against that month's Goals budget.",
+        "operationId": "get_funding_months_income_funding_months__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "current_month",
+            "required": true,
+            "schema": {
+              "title": "Current Month",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Funding Months"
+      }
+    },
+    "/lesson-ratings/": {
+      "post": {
+        "operationId": "create_lesson_rating_lesson_ratings__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonRating"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Lesson Rating"
+      }
+    },
+    "/lessons/series/": {
+      "get": {
+        "description": "Published video series for the Lessons page, ordered by sort_order. Each carries\na DERIVED lesson_count (never stored, so it can't drift). No video paths are exposed.\n\nPremium series are hidden OUTRIGHT from clients that don't advertise the `premium`\nfeature. That is not a business rule and is not behind the kill switch — a build\nwith no paywall and no purchase path can only render a locked card as a dead end,\nand hiding it costs no revenue because that build cannot transact anyway.",
+        "operationId": "list_lesson_series_lessons_series__get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Lesson Series"
+      }
+    },
+    "/lessons/series/{series_id}/": {
+      "get": {
+        "description": "A single published series plus its lessons ordered by sort_order. Returns only the\nmetadata the playlist screen needs — NEVER raw video paths/URLs (see /playback/).\n\nDeliberately NOT marker-filtered: an old binary cannot reach a premium series id,\nbecause it never appears in its list, and nothing here exposes a video path. Marked\nclients additionally get `is_premium` so the playlist can lock rows before the tap,\nand `social`-capable clients get the three creator link fields.\n\nWidening the SERIES select is safe in a way the lessons select is not — those rows\nare never handed to the client. Every series field on the wire is copied out by\nhand into the dict at the bottom of this function, so a column selected here\nreaches nobody until a line down there puts it inside a capability check. It is\nstill selected conditionally; see the comment on series_columns for why.",
+        "operationId": "get_lesson_series_lessons_series__series_id___get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "series_id",
+            "required": true,
+            "schema": {
+              "title": "Series Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Lesson Series"
+      }
+    },
+    "/lessons/{lesson_id}/playback/": {
+      "get": {
+        "description": "Mint a SHORT-LIVED signed URL to stream one lesson's video. The private\n`lesson-videos` bucket is never public, so this is the only way the app gets a\n(temporary, expiring) URL. Returns { url, expires_in }.",
+        "operationId": "get_lesson_playback_lessons__lesson_id__playback__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lesson_id",
+            "required": true,
+            "schema": {
+              "title": "Lesson Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Lesson Playback"
+      }
+    },
+    "/me/entitlements/": {
+      "get": {
+        "description": "The CALLER'S OWN subscription state. Server-side truth: the client never asserts\nits entitlement to us, it asks.\n\nReturns more than premium_active/expires_at because the paywall has to say\n\"Current: Intermediate Monthly\" and, after a crossgrade, \"your new tier starts on\n<expires_at>\". Safe to be generous — this route is new, so it has no old clients.\n\nproduct_id is REPORTING ONLY. Every tier grants the same entitlement; nothing\ndownstream may branch on it.\n\nTHE SIX ORIGINAL KEYS ARE FROZEN — premium_active, expires_at, product_id,\npending_product_id, store, auto_renew — because the shipped premium build reads\nthem. A `limits` build additionally gets the ALLOWANCES (max_goals, goals_used,\nbudget_types, video_series, max_bank_connections), which are values rather than\nverdicts so the free tier can be changed server-side without an app update. They\nstate what this server will actually enforce for THIS caller: with\npremium_enabled still false that means unlimited, for everyone.",
+        "operationId": "get_my_entitlements_me_entitlements__get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Entitlements"
+      }
+    },
+    "/onboarding/preview/": {
+      "post": {
+        "operationId": "onboarding_preview_onboarding_preview__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingPreview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Onboarding Preview"
+      }
+    },
+    "/rollover/close/": {
+      "post": {
+        "description": "Reconcile the month (first close defines the rollover entry) then mark it\nclosed, freezing the tithe and budget split it was closed with. Safe to call\nrepeatedly — reconcile is idempotent and the freeze happens once.\n\nOrder matters: reconcile runs while the month is still OPEN, so it resolves\nfrom the live settings, and the stamp written afterwards freezes those same\nsettings. Money moved and state frozen can therefore never disagree.",
+        "operationId": "rollover_close_rollover_close__post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolloverAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollover Close"
+      }
+    },
+    "/rollover/preview/": {
+      "get": {
+        "description": "Target rollover + per-category breakdown (split used for display only) and\nwhether the month is closed. Does not mutate anything.",
+        "operationId": "rollover_preview_rollover_preview__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollover Preview"
+      }
+    },
+    "/rollover/reopen/": {
+      "post": {
+        "description": "Unlock a closed month for editing. Recompute happens on the next close\n(or whenever reconcile_month runs), the single deterministic recompute point.\n\nReopening also unfreezes the month's tithe and split: while closed_at is NULL\nthe month follows the LIVE settings again, so a reopened month can shift if the\nuser has changed them since — which is why the client warns before doing this.\nThe frozen columns are deliberately left on the row rather than cleared; every\nresolver gates on closed_at, so they are inert until the next close overwrites\nthem (this upsert names only closed_at, and PostgREST updates named columns\nonly, so they survive untouched).",
+        "operationId": "rollover_reopen_rollover_reopen__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolloverAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollover Reopen"
+      }
+    },
+    "/savings/balance/": {
+      "get": {
+        "operationId": "get_savings_balance_savings_balance__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Savings Balance"
+      }
+    },
+    "/savings/goal/": {
+      "get": {
+        "operationId": "get_savings_goals_savings_goal__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "goal_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Goal Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Savings Goals"
+      },
+      "post": {
+        "operationId": "create_savings_goal_savings_goal__post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavingsGoal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Savings Goal"
+      }
+    },
+    "/savings/goal/budget-context/": {
+      "get": {
+        "description": "What the goal form needs to put a new minimum in context: this month's Goals\nbudget, and the monthly amounts already committed to goals and debts. Read-only.\nThe form shows the share and the gentle warning; it never blocks saving.",
+        "operationId": "get_goal_budget_context_savings_goal_budget_context__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_goal_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Goal Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Goal Budget Context"
+      }
+    },
+    "/savings/goal/completed/": {
+      "get": {
+        "operationId": "get_completed_goals_savings_goal_completed__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "goal_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Goal Type"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Completed Goals"
+      }
+    },
+    "/savings/goal/{id}": {
+      "delete": {
+        "operationId": "delete_savings_goal_savings_goal__id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "current_month",
+            "required": true,
+            "schema": {
+              "title": "Current Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "today",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Today"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Savings Goal"
+      },
+      "patch": {
+        "operationId": "update_savings_goal_savings_goal__id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavingsGoalUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Savings Goal"
+      }
+    },
+    "/savings/goal/{id}/complete": {
+      "patch": {
+        "operationId": "complete_savings_goal_savings_goal__id__complete_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Savings Goal"
+      }
+    },
+    "/savings/goal/{id}/extra": {
+      "post": {
+        "description": "An extra payment (it replaces \"Add money\" for goals_v2). Never changes the\nstored minimum; it only moves \"on pace for\" earlier. `source` is the money-source\nanswer: 'income' counts against this month's Goals split, 'opening' does not.",
+        "operationId": "add_goal_extra_payment_savings_goal__id__extra_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalExtraPayment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Goal Extra Payment"
+      }
+    },
+    "/savings/goal/{id}/finish": {
+      "post": {
+        "description": "One-tap completion. Withdraws exactly what the goal holds — no hand-typed\namount — and snapshots it, since allocated_amount (deposits − withdrawals) drops\nto 0 the moment the withdrawal lands.\n\nORDER MATTERS: the goal is marked complete FIRST. There are two writes here and no\ntransaction across them, so if one has to fail it must be the second. Marking first\nmeans a failure leaves the goal active with its money intact (retry is safe);\nwithdrawing first would take the money and leave the goal active at $0.",
+        "operationId": "finish_savings_goal_savings_goal__id__finish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavingsGoalFinish"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Finish Savings Goal"
+      }
+    },
+    "/savings/goal/{id}/minimum": {
+      "post": {
+        "description": "The minimum toggle, off → on: one source='income' deposit of the stored minimum\nfor THIS month (capped at what is left to save), so it counts against this month's\nGoals split and shows in the history.",
+        "operationId": "log_goal_minimum_savings_goal__id__minimum_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GoalToday"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Log Goal Minimum"
+      }
+    },
+    "/savings/goal/{id}/minimum/undo": {
+      "post": {
+        "description": "The toggle, on → off: DELETES this month's minimum row (never a reversal row).\nWith the automatic minimum on, the month is marked handled so the next read does\nnot add it back.",
+        "operationId": "undo_goal_minimum_savings_goal__id__minimum_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/GoalToday"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Undo Goal Minimum"
+      }
+    },
+    "/savings/history/": {
+      "get": {
+        "operationId": "get_savings_history_savings_history__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Savings History"
+      }
+    },
+    "/savings/replant/": {
+      "post": {
+        "description": "Move money from Ready to Replant into an active, unlocked goal. A transfer: two\nsource='transfer' legs sharing a transfer_group, so it counts against no month's\nbudget and the history collapses it to one entry.",
+        "operationId": "plant_from_replant_savings_replant__post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplantPlant"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Plant From Replant"
+      }
+    },
+    "/savings/starting-balance/": {
+      "post": {
+        "description": "One-time capture of the savings the user already had BEFORE they started using\nthe app. Booked into General Savings with source='opening' — like 'rollover', that\nsource is excluded from the budget math (which allowlists source='income'), so\nmoney brought in from before never consumes the Goals budget of the month it lands\nin. Idempotent: a user can only ever have one opening row.",
+        "operationId": "set_starting_balance_savings_starting_balance__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartingBalance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Starting Balance"
+      }
+    },
+    "/savings/transaction/": {
+      "post": {
+        "operationId": "create_savings_transaction_savings_transaction__post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavingsEntry"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Savings Transaction"
+      }
+    },
+    "/savings/transaction/{id}": {
+      "delete": {
+        "operationId": "delete_savings_transaction_savings_transaction__id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Savings Transaction"
+      }
+    },
+    "/savings/transfer/": {
+      "post": {
+        "description": "Move money from General Savings into a specific goal.\nCreates two transactions with source='transfer' so neither affects the Goals budget.\nBoth legs share a `transfer_group` uuid so Recent Activity can collapse them into a\nsingle entry and deleting that entry removes both legs together (see\nget_savings_history / delete_savings_transaction).",
+        "operationId": "transfer_from_general_savings_transfer__post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavingsTransfer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Transfer From General"
+      }
+    },
+    "/settings/": {
+      "get": {
+        "description": "Return the user's settings, lazily creating a default row if missing.",
+        "operationId": "get_settings_settings__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Settings"
+      },
+      "patch": {
+        "description": "Update tithe_enabled, tithe_rate, budget_type and/or the firm-foundation\nprompt flag for a user (partial update).",
+        "operationId": "update_settings_settings__patch",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-client-features",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Client-Features"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Settings"
+      }
+    },
+    "/tithe/given/": {
+      "post": {
+        "description": "Record (or clear) that this month's tithe has actually been handed over.\n\nDISPLAY ONLY. It moves no money and writes no savings transaction: the tithe\nis already carved out of `budgetable`, so the rollover target never contained\nit. All this decides is whether the dashboard still counts the carve-out as\npart of \"left this month\" — before it is given the cash is genuinely still in\nthe user's account, and after it is given it is not.\n\nDeliberately NOT guarded by _assert_month_open. Closed months are read-only\nfor anything that changes the numbers; this changes none of them, and \"I gave\nmy tithe for March\" is a fact a user must be able to correct after closing out\nwithout having to reopen the month.",
+        "operationId": "set_tithe_given_tithe_given__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TitheGiven"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Tithe Given"
+      }
+    },
+    "/webhooks/revenuecat": {
+      "post": {
+        "description": "The ONLY writer of `subscriptions`.\n\nNO TRAILING SLASH, unlike the rest of this file: with redirect_slashes on, the\nslashed form would 307 and we would be betting that RevenueCat re-POSTs to the\nredirect target. The URL configured in their dashboard must match this exactly.\n\nSync `def`, like every other handler here, and that is load-bearing: the supabase\nclient is blocking, so an `async def` would block the event loop on every DB call.\nTaking the body as a dict rather than a Request is what keeps it sync.",
+        "operationId": "revenuecat_webhook_webhooks_revenuecat_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revenuecat Webhook"
+      }
+    }
+  }
+}

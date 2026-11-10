@@ -80,6 +80,15 @@ PROTECTED_ROUTES = [
     ("POST",   "/debt-freedom/1/complete",        {},                                   None),
     ("GET",    "/home/summary/",                  {"month": "July"},                    None),
     ("GET",    "/home/progress/",                 {},                                   None),
+    # Seed Rush. The three run routes also take a guest header instead of a token; with
+    # neither, or with a bad token (never a quiet fallback to guest), they 401.
+    ("POST",   "/seed-rush/runs",                 {},                                   {"kind": "practice", "mode": "easy"}),
+    ("POST",   "/seed-rush/runs/abc/answer",      {},                                   {"position": 0, "answers": ["x"]}),
+    ("POST",   "/seed-rush/runs/abc/finish",      {},                                   None),
+    ("GET",    "/seed-rush/me",                   {},                                   None),
+    ("PUT",    "/seed-rush/username",             {},                                   {"username": "Gardener"}),
+    ("POST",   "/seed-rush/verification/send",    {},                                   None),
+    ("POST",   "/seed-rush/guest/claim",          {},                                   {"guest_id": "00000000-0000-4000-8000-000000000000"}),
 ]
 
 ROUTE_IDS = [f"{m} {p}" for m, p, _, _ in PROTECTED_ROUTES]
@@ -116,10 +125,19 @@ def test_every_protected_route_is_in_the_table():
     #   POST /onboarding/preview/ — the onboarding's numbers BEFORE sign-up. Stateless:
     #                              no database read or write, no user data; see
     #                              tests/test_onboarding.py, which proves it.
+    #   Seed Rush's public reads, for the website before sign-in (tests/test_seed_rush.py):
+    #     GET  /seed-rush/leaderboard          usernames and scores only; a token adds
+    #                                          the caller's own row
+    #     GET  /seed-rush/username/check       valid / available, nothing about who
+    #     POST /seed-rush/verification/confirm authorized by the emailed token itself
+    #     GET  /seed-rush/verses, /seed-rush/day  shared content and the clock
     public = {("GET", "/"), ("GET", "/docs"), ("GET", "/docs/oauth2-redirect"),
               ("GET", "/redoc"), ("GET", "/openapi.json"),
               ("GET", "/config/"), ("POST", "/webhooks/revenuecat"),
-              ("POST", "/onboarding/preview/")}
+              ("POST", "/onboarding/preview/"),
+              ("GET", "/seed-rush/leaderboard"), ("GET", "/seed-rush/username/check"),
+              ("POST", "/seed-rush/verification/confirm"), ("GET", "/seed-rush/verses"),
+              ("GET", "/seed-rush/day")}
     covered = {(m, p) for m, p, _, _ in PROTECTED_ROUTES}
 
     # Match table entries (concrete URLs) to route templates by path shape.

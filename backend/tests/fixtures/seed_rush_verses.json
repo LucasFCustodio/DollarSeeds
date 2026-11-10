@@ -1,0 +1,74 @@
+[
+  {
+    "slug": "test-gardener-1",
+    "reference": "Test Garden 1:1",
+    "category": "Work & Diligence",
+    "text": "The careful gardener waters the seed before the sun rises.",
+    "blanks": ["careful", "seed", "sun"],
+    "easy_blank": "seed",
+    "easy_wrong": ["stone", "cloud"],
+    "medium_wrong": ["lazy", "river", "moon"],
+    "explanation": "A made-up sentence for tests. It is not Scripture.",
+    "active": true
+  },
+  {
+    "slug": "test-gardener-2",
+    "reference": "Test Garden 1:2",
+    "category": "Saving",
+    "text": "A patient farmer stores grain in the barn for the long winter.",
+    "blanks": ["patient", "grain", "winter"],
+    "easy_blank": "grain",
+    "easy_wrong": ["sand", "paper"],
+    "medium_wrong": ["hasty", "water", "summer"],
+    "explanation": null,
+    "active": true
+  },
+  {
+    "slug": "test-gardener-3",
+    "reference": "Test Garden 1:3",
+    "category": "Generosity",
+    "text": "The cheerful neighbor shares bread with every hungry traveler.",
+    "blanks": ["cheerful", "bread", "traveler"],
+    "easy_blank": "bread",
+    "easy_wrong": ["shoes", "lamps"],
+    "medium_wrong": ["grumpy", "silver", "merchant"],
+    "explanation": null,
+    "active": true
+  },
+  {
+    "slug": "test-gardener-4",
+    "reference": "Test Garden 1:4",
+    "category": "Finances & Debt",
+    "text": "Whoever borrows a basket should return it before the market closes.",
+    "blanks": ["borrows", "basket", "market"],
+    "easy_blank": "basket",
+    "easy_wrong": ["bucket", "ladder"],
+    "medium_wrong": ["sells", "harbor", "school"],
+    "explanation": null,
+    "active": true
+  },
+  {
+    "slug": "test-gardener-5",
+    "reference": "Test Garden 1:5",
+    "category": "Contentment",
+    "text": "Quiet evenings and simple meals make the small house glad.",
+    "blanks": ["Quiet", "simple", "glad"],
+    "easy_blank": "simple",
+    "easy_wrong": ["costly", "frozen"],
+    "medium_wrong": ["noisy", "golden", "empty"],
+    "explanation": null,
+    "active": true
+  },
+  {
+    "slug": "test-gardener-6",
+    "reference": "Test Garden 1:6",
+    "category": "Work & Diligence",
+    "text": "Steady hands build the fence, and the fence keeps the lambs safe.",
+    "blanks": ["Steady", "build", "lambs"],
+    "easy_blank": "lambs",
+    "easy_wrong": ["kites", "boats"],
+    "medium_wrong": ["shaky", "paint", "horses"],
+    "explanation": null,
+    "active": true
+  }
+]

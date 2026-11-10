@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import datetime
 import itertools
+import re
 from typing import Any, Optional
 
 
@@ -115,6 +116,32 @@ COLUMN_DEFAULTS: dict[str, dict[str, Any]] = {
     },
     "debt_transactions": {},
     "debt_freedom_settings": {"monthly_extra": None},
+    # Mirrors migration 0015 (Seed Rush). Nullable columns are present-and-NULL.
+    "seed_rush_verses": {"explanation": None, "active": True},
+    "seed_rush_profiles": {
+        "username": None,
+        "email_verified_at": None,
+        "verification_token_hash": None,
+        "verification_expires_at": None,
+        "verification_sent_at": None,
+        "verification_window_started_at": None,
+        "verification_window_count": None,
+    },
+    "seed_rush_runs": {
+        "user_id": None,
+        "guest_id": None,
+        "game_day": None,
+        "current_index": 0,
+        "question_served_at": None,
+        "finished_at": None,
+        "score": 0,
+        "words_right": 0,
+        "words_wrong": 0,
+        "flagged": False,
+        "flag_reason": None,
+    },
+    "seed_rush_answers": {},
+    "seed_rush_guest_claims": {},
 }
 
 # UNIQUE indexes the real schema declares. The fake enforces them on insert so an
@@ -125,6 +152,11 @@ UNIQUE_KEYS: dict[str, tuple[str, ...]] = {
     "subscriptions": ("store", "environment", "store_txn_id"),
     "subscription_events": ("event_id",),
     "app_config": ("key",),
+    # Migration 0015.
+    "seed_rush_verses": ("slug",),
+    "seed_rush_profiles": ("user_id",),
+    "seed_rush_answers": ("run_id", "position"),
+    "seed_rush_guest_claims": ("guest_id",),
 }
 
 # PARTIAL unique indexes: (columns, predicate). Migration 0013's two — one Ready to
@@ -134,7 +166,27 @@ UNIQUE_KEYS: dict[str, tuple[str, ...]] = {
 PARTIAL_UNIQUE_KEYS: dict[str, list] = {
     "savings_goals": [(("user_id",), lambda r: r.get("is_replant") is True)],
     "savings_transactions": [(("user_id", "type"), lambda r: r.get("kind") == "replant_seed")],
+    # Migration 0015: one daily run per account, and per guest id, per game day.
+    "seed_rush_runs": [
+        (("user_id", "game_day"), lambda r: r.get("kind") == "daily" and r.get("user_id") is not None),
+        (("guest_id", "game_day"), lambda r: r.get("kind") == "daily" and r.get("guest_id") is not None),
+    ],
 }
+
+# UNIQUE indexes on an EXPRESSION: (index name, row -> key, or None when the row is not
+# indexed). Migration 0015's `lower(username)` is what makes usernames unique
+# regardless of capitals.
+EXPRESSION_UNIQUE_KEYS: dict[str, list] = {
+    "seed_rush_profiles": [
+        ("lower_username", lambda r: r["username"].lower() if r.get("username") else None),
+    ],
+}
+
+# Tables whose UPDATEs are also checked against the unique indexes above. Opt-in, so
+# the long-standing tables keep exactly the behaviour their tests were written for;
+# Seed Rush needs it because a username change and a guest claim are both UPDATEs
+# that a unique index can refuse.
+UNIQUE_ON_UPDATE: set[str] = {"seed_rush_profiles", "seed_rush_runs"}
 
 # Which columns an upsert matches on. Previously hardcoded to (user_id, month) for
 # month_status — the only upsert in main.py at the time. That is actively wrong for
@@ -211,6 +263,7 @@ class _Query:
         # would make a two-column ordering silently one-column here, and a tiebreak
         # that only exists in the fake's imagination proves nothing.
         self._order: list[tuple[str, bool]] = []
+        self._offset = 0
 
     # ── filters (chainable) ──────────────────────────────────────────────────
     def eq(self, col: str, val: Any) -> "_Query":
@@ -256,8 +309,19 @@ class _Query:
         self.filters.append(("or", None, expr))
         return self
 
+    def ilike(self, col: str, pattern: str) -> "_Query":
+        """PostgREST `ilike`: SQL ILIKE, where `%` is any run and `_` any one character."""
+        self.filters.append(("ilike", col, pattern))
+        return self
+
     def limit(self, n: int) -> "_Query":
         self._limit = n
+        return self
+
+    def range(self, start: int, end: int) -> "_Query":
+        """PostgREST `Range: start-end`, both ends inclusive."""
+        self._offset = start
+        self._limit = end - start + 1
         return self
 
     def order(self, col: str, desc: bool = False) -> "_Query":
@@ -300,6 +364,11 @@ class _Query:
             return actual in val
         if kind == "is":
             return actual is val if val is None else actual == val
+        if kind == "ilike":
+            if actual is None:
+                return False
+            regex = "".join(".*" if ch == "%" else "." if ch == "_" else re.escape(ch) for ch in val)
+            return re.fullmatch(regex, str(actual), re.IGNORECASE | re.DOTALL) is not None
         return self._compare(kind, actual, val)
 
     @staticmethod
@@ -316,6 +385,23 @@ class _Query:
 
     def _rows(self) -> list[dict]:
         return self.db.tables.setdefault(self.table, [])
+
+    def _check_expression_keys(self, row: dict, others: list[dict]) -> None:
+        for name, key_of in EXPRESSION_UNIQUE_KEYS.get(self.table, []):
+            key = key_of(row)
+            if key is not None and any(key_of(o) == key for o in others):
+                raise UniqueViolation(self.table, (name,))
+
+    def _check_unique(self, row: dict, others: list[dict]) -> None:
+        """Every unique index (plain, partial, expression) for one row about to exist."""
+        key = UNIQUE_KEYS.get(self.table)
+        if key and any(all(o.get(k) == row.get(k) for k in key) for o in others):
+            raise UniqueViolation(self.table, key)
+        for cols, applies in PARTIAL_UNIQUE_KEYS.get(self.table, []):
+            if applies(row) and any(applies(o) and all(o.get(k) == row.get(k) for k in cols)
+                                    for o in others):
+                raise UniqueViolation(self.table, cols)
+        self._check_expression_keys(row, others)
 
     def execute(self) -> FakeResponse:
         self.db.calls.append((self.op, self.table))
@@ -342,6 +428,7 @@ class _Query:
             for col, desc in reversed(self._order):
                 # None sorts last ascending / first descending, as in Postgres.
                 out = sorted(out, key=lambda r: (r.get(col) is None, r.get(col)), reverse=desc)
+            out = out[self._offset:]
             if self._limit is not None:
                 out = out[: self._limit]
             # Copies: callers must not be able to mutate the store by accident.
@@ -368,6 +455,7 @@ class _Query:
                         for existing in rows + pending
                     ):
                         raise UniqueViolation(self.table, cols)
+                self._check_expression_keys(row, rows + pending)
                 pending.append(row)
             created = []
             for row in pending:
@@ -378,11 +466,19 @@ class _Query:
             return FakeResponse(created)
 
         if self.op == "update":
+            targets = [row for row in rows if self._matches(row)]
+            if self.table in UNIQUE_ON_UPDATE:
+                # One UPDATE statement is atomic: check every new row before changing any.
+                others = [r for r in rows if not any(r is t for t in targets)]
+                pending = []
+                for row in targets:
+                    new = {**row, **self.payload}
+                    self._check_unique(new, others + pending)
+                    pending.append(new)
             updated = []
-            for row in rows:
-                if self._matches(row):
-                    row.update(self.payload)
-                    updated.append(dict(row))
+            for row in targets:
+                row.update(self.payload)
+                updated.append(dict(row))
             return FakeResponse(updated)
 
         if self.op == "delete":
@@ -456,6 +552,17 @@ class _AdminAuth:
     def __init__(self, db: "FakeSupabase"):
         self.db = db
 
+    def get_user_by_id(self, user_id: str):
+        """Admin lookup. Answers from `db.auth_users` (user_id -> {"email",
+        "app_metadata"}); an unknown id raises, as the real API does."""
+        info = self.db.auth_users.get(user_id)
+        if info is None:
+            raise RuntimeError("User not found")
+        user = FakeUser(user_id)
+        user.email = info.get("email")
+        user.app_metadata = info.get("app_metadata") or {}
+        return FakeGetUserResponse(user)
+
     def delete_user(self, user_id: str):
         # Recorded rather than enacted: the security tests assert on exactly WHICH
         # id reached this call — that is the "can't nuke another user's account" test.
@@ -507,6 +614,7 @@ class FakeSupabase:
         self.remote_tokens: dict[str, str] = {}   # token -> user_id (remote verify)
         self.remote_verify_calls: list[str] = []
         self.signed_urls: list[tuple[str, str, int]] = []
+        self.auth_users: dict[str, dict] = {}     # user_id -> {"email", "app_metadata"}
         self.auth = _Auth(self)
         self.storage = _Storage(self)
         self._ids = itertools.count(1)

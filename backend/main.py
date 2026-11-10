@@ -1,8 +1,8 @@
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
+from typing import Annotated, Literal, Optional
 import os
 import re
 import datetime
@@ -14,6 +14,7 @@ import jwt
 import debt_freedom as df
 import goals_v2 as gv
 import home_progress as hp
+import seed_rush as sr
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -156,6 +157,14 @@ def get_current_user_id(
     Rejects a missing, malformed, expired, tampered or wrongly-signed token with 401.
     The returned value is the token's verified `sub` claim — the authoritative user id.
     """
+    return _verified_claims(cred)["sub"]
+
+
+def _verified_claims(cred: Optional[HTTPAuthorizationCredentials]) -> dict:
+    """The caller's verified token claims, `sub` normalised to a string. Everything
+    get_current_user_id enforces is enforced here; Seed Rush also reads the token's
+    `email` and `app_metadata` (which provider the account signed in with). A token
+    verified remotely carries only `sub`."""
     if cred is None or not cred.credentials:
         raise _unauthorized("Missing bearer token.")
     token = cred.credentials
@@ -194,7 +203,7 @@ def get_current_user_id(
     user_id = claims.get("sub")
     if not user_id:
         raise _unauthorized("Token has no subject.")
-    return str(user_id)
+    return {**claims, "sub": str(user_id)}
 
 # ─── Client capability markers ────────────────────────────────────────────────
 # `X-Client-Features` is a LIST of what the calling build understands, one token per
@@ -1125,6 +1134,8 @@ def delete_account(req: AccountDeletion, user_id: str = Depends(get_current_user
             supabase.table(table).delete().eq("user_id", user_id).execute()
         except Exception as e:
             print(f"Account deletion: failed clearing {table} for {user_id}: {e}")
+    # Seed Rush keys its answers by run, not by user, so it has its own ordered delete.
+    _delete_seed_rush_rows(user_id)
 
     # Delete the Supabase Auth user. Requires the service_role key (the anon key
     # cannot touch the admin API).
@@ -4756,3 +4767,689 @@ def onboarding_preview(body: OnboardingPreview):
         "goal": None if body.goal is None else _preview_goal(body.goal, split["goals"], today),
         "debt": None if body.debt is None else _preview_debt(body.debt, today),
     }
+
+
+# ─── Seed Rush (the website's daily verse game) ───────────────────────────────
+# Website-only: no app build calls these routes, and nothing here touches a table,
+# column or response the app uses. Game rules live in seed_rush.py (pure functions);
+# this section loads rows, calls them and writes back. Data: the seed_rush_* tables
+# (migration 0015). Accounts are the app's own, but this never reads or writes
+# Supabase user metadata — the app's onboarding keys off
+# user_metadata.onboarding_v2_completed_at, and a website-created account must still
+# see that onboarding on its first app launch.
+#
+# Callers are either signed in (the usual bearer token) or a guest: an
+# `X-Seed-Rush-Guest` header holding a random UUID the website keeps in local storage.
+
+RESEND_API_KEY: str = os.environ.get("RESEND_API_KEY", "").strip()
+RESEND_FROM: str = os.environ.get("RESEND_FROM", "").strip() or "DollarSeeds <no-reply@dollarseeds.app>"
+RESEND_URL = "https://api.resend.com/emails"
+
+# Keys the daily verse order, so a future day's order cannot be worked out from the
+# public verse list. Unset (local dev) → a random one per process: games still work,
+# but the order changes on every restart, so production must set it.
+_SEED_RUSH_SECRET_ENV = os.environ.get("SEED_RUSH_SECRET", "").strip()
+if not _SEED_RUSH_SECRET_ENV:
+    print("seed-rush: SEED_RUSH_SECRET is unset; using a random per-process secret "
+          "(daily verse order will change on restart). Set it in production.")
+SEED_RUSH_SECRET: bytes = (_SEED_RUSH_SECRET_ENV.encode("utf-8") if _SEED_RUSH_SECRET_ENV
+                           else os.urandom(32))
+
+SEED_RUSH_GUEST_HEADER = "X-Seed-Rush-Guest"
+SR_VERSE_CACHE_SECONDS = 300      # the loader's changes reach the game within this
+SR_PAGE_SIZE = 1000               # PostgREST's default max rows per request
+SR_IN_CHUNK = 100                 # ids per `in.(...)` filter, to keep URLs short
+
+_sr_limiter = sr.RateLimiter()
+_sr_verse_cache: Optional[tuple[float, dict]] = None
+
+
+def _sr_now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def _sr_error(status: int, code: str, message: str, headers: Optional[dict] = None) -> HTTPException:
+    """Seed Rush errors carry a stable `code` for the website to branch on."""
+    return HTTPException(status_code=status, detail={"code": code, "message": message},
+                         headers=headers)
+
+
+def _sr_select_all(build) -> list:
+    """Every row of a query, a page at a time. `build` returns a fresh, ORDERED query."""
+    out, start = [], 0
+    while True:
+        page = build().range(start, start + SR_PAGE_SIZE - 1).execute().data or []
+        out.extend(page)
+        if len(page) < SR_PAGE_SIZE:
+            return out
+        start += SR_PAGE_SIZE
+
+
+def _sr_chunks(values: list) -> list[list]:
+    return [values[i:i + SR_IN_CHUNK] for i in range(0, len(values), SR_IN_CHUNK)]
+
+
+# ── Who is calling ────────────────────────────────────────────────────────────
+
+def _sr_guest_id(value: Optional[str]) -> str:
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, TypeError, AttributeError):
+        raise _sr_error(400, "invalid_guest_id", "The guest id must be a UUID.")
+
+
+def _sr_caller(
+    request: Request,
+    cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+    guest: Optional[str] = Header(None, alias=SEED_RUSH_GUEST_HEADER),
+) -> dict:
+    """A signed-in user or a guest. A request carrying an Authorization header is
+    judged on it alone — a bad token is a 401, never a quiet fallback to guest."""
+    if request.headers.get("authorization") is not None:
+        claims = _verified_claims(cred)
+        return {"user_id": claims["sub"], "guest_id": None, "claims": claims}
+    if guest is not None:
+        return {"user_id": None, "guest_id": _sr_guest_id(guest), "claims": None}
+    raise _unauthorized("Sign in, or send a Seed Rush guest id.")
+
+
+def _sr_user(cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer)) -> dict:
+    return _verified_claims(cred)
+
+
+def _sr_optional_user(
+    request: Request,
+    cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> Optional[dict]:
+    if request.headers.get("authorization") is None:
+        return None
+    return _verified_claims(cred)
+
+
+def _sr_client_ip(request: Request) -> str:
+    """The caller's IP as Render reports it: the first X-Forwarded-For entry. A client
+    can put its own value in front, which only lets it dodge the per-IP limit — the
+    per-account / per-guest limit still applies, and nothing else trusts this."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _sr_limit(bucket: str, request: Request, caller_key: Optional[str]) -> None:
+    limits = sr.RATE_LIMITS[bucket]
+    checks = [("ip", _sr_client_ip(request))]
+    if caller_key:
+        checks.append(("caller", caller_key))
+    for scope, key in checks:
+        count, window = limits[scope]
+        wait = _sr_limiter.hit(f"{bucket}:{scope}", key, count, window)
+        if wait is not None:
+            raise _sr_error(429, "rate_limited", "Too many requests. Wait a moment and try again.",
+                            headers={"Retry-After": str(wait)})
+
+
+def _sr_identity(claims: dict) -> dict:
+    """The token's claims, with `email` and `app_metadata` filled in from Supabase
+    when the token was verified remotely (that path only yields `sub`; a locally
+    verified Supabase token carries both). Read-only: nothing here ever writes to the
+    auth user."""
+    if "email" in claims or "app_metadata" in claims:
+        return claims
+    try:
+        user = supabase.auth.admin.get_user_by_id(claims["sub"]).user
+        return {**claims, "email": claims.get("email") or getattr(user, "email", None),
+                "app_metadata": claims.get("app_metadata") or getattr(user, "app_metadata", None) or {}}
+    except Exception as e:
+        print(f"seed-rush: user lookup failed for {claims.get('sub')}: {e}")
+        return claims
+
+
+# ── Profiles ──────────────────────────────────────────────────────────────────
+
+def _sr_profile(user_id: str, claims: Optional[dict] = None) -> dict:
+    """The caller's Seed Rush profile, created on first use. A Google or Apple account
+    is marked verified here, on its first Seed Rush call: those providers already
+    confirmed the address."""
+    rows = supabase.table("seed_rush_profiles").select("*").eq("user_id", user_id).limit(1).execute().data
+    profile = rows[0] if rows else None
+    if profile is None:
+        now = sr.iso(_sr_now())
+        try:
+            profile = supabase.table("seed_rush_profiles").insert(
+                {"user_id": user_id, "created_at": now, "updated_at": now}).execute().data[0]
+        except Exception as e:
+            if not _is_unique_violation(e):
+                raise
+            profile = supabase.table("seed_rush_profiles").select("*").eq("user_id", user_id) \
+                .limit(1).execute().data[0]
+    if claims is not None and profile.get("email_verified_at") is None \
+            and sr.provider_verified(_sr_identity(claims)):
+        now = sr.iso(_sr_now())
+        supabase.table("seed_rush_profiles").update({"email_verified_at": now, "updated_at": now}) \
+            .eq("user_id", user_id).is_("email_verified_at", "null").execute()
+        profile = {**profile, "email_verified_at": now}
+    return profile
+
+
+def _sr_username_owner(username: str) -> Optional[str]:
+    """Who holds `username`, ignoring case. `ilike` treats `_` as a one-character
+    wildcard, so its matches are narrowed to exact (lowercased) equality here."""
+    rows = supabase.table("seed_rush_profiles").select("user_id, username") \
+        .ilike("username", username).execute().data or []
+    wanted = username.lower()
+    return next((r["user_id"] for r in rows if (r.get("username") or "").lower() == wanted), None)
+
+
+# ── Verses ────────────────────────────────────────────────────────────────────
+
+def _sr_verses(refresh: bool = False) -> dict:
+    """Every verse row (active or not — a run keeps the verses it was dealt), by id,
+    cached in-process for SR_VERSE_CACHE_SECONDS."""
+    global _sr_verse_cache
+    now = time.monotonic()
+    if not refresh and _sr_verse_cache and now - _sr_verse_cache[0] < SR_VERSE_CACHE_SECONDS:
+        return _sr_verse_cache[1]
+    rows = _sr_select_all(lambda: supabase.table("seed_rush_verses").select("*").order("id"))
+    verses = {int(r["id"]): r for r in rows}
+    _sr_verse_cache = (now, verses)
+    return verses
+
+
+def _sr_verse(verse_id) -> dict:
+    verse = _sr_verses().get(int(verse_id)) or _sr_verses(refresh=True).get(int(verse_id))
+    if verse is None:
+        raise _sr_error(503, "verse_missing", "That verse is no longer available.")
+    return verse
+
+
+def _sr_active_ids() -> list[int]:
+    return [vid for vid, v in _sr_verses().items() if v.get("active")]
+
+
+def _sr_question(run: dict, position: int) -> Optional[dict]:
+    order = run.get("verse_order") or []
+    if position >= len(order):
+        return None
+    verse = _sr_verse(order[position])
+    return sr.question(verse, run["mode"], position, SEED_RUSH_SECRET,
+                       sr.option_label(run, verse["id"]))
+
+
+# ── Runs ──────────────────────────────────────────────────────────────────────
+
+def _sr_owned_run(run_id: str, caller: dict) -> dict:
+    """The run, if it belongs to this caller. Anyone else gets the same 404 as a run
+    that does not exist."""
+    try:
+        run_id = str(uuid.UUID(run_id))
+    except ValueError:
+        raise _sr_error(404, "run_not_found", "Run not found.")
+    rows = supabase.table("seed_rush_runs").select("*").eq("id", run_id).limit(1).execute().data
+    run = rows[0] if rows else None
+    if run is None:
+        raise _sr_error(404, "run_not_found", "Run not found.")
+    if caller["user_id"] is not None:
+        owned = run.get("user_id") is not None and run.get("user_id") == caller["user_id"]
+    else:
+        owned = run.get("guest_id") is not None and run.get("guest_id") == caller["guest_id"]
+    if not owned:
+        raise _sr_error(404, "run_not_found", "Run not found.")
+    return run
+
+
+def _sr_close(run: dict, now: datetime.datetime) -> dict:
+    """Stamp finished_at once. The conditional update makes a second caller a no-op."""
+    if run.get("finished_at") is not None:
+        return run
+    stamp = sr.iso(sr.finish_time(run, now))
+    supabase.table("seed_rush_runs").update({"finished_at": stamp}) \
+        .eq("id", run["id"]).is_("finished_at", "null").execute()
+    rows = supabase.table("seed_rush_runs").select("*").eq("id", run["id"]).limit(1).execute().data
+    return rows[0] if rows else {**run, "finished_at": stamp}
+
+
+def _sr_played_days(column: str, value: str) -> list[datetime.date]:
+    """Game days with a finished daily run for a user_id or guest_id."""
+    rows = _sr_select_all(lambda: supabase.table("seed_rush_runs")
+                          .select("id, game_day, finished_at, deadline_at")
+                          .eq(column, value).eq("kind", sr.KIND_DAILY).order("game_day"))
+    now = _sr_now()
+    return [sr.parse_day(r["game_day"]) for r in rows if r.get("game_day") and sr.is_over(r, now)]
+
+
+def _sr_streak(user_id: Optional[str], guest_id: Optional[str]) -> int:
+    column, value = ("user_id", user_id) if user_id else ("guest_id", guest_id)
+    return sr.streak(_sr_played_days(column, value), sr.game_day(_sr_now()))
+
+
+def _sr_board(day: datetime.date) -> list[dict]:
+    """The day's ranked daily runs: finished, unflagged, by a verified account with a
+    username. Each row gains `rank` and `username`. Read straight from the runs — a
+    finished daily run IS the day's result, so there is no results table to drift."""
+    now = _sr_now()
+    rows = _sr_select_all(lambda: supabase.table("seed_rush_runs")
+                          .select("id, user_id, mode, score, words_right, words_wrong, "
+                                  "finished_at, deadline_at, flagged")
+                          .eq("kind", sr.KIND_DAILY).eq("game_day", day.isoformat())
+                          .eq("flagged", False).order("id"))
+    runs = [r for r in rows if r.get("user_id") and sr.is_over(r, now)]
+    profiles: dict = {}
+    for chunk in _sr_chunks(sorted({r["user_id"] for r in runs})):
+        for p in supabase.table("seed_rush_profiles").select("user_id, username, email_verified_at") \
+                .in_("user_id", chunk).execute().data or []:
+            profiles[p["user_id"]] = p
+    eligible = []
+    for r in runs:
+        p = profiles.get(r["user_id"])
+        if p and p.get("username") and p.get("email_verified_at"):
+            eligible.append({**r, "username": p["username"]})
+    return [{**r, "rank": i} for i, r in enumerate(sr.ranked(eligible), 1)]
+
+
+def _sr_board_row(row: dict) -> dict:
+    return {"rank": row["rank"], "username": row["username"], "mode": row["mode"],
+            "score": row["score"], "words_wrong": row["words_wrong"]}
+
+
+# ── Request bodies ────────────────────────────────────────────────────────────
+
+class SeedRushStart(BaseModel):
+    kind: Literal["daily", "practice"]
+    mode: Literal["easy", "medium", "hard"]
+
+
+class SeedRushAnswer(BaseModel):
+    position: int = Field(ge=0)
+    answers: list[Annotated[str, Field(max_length=sr.MAX_ANSWER_LENGTH)]] = Field(min_length=1, max_length=3)
+
+
+class SeedRushUsername(BaseModel):
+    username: str = Field(max_length=64)
+
+
+class SeedRushToken(BaseModel):
+    token: str = Field(min_length=1, max_length=256)
+
+
+class SeedRushClaim(BaseModel):
+    guest_id: str = Field(max_length=64)
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.post("/seed-rush/runs")
+def seed_rush_start(body: SeedRushStart, request: Request, caller: dict = Depends(_sr_caller)):
+    _sr_limit("start", request, caller["user_id"] or caller["guest_id"])
+    if caller["user_id"]:
+        _sr_profile(caller["user_id"], caller["claims"])
+    active = _sr_active_ids()
+    if not active:
+        raise _sr_error(503, "no_verses", "Seed Rush has no verses yet.")
+    now = _sr_now()
+    day = sr.game_day(now)
+    daily = body.kind == sr.KIND_DAILY
+    order = sr.daily_order(SEED_RUSH_SECRET, day, body.mode, active) if daily else sr.practice_order(active)
+    run = {
+        "id": str(uuid.uuid4()),
+        "user_id": caller["user_id"], "guest_id": caller["guest_id"],
+        "kind": body.kind, "mode": body.mode,
+        "game_day": day.isoformat() if daily else None,
+        "verse_order": order, "current_index": 0,
+        "started_at": sr.iso(now),
+        "deadline_at": sr.iso(now + datetime.timedelta(seconds=sr.RUN_SECONDS)),
+        "question_served_at": sr.iso(now),
+        "score": 0, "words_right": 0, "words_wrong": 0, "flagged": False,
+    }
+    try:
+        supabase.table("seed_rush_runs").insert(run).execute()
+    except Exception as e:
+        if daily and _is_unique_violation(e):
+            raise _sr_error(409, "already_played", "You've already played today's Seed Rush.")
+        raise
+    return {
+        "run_id": run["id"], "kind": run["kind"], "mode": run["mode"], "game_day": run["game_day"],
+        "started_at": run["started_at"], "deadline_at": run["deadline_at"],
+        "server_time": sr.iso(now), "duration_seconds": sr.RUN_SECONDS,
+        "total_verses": len(order), "question": _sr_question(run, 0),
+    }
+
+
+@app.post("/seed-rush/runs/{run_id}/answer")
+def seed_rush_answer(run_id: str, body: SeedRushAnswer, request: Request,
+                     caller: dict = Depends(_sr_caller)):
+    _sr_limit("answer", request, caller["user_id"] or caller["guest_id"])
+    run = _sr_owned_run(run_id, caller)
+    now = _sr_now()
+    if run.get("finished_at") is not None:
+        raise _sr_error(409, "run_finished", "This run is already finished.")
+    if now > sr.accepting_until(run):
+        _sr_close(run, now)
+        raise _sr_error(409, "time_up", "Time is up.")
+    index = int(run.get("current_index") or 0)
+    if body.position < index:
+        raise _sr_error(409, "already_answered", "That verse was already answered.")
+    if body.position != index or index >= len(run.get("verse_order") or []):
+        raise _sr_error(409, "wrong_position", "That isn't the current verse.")
+
+    mode = run["mode"]
+    verse = _sr_verse(run["verse_order"][index])
+    expected = len(sr.mode_blanks(verse, mode))
+    if len(body.answers) != expected:
+        raise _sr_error(422, "wrong_answer_count", f"Send exactly {expected} answer(s) for this verse.")
+    graded = sr.grade(verse, mode, body.answers)
+    served = sr.utc(run.get("question_served_at")) or sr.utc(run["started_at"])
+    elapsed_ms = max(0, int((now - served).total_seconds() * 1000))
+    try:
+        # UNIQUE (run_id, position): of two overlapping submissions, one lands.
+        supabase.table("seed_rush_answers").insert({
+            "run_id": run["id"], "position": index, "verse_id": verse["id"],
+            "submitted": body.answers, "correct": graded["right"], "points": graded["points"],
+            "answered_at": sr.iso(now), "elapsed_ms": elapsed_ms,
+        }).execute()
+    except Exception as e:
+        if _is_unique_violation(e):
+            raise _sr_error(409, "already_answered", "That verse was already answered.")
+        raise
+
+    right = sum(graded["right"])
+    update = {
+        "current_index": index + 1,
+        "score": int(run.get("score") or 0) + graded["points"],
+        "words_right": int(run.get("words_right") or 0) + right,
+        "words_wrong": int(run.get("words_wrong") or 0) + len(graded["right"]) - right,
+        "question_served_at": sr.iso(now),
+    }
+    if sr.too_fast(mode, elapsed_ms) and not run.get("flagged"):
+        update["flagged"] = True
+        update["flag_reason"] = (f"verse {index} answered in {elapsed_ms} ms "
+                                 f"(minimum {sr.MIN_ANSWER_MS[mode]} ms in {mode})")
+    finished = index + 1 >= len(run["verse_order"]) or now >= sr.deadline(run)
+    if finished:
+        update["finished_at"] = sr.iso(sr.finish_time(run, now))
+    supabase.table("seed_rush_runs").update(update).eq("id", run["id"]).execute()
+
+    words = sr.correct_words(verse, mode)
+    return {
+        "position": index,
+        "results": [{"id": i, "right": ok, "correct": words[i]} for i, ok in enumerate(graded["right"])],
+        "points": graded["points"],
+        "score": update["score"], "words_right": update["words_right"],
+        "words_wrong": update["words_wrong"],
+        "finished": finished,
+        "question": None if finished else _sr_question(run, index + 1),
+        "deadline_at": run["deadline_at"], "server_time": sr.iso(now),
+    }
+
+
+@app.post("/seed-rush/runs/{run_id}/finish")
+def seed_rush_finish(run_id: str, caller: dict = Depends(_sr_caller)):
+    run = _sr_close(_sr_owned_run(run_id, caller), _sr_now())
+    answers = supabase.table("seed_rush_answers").select("*").eq("run_id", run["id"]) \
+        .order("position").execute().data or []
+    seen = []
+    for a in answers:
+        verse = _sr_verse(a["verse_id"])
+        words = sr.correct_words(verse, run["mode"])
+        submitted = a.get("submitted") or []
+        correct = a.get("correct") or []
+        seen.append({
+            "position": a["position"], "verse_id": verse["id"], "slug": verse["slug"],
+            "reference": verse["reference"], "answered": True,
+            "right": bool(correct) and all(correct), "points": a.get("points") or 0,
+            "blanks": [{"id": i, "right": bool(correct[i]) if i < len(correct) else False,
+                        "correct": w, "submitted": submitted[i] if i < len(submitted) else None}
+                       for i, w in enumerate(words)],
+        })
+    # The verse on screen when the clock ran out was seen too, just not answered.
+    order, index = run.get("verse_order") or [], int(run.get("current_index") or 0)
+    if index < len(order) and index == len(answers):
+        verse = _sr_verse(order[index])
+        seen.append({"position": index, "verse_id": verse["id"], "slug": verse["slug"],
+                     "reference": verse["reference"], "answered": False, "right": False,
+                     "points": 0})
+
+    rank = None
+    if run["kind"] == sr.KIND_DAILY and run.get("user_id") and not run.get("flagged"):
+        mine = next((r for r in _sr_board(sr.parse_day(run["game_day"])) if r["id"] == run["id"]), None)
+        rank = mine["rank"] if mine else None
+    return {
+        "run_id": run["id"], "kind": run["kind"], "mode": run["mode"], "game_day": run["game_day"],
+        "score": run["score"], "words_right": run["words_right"], "words_wrong": run["words_wrong"],
+        "finished_at": run["finished_at"], "verses": seen,
+        "streak": _sr_streak(run.get("user_id"), run.get("guest_id")),
+        "rank": rank,
+    }
+
+
+@app.get("/seed-rush/leaderboard")
+def seed_rush_leaderboard(day: Optional[str] = None, claims: Optional[dict] = Depends(_sr_optional_user)):
+    if day is None:
+        board_day = sr.game_day(_sr_now())
+    else:
+        board_day = sr.parse_day(day) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) else None
+        if board_day is None:
+            raise _sr_error(422, "invalid_day", "day must be YYYY-MM-DD.")
+    board = _sr_board(board_day)
+    me = None
+    if claims is not None:
+        _sr_profile(claims["sub"], claims)
+        mine = next((r for r in board if r["user_id"] == claims["sub"]), None)
+        me = _sr_board_row(mine) if mine else None
+    return {"game_day": board_day.isoformat(),
+            "entries": [_sr_board_row(r) for r in board[:sr.LEADERBOARD_SIZE]],
+            "me": me}
+
+
+@app.get("/seed-rush/me")
+def seed_rush_me(claims: dict = Depends(_sr_user)):
+    user_id = claims["sub"]
+    profile = _sr_profile(user_id, claims)
+    now = _sr_now()
+    today = sr.game_day(now)
+    rows = supabase.table("seed_rush_runs").select("id, mode, score, finished_at, deadline_at") \
+        .eq("user_id", user_id).eq("kind", sr.KIND_DAILY).eq("game_day", today.isoformat()) \
+        .limit(1).execute().data
+    run = rows[0] if rows else None
+    return {
+        "username": profile.get("username"),
+        "email_verified": profile.get("email_verified_at") is not None,
+        "email_verified_at": profile.get("email_verified_at"),
+        "streak": _sr_streak(user_id, None),
+        "game_day": today.isoformat(),
+        "played_today": run is not None,
+        "today_run": None if run is None else {
+            "run_id": run["id"], "mode": run["mode"], "score": run["score"],
+            "finished": sr.is_over(run, now),
+        },
+    }
+
+
+@app.get("/seed-rush/username/check")
+def seed_rush_username_check(request: Request, u: str = Query("", max_length=64)):
+    _sr_limit("username", request, None)
+    problem = sr.username_problem(u)
+    if problem:
+        return {"username": u, "valid": False, "available": False, "reason": problem}
+    taken = _sr_username_owner(u) is not None
+    return {"username": u, "valid": True, "available": not taken, "reason": "taken" if taken else None}
+
+
+@app.put("/seed-rush/username")
+def seed_rush_set_username(body: SeedRushUsername, request: Request, claims: dict = Depends(_sr_user)):
+    user_id = claims["sub"]
+    _sr_limit("username", request, user_id)
+    problem = sr.username_problem(body.username)
+    if problem:
+        raise _sr_error(400, problem, "That username isn't allowed.")
+    owner = _sr_username_owner(body.username)
+    if owner is not None and owner != user_id:
+        raise _sr_error(409, "taken", "That username is taken.")
+    _sr_profile(user_id, claims)
+    try:
+        # The unique index on lower(username) settles a race between two claimants.
+        supabase.table("seed_rush_profiles").update(
+            {"username": body.username, "updated_at": sr.iso(_sr_now())}).eq("user_id", user_id).execute()
+    except Exception as e:
+        if _is_unique_violation(e):
+            raise _sr_error(409, "taken", "That username is taken.")
+        raise
+    return {"username": body.username}
+
+
+def _resend_post(payload: dict) -> httpx.Response:
+    """One email through Resend's HTTP API. Separate so tests can replace it: the
+    suite never calls the real API."""
+    return httpx.post(RESEND_URL, json=payload, timeout=10,
+                      headers={"Authorization": f"Bearer {RESEND_API_KEY}"})
+
+
+def _sr_deliver(to: str, link: str, username: Optional[str]) -> bool:
+    """Send the verification email. False when Resend refused or could not be reached
+    (its free plan stops at 100 emails a day). Without RESEND_API_KEY (local dev) the
+    link is printed instead, so it can be opened by hand."""
+    if not RESEND_API_KEY:
+        print(f"seed-rush: RESEND_API_KEY is unset; verification link for {to}: {link}")
+        return True
+    msg = sr.verification_email(link, username)
+    try:
+        res = _resend_post({"from": RESEND_FROM, "to": [to], "subject": msg["subject"],
+                            "html": msg["html"], "text": msg["text"]})
+    except Exception as e:
+        print(f"seed-rush: Resend unreachable: {e}")
+        return False
+    if not 200 <= res.status_code < 300:
+        print(f"seed-rush: Resend refused ({res.status_code}): {res.text[:300]}")
+        return False
+    return True
+
+
+@app.post("/seed-rush/verification/send")
+def seed_rush_send_verification(claims: dict = Depends(_sr_user)):
+    user_id = claims["sub"]
+    profile = _sr_profile(user_id, claims)
+    if profile.get("email_verified_at"):
+        return {"status": "already_verified"}
+    email = _sr_identity(claims).get("email")
+    if not email:
+        raise _sr_error(400, "no_email", "This account has no email address.")
+    now = _sr_now()
+    allowed, window, wait = sr.send_allowance(profile, now)
+    if not allowed:
+        raise _sr_error(429, "rate_limited", "Too many emails. Try again later.",
+                        headers={"Retry-After": str(wait)})
+    # Counted before sending, so a send that fails still uses up an attempt — that is
+    # what keeps a refusing Resend from being hammered.
+    supabase.table("seed_rush_profiles").update(window).eq("user_id", user_id).execute()
+    token, token_hash = sr.new_token()
+    if not _sr_deliver(email, sr.VERIFY_LINK.format(token=token), profile.get("username")):
+        # The previous link (if any) stays valid: nothing is overwritten.
+        return {"status": "delayed"}
+    supabase.table("seed_rush_profiles").update({
+        "verification_token_hash": token_hash,
+        "verification_expires_at": sr.iso(now + sr.VERIFY_TTL),
+        "verification_sent_at": sr.iso(now),
+        "updated_at": sr.iso(now),
+    }).eq("user_id", user_id).execute()
+    return {"status": "sent"}
+
+
+@app.post("/seed-rush/verification/confirm")
+def seed_rush_confirm_verification(body: SeedRushToken):
+    rows = supabase.table("seed_rush_profiles").select("user_id, verification_expires_at") \
+        .eq("verification_token_hash", sr.hash_token(body.token)).limit(1).execute().data
+    if not rows:
+        raise _sr_error(400, "invalid_token", "This link isn't valid. Ask for a new one.")
+    now = _sr_now()
+    expires = sr.utc(rows[0].get("verification_expires_at"))
+    if expires is None or now > expires:
+        raise _sr_error(400, "expired_token", "This link has expired. Ask for a new one.")
+    supabase.table("seed_rush_profiles").update({
+        "email_verified_at": sr.iso(now), "verification_token_hash": None,
+        "verification_expires_at": None, "updated_at": sr.iso(now),
+    }).eq("user_id", rows[0]["user_id"]).execute()
+    return {"status": "verified"}
+
+
+@app.post("/seed-rush/guest/claim")
+def seed_rush_claim_guest(body: SeedRushClaim, claims: dict = Depends(_sr_user)):
+    """Move a guest's runs to the signed-in account, so the streak carries over — a
+    streak computed from those real runs, never from a number the client sends. A
+    guest id can be claimed once. Where guest and account both played a day's daily
+    run, the account's stands and the guest's stays unclaimed."""
+    user_id = claims["sub"]
+    guest_id = _sr_guest_id(body.guest_id)
+    try:
+        supabase.table("seed_rush_guest_claims").insert(
+            {"guest_id": guest_id, "user_id": user_id, "claimed_at": sr.iso(_sr_now())}).execute()
+    except Exception as e:
+        if not _is_unique_violation(e):
+            raise
+        prior = supabase.table("seed_rush_guest_claims").select("user_id").eq("guest_id", guest_id) \
+            .limit(1).execute().data
+        if prior and prior[0]["user_id"] == user_id:
+            return {"claimed_runs": 0, "skipped_runs": 0, "already_claimed": True,
+                    "streak": _sr_streak(user_id, None)}
+        raise _sr_error(409, "already_claimed", "This guest has already been claimed.")
+
+    _sr_profile(user_id, claims)
+    taken_days = {r["game_day"] for r in _sr_select_all(
+        lambda: supabase.table("seed_rush_runs").select("id, game_day")
+        .eq("user_id", user_id).eq("kind", sr.KIND_DAILY).order("id"))}
+    guest_runs = _sr_select_all(lambda: supabase.table("seed_rush_runs").select("id, kind, game_day")
+                                .eq("guest_id", guest_id).order("id"))
+    moved = skipped = 0
+    for r in guest_runs:
+        daily = r["kind"] == sr.KIND_DAILY
+        if daily and r["game_day"] in taken_days:
+            skipped += 1
+            continue
+        try:
+            res = supabase.table("seed_rush_runs").update({"user_id": user_id, "guest_id": None}) \
+                .eq("id", r["id"]).eq("guest_id", guest_id).execute()
+        except Exception as e:
+            if not _is_unique_violation(e):
+                raise
+            skipped += 1     # the account started that day's run a moment ago
+            continue
+        moved += len(res.data or [])
+        if daily:
+            taken_days.add(r["game_day"])
+    return {"claimed_runs": moved, "skipped_runs": skipped, "already_claimed": False,
+            "streak": _sr_streak(user_id, None)}
+
+
+@app.get("/seed-rush/verses")
+def seed_rush_verses(response: Response):
+    """The active verses, for the website's verse pages. No blank or option data."""
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    verses = [v for _, v in sorted(_sr_verses().items()) if v.get("active")]
+    return {"verses": [{"slug": v["slug"], "reference": v["reference"], "category": v["category"],
+                        "text": v["text"], "explanation": v.get("explanation")} for v in verses]}
+
+
+@app.get("/seed-rush/day")
+def seed_rush_day():
+    now = _sr_now()
+    day = sr.game_day(now)
+    return {"game_day": day.isoformat(), "starts_at": sr.iso(sr.day_starts_at(day)),
+            "next_day_starts_at": sr.iso(sr.next_day_starts_at(now)), "server_time": sr.iso(now),
+            "timezone": sr.GAME_TIMEZONE, "start_hour": sr.GAME_DAY_START_HOUR}
+
+
+def _delete_seed_rush_rows(user_id: str) -> None:
+    """Account deletion's Seed Rush half: the account's answers, runs, profile and
+    guest claims. Each step is guarded like the tables in USER_DATA_TABLES, so it is
+    also safe before migration 0015 is applied."""
+    try:
+        run_ids = [r["id"] for r in _sr_select_all(
+            lambda: supabase.table("seed_rush_runs").select("id").eq("user_id", user_id).order("id"))]
+        for chunk in _sr_chunks(run_ids):
+            supabase.table("seed_rush_answers").delete().in_("run_id", chunk).execute()
+    except Exception as e:
+        print(f"Account deletion: failed clearing seed_rush_answers for {user_id}: {e}")
+    for table in ("seed_rush_runs", "seed_rush_profiles", "seed_rush_guest_claims"):
+        try:
+            supabase.table(table).delete().eq("user_id", user_id).execute()
+        except Exception as e:
+            print(f"Account deletion: failed clearing {table} for {user_id}: {e}")
